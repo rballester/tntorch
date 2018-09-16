@@ -74,3 +74,12 @@ Check out the [introductory notebook](https://github.com/rballester/tntorch/blob
 - Polyharmonic regression
 - Ridge regression
 - Tensor weight regression/classification
+
+## Installation
+
+The main dependencies are *NumPy* and *PyTorch*. To download and install *tntorch*:
+
+```
+git clone https://github.com/rballester/tntorch.git
+pip install -e tntorch
+```
