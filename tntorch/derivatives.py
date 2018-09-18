@@ -150,24 +150,45 @@ Single-Diode Solar Cell Model" (2017). Available: https://arxiv.org/pdf/1406.760
 
 def divergence(t, vector_mode=-1, bounds=None):
     """
+    Computes the divergence (scalar field) out of a vector field encoded in a tensor.
 
     :param t: a tensor vector field
-    :param vector_mode: which mode contains the vectors in the field ((x, y, z), for 3D). By default, the last mode
+    :param vector_mode: which mode encodes the vectors in the field ((x, y, z), for 3D). By default, the last mode
     :param bounds:
-    :return: a scala
+    :return: a scalar field
 
     """
 
     if bounds is None:
-        bounds = [None for n in range(t.ndim)]
+        bounds = [None for n in range(t.ndim-1)]
     elif not hasattr(bounds[0], '__len__'):
-        bounds = [bounds for n in range(t.ndim)]
-    assert len(bounds) == t.ndim
+        bounds = [bounds for n in range(t.ndim-1)]
+    assert len(bounds) == t.ndim-1
     if vector_mode < 0:
         vector_mode = t.ndim + vector_mode
 
     addends = []
     for m in range(t.shape[vector_mode]):
         idx = [slice(None)]*vector_mode + [m] + [slice(None)]*(t.ndim-vector_mode-1)
-        addends.append(tn.partial(t[idx], m, order=2))
+        addends.append(tn.partial(t[idx], m, order=2, bounds=bounds[m]))
     return sum(addends)
+
+
+def curl(t, vector_mode=-1, bounds=None):
+    assert t.ndim == 4
+    assert t.shape[vector_mode] == 3
+    if bounds is None:
+        bounds = [None for n in range(t.ndim-1)]
+    elif not hasattr(bounds[0], '__len__'):
+        bounds = [bounds for n in range(t.ndim-1)]
+    assert len(bounds) == t.ndim-1
+    if vector_mode < 0:
+        vector_mode = t.ndim + vector_mode
+
+    sl0 =  [slice(None)]*vector_mode + [0] + [slice(None)]*(t.ndim-vector_mode-1)
+    sl1 =  [slice(None)]*vector_mode + [1] + [slice(None)]*(t.ndim-vector_mode-1)
+    sl2 =  [slice(None)]*vector_mode + [2] + [slice(None)]*(t.ndim-vector_mode-1)
+
+    return [tn.partial(t[sl2], 1, bounds=bounds[1]) - tn.partial(t[sl1], 2, bounds=bounds[2]),
+            tn.partial(t[sl0], 2, bounds=bounds[2]) - tn.partial(t[sl2], 0, bounds=bounds[0]),
+            tn.partial(t[sl1], 0, bounds=bounds[0]) - tn.partial(t[sl0], 1, bounds=bounds[1])]
