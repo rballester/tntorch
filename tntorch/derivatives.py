@@ -1,5 +1,6 @@
 import tntorch as tn
 import torch
+import numpy as np
 
 
 def partialset(t, order=1, mask=None, bounds=None):
@@ -82,7 +83,7 @@ def partial(t, modes, order=1, bounds=None):
     t2 = t.clone()
     for i, mode in enumerate(modes):
         for o in range(1, order+1):
-            step = (bounds[i][1] - bounds[i][0]) / (t.shape[mode] - o)
+            step = (bounds[i][1] - bounds[i][0]) / (t.shape[mode]-1)
             if t2.Us[mode] is None:
                 t2.cores[mode] = (t2.cores[mode][:, 1:, :] - t2.cores[mode][:, :-1, :]) / step
                 t2.cores[mode] = torch.cat((t2.cores[mode], torch.zeros(t2.cores[mode].shape[0],
@@ -145,3 +146,28 @@ Single-Diode Solar Cell Model" (2017). Available: https://arxiv.org/pdf/1406.760
     w = w[idx]
     v = v[:, idx]
     return w, v
+
+
+def divergence(t, vector_mode=-1, bounds=None):
+    """
+
+    :param t: a tensor vector field
+    :param vector_mode: which mode contains the vectors in the field ((x, y, z), for 3D). By default, the last mode
+    :param bounds:
+    :return: a scala
+
+    """
+
+    if bounds is None:
+        bounds = [None for n in range(t.ndim)]
+    elif not hasattr(bounds[0], '__len__'):
+        bounds = [bounds for n in range(t.ndim)]
+    assert len(bounds) == t.ndim
+    if vector_mode < 0:
+        vector_mode = t.ndim + vector_mode
+
+    addends = []
+    for m in range(t.shape[vector_mode]):
+        idx = [slice(None)]*vector_mode + [m] + [slice(None)]*(t.ndim-vector_mode-1)
+        addends.append(tn.partial(t[idx], m, order=2))
+    return sum(addends)
