@@ -59,7 +59,6 @@ class Tensor(object):
         Us = []
         for n in range(self.ndim):
             if self.Us[n] is not None and other.Us[n] is not None:
-                # assert 0
                 slice1 = torch.cat([core1, torch.zeros([core2.shape[0], core1.shape[1], core1.shape[2]])], dim=0)
                 slice1 = torch.cat([slice1, torch.zeros(core1.shape[0]+core2.shape[0], core1.shape[1], core2.shape[2])], dim=2)
                 slice2 = torch.cat([torch.zeros([core1.shape[0], core2.shape[1], core2.shape[2]]), core2], dim=0)
@@ -86,7 +85,7 @@ class Tensor(object):
     def __radd__(self, other):
         if other is None:
             return self
-        return other + self
+        return self + other
 
     def __sub__(self, other):
         return self + -1*other
@@ -365,7 +364,7 @@ class Tensor(object):
                 this_mode = 'index'
             elif key[i] is None:
                 this_mode = 'none'
-            elif isinstance(key[i], int):
+            elif isinstance(key[i], (int, np.integer)):
                 this_mode = 'int'
             elif isinstance(key[i], slice):
                 this_mode = 'slice'
