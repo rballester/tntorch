@@ -148,47 +148,64 @@ Single-Diode Solar Cell Model" (2017). Available: https://arxiv.org/pdf/1406.760
     return w, v
 
 
-def divergence(t, vector_mode=-1, bounds=None):
+def divergence(ts, bounds=None):
     """
     Computes the divergence (scalar field) out of a vector field encoded in a tensor.
 
-    :param t: a tensor vector field
-    :param vector_mode: which mode encodes the vectors in the field ((x, y, z), for 3D). By default, the last mode
+    :param ts: an N-D vector field, encoded as a list of N N-D tensors
     :param bounds:
     :return: a scalar field
 
     """
 
+    assert ts[0].ndim == len(ts)
+    assert all([t.shape == ts[0].shape for t in ts[1:]])
     if bounds is None:
-        bounds = [None for n in range(t.ndim-1)]
+        bounds = [None]*len(ts)
     elif not hasattr(bounds[0], '__len__'):
-        bounds = [bounds for n in range(t.ndim-1)]
-    assert len(bounds) == t.ndim-1
-    if vector_mode < 0:
-        vector_mode = t.ndim + vector_mode
+        bounds = [bounds for n in range(len(ts))]
+    assert len(bounds) == len(ts)
 
-    addends = []
-    for m in range(t.shape[vector_mode]):
-        idx = [slice(None)]*vector_mode + [m] + [slice(None)]*(t.ndim-vector_mode-1)
-        addends.append(tn.partial(t[idx], m, order=2, bounds=bounds[m]))
-    return sum(addends)
+    return sum([tn.partial(ts[n], n, order=1, bounds=bounds[n]) for n in range(len(ts))])
 
 
-def curl(t, vector_mode=-1, bounds=None):
-    assert t.ndim == 4
-    assert t.shape[vector_mode] == 3
+def curl(ts, bounds=None):
+    """
+    Compute the curl of a vector field
+
+    :param ts: three 3D encoding the x, y, and z vector coordinates respectively
+    :param bounds:
+    :return: three tensors of the same shape
+
+    """
+
+    assert [t.ndim == 3 for t in ts]
+    assert len(ts) == 3
     if bounds is None:
-        bounds = [None for n in range(t.ndim-1)]
+        bounds = [None for n in range(3)]
     elif not hasattr(bounds[0], '__len__'):
-        bounds = [bounds for n in range(t.ndim-1)]
-    assert len(bounds) == t.ndim-1
-    if vector_mode < 0:
-        vector_mode = t.ndim + vector_mode
+        bounds = [bounds for n in range(3)]
+    assert len(bounds) == 3
 
-    sl0 =  [slice(None)]*vector_mode + [0] + [slice(None)]*(t.ndim-vector_mode-1)
-    sl1 =  [slice(None)]*vector_mode + [1] + [slice(None)]*(t.ndim-vector_mode-1)
-    sl2 =  [slice(None)]*vector_mode + [2] + [slice(None)]*(t.ndim-vector_mode-1)
+    return [tn.partial(ts[2], 1, bounds=bounds[1]) - tn.partial(ts[1], 2, bounds=bounds[2]),
+            tn.partial(ts[0], 2, bounds=bounds[2]) - tn.partial(ts[2], 0, bounds=bounds[0]),
+            tn.partial(ts[1], 0, bounds=bounds[0]) - tn.partial(ts[0], 1, bounds=bounds[1])]
 
-    return [tn.partial(t[sl2], 1, bounds=bounds[1]) - tn.partial(t[sl1], 2, bounds=bounds[2]),
-            tn.partial(t[sl0], 2, bounds=bounds[2]) - tn.partial(t[sl2], 0, bounds=bounds[0]),
-            tn.partial(t[sl1], 0, bounds=bounds[0]) - tn.partial(t[sl0], 1, bounds=bounds[1])]
+
+def laplacian(t, bounds=None):
+    """
+    Computes the Laplacian of a scalar field.
+
+    :param t: a tensor
+    :param bounds:
+    :return: a tensor
+
+    """
+
+    if bounds is None:
+        bounds = [None]*t.ndim
+    elif not hasattr(bounds[0], '__len__'):
+        bounds = [bounds for n in range(t.ndim)]
+    assert len(bounds) == t.ndim
+
+    return sum([tn.partial(t, n, order=2, bounds=bounds[n]) for n in range(t.ndim)])

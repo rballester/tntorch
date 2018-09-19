@@ -8,7 +8,7 @@ class TestDerivatives(TestCase):
     def test_divergence(self):
 
         t = tn.rand([10] * 3 + [3], ranks_tt=3)
-        d = tn.divergence(t)
+        d = tn.divergence([t[..., 0], t[..., 1], t[..., 2]])
         x = t.numpy()
 
         def partial(x, mode):
