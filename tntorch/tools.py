@@ -170,6 +170,28 @@ def round(t, **kwargs):
     return t.round()
 
 
+def cumsum(t, modes):
+    """
+    Computes the cumulative sum of a tensor along one or several modes, similarly to PyTorch's `cumsum()`.
+
+    :param t: a tensor
+    :param modes: an int or list of ints
+    :return: a tensor of the same shape
+
+    """
+
+    if not hasattr(modes, '__len__'):
+        modes = [modes]
+
+    t = t.clone()
+    for n in modes:
+        if t.Us[n] is None:
+            t.cores[n] = torch.cumsum(t.cores[n], dim=-2)
+        else:
+            t.Us[n] = torch.cumsum(t.Us[n], dim=0)
+    return t
+
+
 def rand(shape, ranks_tt=1, ranks_tucker=None, requires_grad=False, device=None):
     """
     Generate a TT with random cores (and optionally factors), whose entries are uniform in [0, 1]
