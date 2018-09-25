@@ -569,3 +569,38 @@ def dof(t):
         if t.Us[n] is not None and t.Us[n].requires_grad:
             result += t.Us[n].shape[0] * t.Us[n].shape[1]
     return result
+
+
+def cat(ts, mode):
+    """
+    Concatenate two or more tensors along a given mode, similarly to PyTorch's `cat()`.
+
+    :param ts: a list of tensors
+    :param mode: an int
+    :return: a tensor of the same shape as all tensors in the list, except along `mode` where it has the sum of shapes
+
+    """
+
+    if len(ts) == 1:
+        return ts[0].clone()
+    if any([any([t.shape[n] != ts[0].shape[n] for n in np.delete(range(ts[0].ndim), mode)]) for t in ts[1:]]):
+        raise ValueError('To concatenate tensors, all must have the same shape along all but the given mode')
+
+    shapes = np.array([t.shape[mode] for t in ts])
+    sumshapes = np.concatenate([np.array([0]), np.cumsum(shapes)])
+    for i in range(len(ts)):
+        t = ts[i].clone()
+        if t.Us[mode] is None:
+            if t.cores[mode].dim() == 2:
+                t.cores[mode] = torch.zeros(sumshapes[-1], t.cores[mode].shape[-1])
+            else:
+                t.cores[mode] = torch.zeros(t.cores[mode].shape[0], sumshapes[-1], t.cores[mode].shape[-1])
+            t.cores[mode][..., sumshapes[i]:sumshapes[i+1], :] += ts[i].cores[mode]
+        else:
+            t.Us[mode] = torch.zeros(sumshapes[-1], t.Us[mode].shape[-1])
+            t.Us[mode][sumshapes[i]:sumshapes[i+1], :] += ts[i].Us[mode]
+        if i == 0:
+            result = t
+        else:
+            result += t
+    return result
