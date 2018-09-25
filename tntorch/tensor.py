@@ -5,17 +5,27 @@ torch.set_default_dtype(torch.float64)
 import time
 
 
-class Tensor(object):
+class Tensor(object):  # CP done
+
+    """
+    Handler class for all tensor networks. Currently we support TT, CP, and hybrid formats (TT-Tucker, CP-Tucker, or
+    combinations of those). N-dimensional tensors always have N cores, with each core following one of four options:
+
+    - Size R_{n-1} x I_n x R_n (standard TT core)
+    - Size R_{n-1} x S_n x R_n (TT-Tucker core), accompanied by an I_n x S_n factor matrix
+    - Size I_n x R (CP factor matrix)
+    - S_n x R_n (CP-Tucker core), accompanied by an I_n x S_n factor matrix
+    """
 
     def __init__(self, data, Us=None, idxs=None, eps=None):  # TODO requires_grad
         if isinstance(data, (list, tuple)):
             # data = [torch.Tensor(d) for d in data]
             # TODO accept ndarrays
-            if not all([d.dim() == 3 for d in data]):
-                raise ValueError('All TT cores must have 3 dimensions')
-            if not all([data[i].shape[-1] == data[i+1].shape[0] for i in range(len(data)-1)]):
-                str = ' '.join(['({},{},{})'.format(d.shape[0], d.shape[1], d.shape[2]) for d in data])
-                raise ValueError('Core ranks do not match: {}'.format(str))
+            if not all([2 <= d.dim() <= 3 for d in data]):
+                raise ValueError('All tensor cores must have 2 (for CP) or 3 (for TT) dimensions')
+            for n in range(len(data)-1):
+                if (data[n+1].dim() == 3 and data[n].shape[-1] != data[n+1].shape[0]) or (data[n+1].dim() == 2 and data[n].shape[-1] != data[n+1].shape[1]):
+                    raise ValueError('Core ranks do not match: {}'.format(str))
             self.cores = data
         elif isinstance(data, np.ndarray):
             data = torch.Tensor(data)
@@ -63,6 +73,8 @@ class Tensor(object):
         cores = []
         Us = []
         for n in range(self.ndim):
+            core1 = self.cores[n]
+            core2 = other.cores[n]
             if self.Us[n] is not None and other.Us[n] is not None:
                 slice1 = torch.cat([core1, torch.zeros([core2.shape[0], core1.shape[1], core1.shape[2]])], dim=0)
                 slice1 = torch.cat([slice1, torch.zeros(core1.shape[0]+core2.shape[0], core1.shape[1], core2.shape[2])], dim=2)
@@ -72,10 +84,8 @@ class Tensor(object):
                 cores.append(c)
                 Us.append(torch.cat((self.Us[n], other.Us[n]), dim=1))
                 continue
-            core1 = self.cores[n]
             if self.Us[n] is not None:
                 core1 = torch.einsum('ijk,aj->iak', (core1, self.Us[n]))
-            core2 = other.cores[n]
             if other.Us[n] is not None:
                 core2 = torch.einsum('ijk,aj->iak', (core2, other.Us[n]))
             column1 = torch.cat([core1, torch.zeros([core2.shape[0], self.shape[n], core1.shape[2]])], dim=0)
@@ -118,8 +128,6 @@ class Tensor(object):
                                             self.cores[n].shape[2]*other.cores[n].shape[2])))
                 Us.append(torch.reshape(torch.einsum('ij,ik->ijk', (self.Us[n], other.Us[n])),
                          (self.Us[n].shape[0], -1)))
-                print(self.cores[n].shape, other.cores[n].shape, cores[-1].shape)
-                print(self.Us[n].shape, other.Us[n].shape, Us[-1].shape)
             else:
                 core1 = self.cores[n]
                 core2 = other.cores[n]
@@ -157,37 +165,42 @@ class Tensor(object):
         return not self == other
 
     @property
-    def shape(self):
+    def shape(self):  # CP done
         shape = []
         for n in range(self.ndim):
             if self.Us[n] is None:
-                shape.append(self.cores[n].shape[1])
+                shape.append(self.cores[n].shape[-2])
             else:
                 shape.append(self.Us[n].shape[0])
         return torch.Size(shape)
 
     @property
-    def ranks_tt(self):
+    def ranks_tt(self):  # CP done
         return np.array([c.shape[0] for c in self.cores] + [self.cores[-1].shape[-1]])
 
+    @ranks_tt.setter
+    def ranks_tt(self, value):
+        self.round(rmax=value)
+
     @property
-    def ranks_tucker(self):
+    def ranks_tucker(self):  # CP done
         return np.array([c.shape[1] for c in self.cores])
 
     @property
-    def ndim(self):
+    def ndim(self):  # CP done
         return len(self.cores)
 
     @property
     def size(self):
         return torch.prod(torch.Tensor(list(self.shape)))
 
-    def __repr__(self):
+    def __repr__(self):  # CP done
 
+        format = 'TT'
+        if any([c.dim() == 2 for c in self.cores]):
+            format += '-CP'
         if any([U is not None for U in self.Us]):
-            format = 'TT-Tucker'
-        else:
-            format = 'TT'
+            format += '-Tucker'
         s = '{}D {} tensor:\n'.format(self.ndim, format)
         s += '\n'
         ttr = self.ranks_tt
@@ -230,8 +243,12 @@ class Tensor(object):
         # Nodes
         row = [' ']*(4*self.ndim-1)
         for n in range(self.ndim):
-            lenn = len('({})'.format(n))
-            row[(n+1)*4-(lenn-1)//2:(n+1)*4-(lenn-1)//2+lenn] = '({})'.format(n)
+            if self.cores[n].dim() == 2:
+                nodestr = '[{}]'.format(n)
+            else:
+                nodestr = '({})'.format(n)
+            lenn = len(nodestr)
+            row[(n+1)*4-(lenn-1)//2:(n+1)*4-(lenn-1)//2+lenn] = nodestr
         s += ''.join(row[2:])
         s += '\n'
 
@@ -451,7 +468,7 @@ class Tensor(object):
         result = self - tn.Tensor(subtract_cores) + tn.Tensor(add_cores)
         self.__init__(result.cores, result.Us, self.idxs)
 
-    def full_tucker(self):
+    def full_tucker(self):  # CP done
         """
         Decompresses this tensor only along the Tucker factors.
 
@@ -462,12 +479,15 @@ class Tensor(object):
         cores = []
         for n in range(self.ndim):
             if self.Us[n] is not None:
-                cores.append(torch.einsum('ijk,aj->iak', (self.cores[n], self.Us[n])))
+                if self.cores[n].dim() == 2:
+                    cores.append(torch.einsum('jk,aj->ak', (self.cores[n], self.Us[n])))
+                else:
+                    cores.append(torch.einsum('ijk,aj->iak', (self.cores[n], self.Us[n])))
             else:
                 cores.append(self.cores[n].clone())
         return tn.Tensor(cores, idxs=self.idxs)
 
-    def full(self):
+    def full(self):  # CP done
         """
         Decompresses this tensor into a torch tensor.
 
@@ -479,14 +499,17 @@ class Tensor(object):
         shape = []
         factor = torch.ones([1, 1])
         for n in range(t.ndim):
-            shape.append(t.cores[n].shape[1])
-            factor = torch.einsum('ai,ibj->abj', (factor, t.cores[n]))
+            shape.append(t.cores[n].shape[-2])
+            if t.cores[n].dim() == 2:
+                factor = torch.einsum('ai,bi->abi', (factor, t.cores[n]))
+            else:
+                factor = torch.einsum('ai,ibj->abj', (factor, t.cores[n]))
             factor = factor.reshape([-1, t.cores[n].shape[-1]])
         factor = factor[..., 0]
         factor = factor.reshape(shape)
         return factor
 
-    def numpy(self):
+    def numpy(self):  # CP done
         """
         Decompresses this tensor into a NumPy multiarray.
 
@@ -496,7 +519,7 @@ class Tensor(object):
 
         return self.full().detach().numpy()
 
-    def clone(self):
+    def clone(self):  # CP done
         """
         Creates a copy of this tensor (calls clone() on all internal tensor network nodes)
 
@@ -527,19 +550,33 @@ class Tensor(object):
             return
         Q, R = torch.qr(self.Us[mu])
         self.Us[mu] = Q
-        self.cores[mu] = torch.einsum('ijk,aj->iak', (self.cores[mu], R))
+        if self.cores[mu].dim() == 2:
+            self.cores[mu] = torch.einsum('jk,aj->ak', (self.cores[mu], R))
+        else:
+            self.cores[mu] = torch.einsum('ijk,aj->iak', (self.cores[mu], R))
+
+    def _cp_to_tt(self, n):
+        """
+        If the n-th core has CP form, this method transforms it (in place) into TT.
+
+        :param n: an integer between 0 to N-1
+        """
 
     def left_orthogonalize(self, mu):
         """
-        Makes the mu-th core left-orthogonal and pushes the R factor to its right core
-        Note: this may change the ranks of the cores.
+        Makes the mu-th core left-orthogonal and pushes the R factor to its right core. This may change the ranks
+        of the cores.
 
         This method works in place.
+
+        Note: this method will turn CP (or CP-Tucker) cores into TT (or TT-Tucker) ones.
 
         :return: the R factor
         """
 
         assert 0 <= mu < self.ndim-1
+        if self.cores[mu].dim() == 2:
+            self.cores[mu] = self.cores
         self.factor_orthogonalize(mu)
         Q, R = torch.qr(tn.left_unfolding(self.cores[mu]))
         self.cores[mu] = torch.reshape(Q, self.cores[mu].shape[:-1] + (Q.shape[1], ))
@@ -549,10 +586,12 @@ class Tensor(object):
 
     def right_orthogonalize(self, mu):
         """
-        Makes the mu-th core right-orthogonal and pushes the L factor to its left core
-        Note: this may change the ranks of the tensor.
+        Makes the mu-th core right-orthogonal and pushes the L factor to its left core. Note: this may change the ranks
+         of the tensor.
 
         This method works in place.
+
+        Note: this method will turn CP (or CP-Tucker) cores into TT (or TT-Tucker) ones.
 
         :return: the L factor
         """
@@ -573,6 +612,8 @@ class Tensor(object):
 
         This method works in place.
 
+        Note: this method will turn CP (or CP-Tucker) cores into TT (or TT-Tucker) ones.
+
         :returns L, R: left and right factors
         """
 
@@ -583,53 +624,7 @@ class Tensor(object):
         for i in range(self.ndim-1, mu, -1):
             L = self.right_orthogonalize(i)
         return R, L
-
-    def round(self, eps=0, rmax=np.iinfo(np.int32).max, algorithm='svd', verbose=False):
-        """
-        Tries to recompress this tensor in place by reducing its TT ranks.
-
-        Note: this method does not reduce Tucker ranks (yet).
-
-        :param eps: this relative error will not be exceeded. Default is 0
-        :param rmax: all ranks should be rmax at most
-        :param algorithm: 'svd' (default) or 'eig'. The latter can be faster, but less accurate
-        :param verbose:
-
-        """
-
-        N = self.ndim
-        shape = self.shape
-        start = time.time()
-        self.orthogonalize(N-1)  # Make everything left-orthogonal
-        if verbose:
-            print('Orthogonalization time:', time.time() - start)
-        delta = eps / max(1, np.sqrt(N - 1)) * torch.norm(self.cores[-1])
-        for mu in range(N - 1, 0, -1):
-            M = tn.right_unfolding(self.cores[mu])
-            left, M = tn.truncated_svd(M, delta=delta, rmax=rmax, left_ortho=False, algorithm=algorithm, verbose=verbose)
-            self.cores[mu] = torch.reshape(M, [-1, shape[mu], self.cores[mu].shape[2]])
-            self.cores[mu-1] = torch.einsum('ijk,kl', (self.cores[mu-1], left))  # Pass factor to the left
-
-    def set_factors(self, name, modes='all', requires_grad=False):
-        """
-        Sets factors Us of this tensor to be of a certain family.
-
-        :param name: See `generate_basis()`
-        :param modes: list of factors to set; default is 'all'
-        :param requires_grad: whether the new factors should be optimizable. Default is False
-
-        """
-
-        if modes == 'all':
-            modes = range(self.ndim)
-
-        for m in modes:
-            if self.Us[m] is None:
-                self.Us[m] = tn.generate_basis(name, (self.cores[m].shape[1], self.cores[m].shape[1]))
-            else:
-                self.Us[m] = tn.generate_basis(name, self.Us[m].shape)
-            self.Us[m].requires_grad = requires_grad
-
+    
     def round_tucker(self, eps=0, rmax=None, algorithm='svd'):
         """
         Tries to recompress this tensor in place by reducing its Tucker ranks.
@@ -671,6 +666,7 @@ class Tensor(object):
             if mu < N-1:
                 self.left_orthogonalize(mu)
 
+
     def round(self, eps=0, rmax=None, algorithm='svd', verbose=False):
         """
         Tries to recompress this tensor in place by reducing its TT ranks.
@@ -703,6 +699,26 @@ class Tensor(object):
             left, M = tn.truncated_svd(M, delta=delta, rmax=rmax[mu-1], left_ortho=False, algorithm=algorithm, verbose=verbose)
             self.cores[mu] = torch.reshape(M, [-1, shape[mu], self.cores[mu].shape[2]])
             self.cores[mu-1] = torch.einsum('ijk,kl', (self.cores[mu-1], left))  # Pass factor to the left
+
+    def set_factors(self, name, modes='all', requires_grad=False):  # CP done
+        """
+        Sets factors Us of this tensor to be of a certain family.
+
+        :param name: See `generate_basis()`
+        :param modes: list of factors to set; default is 'all'
+        :param requires_grad: whether the new factors should be optimizable. Default is False
+
+        """
+
+        if modes == 'all':
+            modes = range(self.ndim)
+
+        for m in modes:
+            if self.Us[m] is None:
+                self.Us[m] = tn.generate_basis(name, (self.shape[m], self.shape[m]))
+            else:
+                self.Us[m] = tn.generate_basis(name, self.Us[m].shape)
+            self.Us[m].requires_grad = requires_grad
 
     def as_leaf(self):
         """

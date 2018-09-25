@@ -13,10 +13,10 @@ class TestDerivatives(TestCase):
 
         def partial(x, mode):
             return np.concatenate([np.diff(x, axis=mode),
-                                   np.zeros([sh for sh in x.shape[:mode]] + [1] + [sh for sh in x.shape[mode + 1:]])],
+                                   np.zeros([sh for sh in x.shape[:mode]] + [1] + [sh for sh in x.shape[mode+1:]])],
                                   axis=mode)
 
-        gt = partial(partial(x[..., 0], 0), 0)
-        gt += partial(partial(x[..., 1], 1), 1)
-        gt += partial(partial(x[..., 2], 2), 2)
+        gt = partial(x[..., 0], 0)
+        gt += partial(x[..., 1], 1)
+        gt += partial(x[..., 2], 2)
         self.assertAlmostEqual(np.linalg.norm(d.numpy() - gt) / np.linalg.norm(gt), 0)
