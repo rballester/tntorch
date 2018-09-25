@@ -474,8 +474,7 @@ def optimize(tensors, loss_function, tol=1e-4, max_iter=10000, print_freq=500, v
         loss = loss_function(*tensors)
         if not isinstance(loss, (tuple, list)):
             loss = [loss]
-        losses.append(reduce(lambda x, y: (x + y) / 2, loss))
-        # losses.append(sum(loss))
+        losses.append(reduce(lambda x, y: x + y, loss))
         if len(losses) >= 2:
             delta_loss = (losses[-1] - losses[-2])
         else:
@@ -546,7 +545,7 @@ def generate_basis(name, shape, orthonormal=False):
         elif name == "hermite":
             U = np.polynomial.hermite.hermval(eval_points, np.eye(shape[0], shape[1])).T
         else:
-            raise ValueError("Unrecognized basis function")
+            raise ValueError("Unsupported basis function")
     if orthonormal:
         U / np.sqrt(np.sum(U*U, axis=0))
     return torch.from_numpy(U)
@@ -565,9 +564,9 @@ def dof(t):
     result = 0
     for n in range(t.ndim):
         if t.cores[n].requires_grad:
-            result += t.cores[n].shape[0] * t.cores[n].shape[1] * t.cores[n].shape[2]
+            result += t.cores[n].numel()
         if t.Us[n] is not None and t.Us[n].requires_grad:
-            result += t.Us[n].shape[0] * t.Us[n].shape[1]
+            result += t.Us[n].numel()
     return result
 
 
