@@ -10,5 +10,5 @@ class TestInit(TestCase):
         for i in range(100):
             gt = np.random.rand(*np.random.randint(1, 8, np.random.randint(1, 6)))
             t = tn.Tensor(gt)
-            reco = t.full().numpy()
+            reco = t.numpy()
             self.assertAlmostEqual(np.linalg.norm(gt - reco) / np.linalg.norm(gt), 0)
