@@ -26,9 +26,14 @@ class Tensor(object):
                 shape = data.shape
                 data = torch.reshape(torch.Tensor(data), [shape[0], -1])
                 for n in range(1, N):
-                    self.cores.append(torch.reshape(torch.eye(data.shape[0]), [data.shape[0] // shape[n-1],
-                                                                               shape[n - 1], data.shape[0]]))
-                    data = torch.reshape(data, (data.shape[0] * shape[n], data.shape[1] // shape[n]))
+                    if data.shape[0] < data.shape[1]:
+                        self.cores.append(torch.reshape(torch.eye(data.shape[0]), [data.shape[0] // shape[n-1],
+                                                                                   shape[n - 1], data.shape[0]]))
+                        data = torch.reshape(data, (data.shape[0] * shape[n], data.shape[1] // shape[n]))
+                    else:
+                        self.cores.append(torch.reshape(data, [data.shape[0] // shape[n-1],
+                                                                                   shape[n - 1], data.shape[1]]))
+                        data = torch.reshape(torch.eye(data.shape[1]), (data.shape[1] * shape[n], data.shape[1] // shape[n]))
                 self.cores.append(torch.reshape(data, [data.shape[0] // shape[N - 1], shape[N-1], 1]))
             else:  # TT-SVD (or TT-EIG) algorithm
                 raise NotImplementedError
