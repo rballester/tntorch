@@ -12,7 +12,7 @@ def core_kron(a, b):
     return c
 
 
-def dot(a, b, k=None):
+def dot(a, b, k=None):  # TODO support partial dot products
     """
     Computes the dot product between two tensors.
 
@@ -96,7 +96,6 @@ def sum(t, modes=None, keepdims=False):
 
     """
 
-    # return self.ttm([torch.arange(sh, dtype=torch.double) for sh in self.shape], mode=range(self.ndim)).item()
     if modes is None:
         modes = np.arange(t.ndim)
     if not hasattr(modes, '__len__'):
@@ -106,7 +105,7 @@ def sum(t, modes=None, keepdims=False):
     for n in range(t.ndim):
         if n in modes:
             if t.Us[n] is None:
-                cores.append(torch.sum(t.cores[n], dim=1, keepdim=True))
+                cores.append(torch.sum(t.cores[n], dim=-2, keepdim=True))
                 Us.append(None)
             else:
                 cores.append(t.cores[n].clone())
@@ -114,7 +113,6 @@ def sum(t, modes=None, keepdims=False):
         else:
             cores.append(t.cores[n].clone())
             Us.append(t.Us[n].clone())
-    # return tn.Tensor(cores, Us=Us)
     result = tn.Tensor(cores, Us=Us)
     if keepdims:
         return result
@@ -238,7 +236,7 @@ def _random(function, shape, ranks_tt=1, ranks_tucker=None, requires_grad=False,
 
 
 def ones(shape):
-    return tn.Tensor([torch.ones(1, sh, 1) for sh in shape])
+    return tn.Tensor([torch.ones(1, 1, 1) for sh in shape], Us=[torch.ones(1, sh, 1) for sh in shape])
 
 
 def ones_like(tensor):
@@ -246,7 +244,7 @@ def ones_like(tensor):
 
 
 def zeros(shape):
-    return tn.Tensor([torch.zeros(1, sh, 1) for sh in shape])
+    return tn.Tensor([torch.zeros(1, 1, 1) for sh in shape], Us=[torch.zeros(1, sh, 1) for sh in shape])
 
 
 def zeros_like(tensor):
