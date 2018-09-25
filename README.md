@@ -64,6 +64,8 @@ Check out the [introductory notebook](https://github.com/rballester/tntorch/blob
 - [Tensor completion](https://github.com/rballester/tntorch/blob/master/tutorials/completion.ipynb)
 - [Tensor decomposition](https://github.com/rballester/tntorch/blob/master/tutorials/decompositions.ipynb)
 - [Sensitivity analysis](https://github.com/rballester/tntorch/blob/master/tutorials/sobol.ipynb)
+- [Vector field data](https://github.com/rballester/tntorch/blob/master/tutorials/vector_fields.ipynb)
+
 
 ## Planned
 

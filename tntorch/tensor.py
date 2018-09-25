@@ -629,3 +629,100 @@ class Tensor(object):
             else:
                 self.Us[m] = tn.generate_basis(name, self.Us[m].shape)
             self.Us[m].requires_grad = requires_grad
+
+    def round_tucker(self, eps=0, rmax=None, algorithm='svd'):
+        """
+        Tries to recompress this tensor in place by reducing its Tucker ranks.
+
+        :param eps: this relative error will not be exceeded. Default is 0
+        :param rmax: all ranks should be rmax at most (default: no limit)
+        :param algorithm: 'svd' (default) or 'eig'. The latter can be faster, but less accurate
+        :param verbose:
+
+        """
+
+        N = self.ndim
+        if not hasattr(rmax, '__len__'):
+            rmax = [rmax]*N
+        assert len(rmax) == N
+
+        self.orthogonalize(0)
+        for mu in range(N):
+            if self.Us[mu] is None:
+                if rmax[mu] is None:
+                    self.left_orthogonalize(mu)
+                    continue
+                else:
+                    self.Us[mu] = torch.eye(self.shape[mu])
+
+            # Send non-orthogonality to factor
+            Q, R = torch.qr(torch.reshape(self.cores[mu].permute(0, 2, 1), [-1, self.cores[mu].shape[1]]))
+            self.cores[mu] = torch.reshape(Q, [self.cores[mu].shape[0], self.cores[mu].shape[2], -1]).permute(0, 2, 1)
+            self.Us[mu] = torch.matmul(self.Us[mu], R.t())
+
+            # Split factor according to error budget
+            left, right = tn.truncated_svd(self.Us[mu], eps=eps/np.sqrt(N), rmax=rmax[mu], left_ortho=True, algorithm=algorithm)
+            self.Us[mu] = left
+
+            # Push the (non-orthogonal) remainder to the core
+            self.cores[mu] = torch.einsum('ijk,aj->iak', (self.cores[mu], right))
+
+            # Prepare next iteration
+            if mu < N-1:
+                self.left_orthogonalize(mu)
+
+    def round(self, eps=0, rmax=None, algorithm='svd', verbose=False):
+        """
+        Tries to recompress this tensor in place by reducing its TT ranks.
+
+        Note: this method does not attempt to reduce Tucker ranks.
+
+        Note: this method will turn CP (or CP-Tucker) cores into TT (or TT-Tucker) ones.
+
+        :param eps: this relative error will not be exceeded. Default is 0
+        :param rmax: all ranks should be rmax at most (default: no limit)
+        :param algorithm: 'svd' (default) or 'eig'. The latter can be faster, but less accurate
+        :param verbose:
+
+        """
+
+        N = self.ndim
+        if not hasattr(rmax, '__len__'):
+            rmax = [rmax]*(N-1)
+        assert len(rmax) == N-1
+
+        shape = self.shape
+        start = time.time()
+        self.orthogonalize(N-1)  # Make everything left-orthogonal
+        self._cp_to_tt(N-1)
+        if verbose:
+            print('Orthogonalization time:', time.time() - start)
+        delta = eps / max(1, np.sqrt(N - 1)) * torch.norm(self.cores[-1])
+        for mu in range(N - 1, 0, -1):
+            M = tn.right_unfolding(self.cores[mu])
+            left, M = tn.truncated_svd(M, delta=delta, rmax=rmax[mu-1], left_ortho=False, algorithm=algorithm, verbose=verbose)
+            self.cores[mu] = torch.reshape(M, [-1, shape[mu], self.cores[mu].shape[2]])
+            self.cores[mu-1] = torch.einsum('ijk,kl', (self.cores[mu-1], left))  # Pass factor to the left
+
+    def as_leaf(self):
+        """
+        Makes this tensor a leaf (optimizable) tensor, thus forgetting the operations from which it arose.
+
+        Example:
+
+        t = tn.rand([10]*3, requires_grad=True)  # Is a leaf
+        t *= 2  # Is not a leaf
+        t.as_leaf()  # Is a leaf again
+
+        """
+
+        for n in range(self.ndim):
+            if self.Us[n] is not None:
+                if self.Us[n].requires_grad:
+                    self.Us[n] = self.Us[n].detach().clone().requires_grad_()
+                else:
+                    self.Us[n] = self.Us[n].detach().clone()
+            if self.cores[n].requires_grad:
+                self.cores[n] = self.cores[n].detach().clone().requires_grad_()
+            else:
+                self.cores[n] = self.cores[n].detach().clone()

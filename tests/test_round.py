@@ -36,3 +36,11 @@ class TestRound(TestCase):
             t = gt+gt
             t.round(1e-8, algorithm='eig')
             self.assertAlmostEqual(tn.relative_error(gt, t/2).item(), 0, places=7)
+
+    def test_round_tucker(self):
+            for i in range(100):
+                eps = np.random.rand()**2
+                gt = tn.rand([32]*4, ranks_tt=8, ranks_tucker=8)
+                t = gt.clone()
+                t.round_tucker(eps=eps)
+                self.assertLessEqual(tn.relative_error(gt, t), eps)
