@@ -3,26 +3,12 @@ import torch
 import numpy as np
 import time
 import scipy.fftpack
-from functools import reduce
 
 
 def core_kron(a, b):
     c = a[:, None, :, :, None] * b[None, :, :, None, :]
     c = c.reshape([a.shape[0] * b.shape[0], -1, a.shape[-1] * b.shape[-1]])
     return c
-
-
-def dot(a, b, k=None):  # TODO support partial dot products
-    """
-    Computes the dot product between two tensors.
-
-    :param a: a tensor
-    :param b: a tensor
-    :return: a scalar
-
-    """
-
-    return a.dot(b, k)
 
 
 def mean(t):
@@ -162,10 +148,22 @@ def ttm(t, U, mode, transpose=False):
     return tn.Tensor(cores, Us=Us, idxs=t.idxs)
 
 
+def round_tt(t, **kwargs):
+    t2 = t.clone()
+    t2.round_tt(**kwargs)
+    return t2
+
+
+def round_tucker(t, **kwargs):
+    t2 = t.clone()
+    t2.round_tucker(**kwargs)
+    return t2
+
+
 def round(t, **kwargs):
     t2 = t.clone()
     t2.round(**kwargs)
-    return t.round()
+    return t2
 
 
 def cumsum(t, modes):

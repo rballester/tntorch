@@ -123,7 +123,7 @@ class Tensor(object):
         Us = []
         for n in range(self.ndim):
             if self.Us[n] is not None and other.Us[n] is not None and self.cores[n].shape[1]*other.cores[n].shape[1] < self.shape[n]:
-                cores.append(torch.reshape(torch.einsum('ijk,abc->iajbkc', (self.cores[n], other.cores[n])), 
+                cores.append(torch.reshape(torch.einsum('ijk,abc->iajbkc', (self.cores[n], other.cores[n])),
                                            (self.cores[n].shape[0]*other.cores[n].shape[0],
                                             self.cores[n].shape[1]*other.cores[n].shape[1],
                                             self.cores[n].shape[2]*other.cores[n].shape[2])))
@@ -138,7 +138,7 @@ class Tensor(object):
                     core2 = torch.einsum('ijk,aj->iak', (core2, other.Us[n]))
                 cores.append(tn.core_kron(core1, core2))
                 Us.append(None)
-                
+
         return tn.Tensor(cores, Us=Us)
 
     def __rmul__(self, other):
@@ -181,11 +181,15 @@ class Tensor(object):
 
     @ranks_tt.setter
     def ranks_tt(self, value):
-        self.round(rmax=value)
+        self.round_tt(rmax=value)
 
     @property
     def ranks_tucker(self):
         return np.array([c.shape[1] for c in self.cores])
+
+    @ranks_tucker.setter
+    def ranks_tucker(self, value):
+        self.round_tucker(rmax=value)
 
     @property
     def ndim(self):
@@ -267,25 +271,8 @@ class Tensor(object):
 
         return s
 
-    def dot(self, other, k=None):  # TODO support partial dot products
-        assert np.array_equal(self.shape, other.shape)
-        if k is None:
-            k = min(self.ndim, other.ndim)
-        Lprod = torch.ones([1, 1])
-        for mu in range(self.ndim-1, self.ndim-1-k, -1):
-            core1 = self.cores[mu]
-            if self.Us[mu] is None:
-                core2 = other.cores[mu]
-                if other.Us[mu] is not None:
-                    core1 = torch.einsum('ijk,ja->iak', (core1, other.Us[mu]))
-            elif other.Us[mu] is None:
-                core2 = torch.einsum('ijk,ja->iak', (other.cores[mu], self.Us[mu]))
-            else:
-                core2 = torch.einsum('ijk,ar,aj->irk', (other.cores[mu], self.Us[mu], other.Us[mu]))
-            Ucore = torch.einsum('ijk,ka->ija', (core1, Lprod))
-            Vcore = core2
-            Lprod = torch.mm(Ucore.reshape([Ucore.shape[0], -1]), torch.t(Vcore.reshape([Vcore.shape[0], -1])))
-        return torch.squeeze(Lprod)
+    def dot(self, other):
+        return tn.dot(self, other)
 
     def _process_key(self, key):
         if not hasattr(key, '__len__'):
@@ -554,6 +541,24 @@ class Tensor(object):
                 result += self.Us[n].numel()
         return result
 
+    def mean(self):
+        return tn.mean(self)
+
+    def sum(self):
+        return tn.sum(self)
+
+    def var(self):
+        return tn.var(self)
+
+    def std(self):
+        return tn.std(self)
+
+    def norm(self):
+        return tn.norm(self)
+
+    def normsq(self):
+        return tn.normsq(self)
+
     def factor_orthogonalize(self, mu):
         """
         Pushes the factor's non-orthogonal part to its corresponding core.
@@ -641,7 +646,7 @@ class Tensor(object):
         for i in range(self.ndim-1, mu, -1):
             L = self.right_orthogonalize(i)
         return R, L
-    
+
     def round_tucker(self, eps=0, rmax=None, algorithm='svd'):
         """
         Tries to recompress this tensor in place by reducing its Tucker ranks.

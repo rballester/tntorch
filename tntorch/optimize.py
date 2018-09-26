@@ -2,6 +2,7 @@ import tntorch as tn
 import torch
 import numpy as np
 import time
+from functools import reduce
 
 
 def optimize(tensors, loss_function, tol=1e-4, max_iter=10000, print_freq=500, verbose=True):
