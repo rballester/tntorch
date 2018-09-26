@@ -60,6 +60,7 @@ Check out the [introductory notebook](https://github.com/rballester/tntorch/blob
 - [ANOVA decomposition](https://github.com/rballester/tntorch/blob/master/tutorials/anova.ipynb)
 - [Boolean logic](https://github.com/rballester/tntorch/blob/master/tutorials/logic.ipynb)
 - [Classification](https://github.com/rballester/tntorch/blob/master/tutorials/classification.ipynb)
+- [Differentiation](https://github.com/rballester/tntorch/blob/master/tutorials/derivatives.ipynb)
 - [Discrete/weighted finite automata](https://github.com/rballester/tntorch/blob/master/tutorials/automata.ipynb)
 - [Polynomial chaos expansions](https://github.com/rballester/tntorch/blob/master/tutorials/pce.ipynb)
 - [Tensor completion](https://github.com/rballester/tntorch/blob/master/tutorials/completion.ipynb)
