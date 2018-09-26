@@ -23,7 +23,7 @@ def distance(t1, t2):
     """
 
     t1, t2 = _process(t1, t2)
-    return torch.sqrt(tn.dot(t1, t1) + tn.dot(t2, t2) - 2 * tn.dot(t1, t2))
+    return torch.sqrt(tn.dot(t1, t1) + tn.dot(t2, t2) - 2 * tn.dot(t1, t2).clamp(0))
 
 
 def relative_error(gt, approx):
@@ -38,7 +38,7 @@ def relative_error(gt, approx):
 
     gt, approx = _process(gt, approx)
     dotgt = tn.dot(gt, gt)
-    return torch.sqrt(dotgt + tn.dot(approx, approx) - 2*tn.dot(gt, approx)) / torch.sqrt(dotgt)
+    return torch.sqrt((dotgt + tn.dot(approx, approx) - 2*tn.dot(gt, approx)).clamp(0)) / torch.sqrt(dotgt.clamp(0))
 
 
 def rmse(gt, approx):
