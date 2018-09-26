@@ -14,10 +14,12 @@ def _process(gt, approx):
 
 def distance(t1, t2):
     """
-    Euclidean distance between two tensors. Generally faster than tn.norm(t1-t2)
+    Computes the Euclidean distance between two tensors. Generally faster than tn.norm(t1-t2).
 
     :param t1:
     :param t2:
+    :return: a scalar >= 0
+
     """
 
     t1, t2 = _process(t1, t2)
@@ -26,7 +28,7 @@ def distance(t1, t2):
 
 def relative_error(gt, approx):
     """
-    Compute the relative error between two tensors (torch or tntorch)
+    Computes the relative error between two tensors (torch or tntorch).
 
     :param gt: a torch or tntorch tensor
     :param approx: a torch or tntorch tensor
@@ -41,7 +43,7 @@ def relative_error(gt, approx):
 
 def rmse(gt, approx):
     """
-    Compute the RMSE between two tensors (torch or tntorch)
+    Computes the RMSE between two tensors (torch or tntorch).
 
     :param gt: a torch or tntorch tensor
     :param approx: a torch or tntorch tensor
@@ -57,7 +59,7 @@ def rmse(gt, approx):
 
 def r_squared(gt, approx):
     """
-    Compute the R^2 score between two tensors (torch or tntorch)
+    Computes the R^2 score between two tensors (torch or tntorch).
 
     :param gt: a torch or tntorch tensor
     :param approx: a torch or tntorch tensor

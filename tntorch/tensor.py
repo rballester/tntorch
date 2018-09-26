@@ -5,7 +5,7 @@ torch.set_default_dtype(torch.float64)
 import time
 
 
-class Tensor(object):  # CP done
+class Tensor(object):
 
     """
     Handler class for all tensor networks. Currently we support TT, CP, and hybrid formats (TT-Tucker, CP-Tucker, or
@@ -76,6 +76,7 @@ class Tensor(object):  # CP done
             core1 = self.cores[n]
             core2 = other.cores[n]
             if self.Us[n] is not None and other.Us[n] is not None:
+                # if core1.shape[1] + core2.shape[1] >= self.Us[n] and core1.shape[1] + core2.shape[1] >= self.Us[n]
                 slice1 = torch.cat([core1, torch.zeros([core2.shape[0], core1.shape[1], core1.shape[2]])], dim=0)
                 slice1 = torch.cat([slice1, torch.zeros(core1.shape[0]+core2.shape[0], core1.shape[1], core2.shape[2])], dim=2)
                 slice2 = torch.cat([torch.zeros([core1.shape[0], core2.shape[1], core2.shape[2]]), core2], dim=0)
@@ -165,7 +166,7 @@ class Tensor(object):  # CP done
         return not self == other
 
     @property
-    def shape(self):  # CP done
+    def shape(self):
         shape = []
         for n in range(self.ndim):
             if self.Us[n] is None:
@@ -175,7 +176,7 @@ class Tensor(object):  # CP done
         return torch.Size(shape)
 
     @property
-    def ranks_tt(self):  # CP done
+    def ranks_tt(self):
         return np.array([c.shape[0] for c in self.cores] + [self.cores[-1].shape[-1]])
 
     @ranks_tt.setter
@@ -183,18 +184,18 @@ class Tensor(object):  # CP done
         self.round(rmax=value)
 
     @property
-    def ranks_tucker(self):  # CP done
+    def ranks_tucker(self):
         return np.array([c.shape[1] for c in self.cores])
 
     @property
-    def ndim(self):  # CP done
+    def ndim(self):
         return len(self.cores)
 
     @property
     def size(self):
         return torch.prod(torch.Tensor(list(self.shape)))
 
-    def __repr__(self):  # CP done
+    def __repr__(self):
 
         format = 'TT'
         if any([c.dim() == 2 for c in self.cores]):
@@ -468,7 +469,7 @@ class Tensor(object):  # CP done
         result = self - tn.Tensor(subtract_cores) + tn.Tensor(add_cores)
         self.__init__(result.cores, result.Us, self.idxs)
 
-    def full_tucker(self):  # CP done
+    def full_tucker(self):
         """
         Decompresses this tensor only along the Tucker factors.
 
@@ -487,7 +488,7 @@ class Tensor(object):  # CP done
                 cores.append(self.cores[n].clone())
         return tn.Tensor(cores, idxs=self.idxs)
 
-    def full(self):  # CP done
+    def full(self):
         """
         Decompresses this tensor into a torch tensor.
 
@@ -509,7 +510,7 @@ class Tensor(object):  # CP done
         factor = factor.reshape(shape)
         return factor
 
-    def numpy(self):  # CP done
+    def numpy(self):
         """
         Decompresses this tensor into a NumPy multiarray.
 
@@ -519,7 +520,7 @@ class Tensor(object):  # CP done
 
         return self.full().detach().numpy()
 
-    def clone(self):  # CP done
+    def clone(self):
         """
         Creates a copy of this tensor (calls clone() on all internal tensor network nodes)
 
@@ -537,6 +538,21 @@ class Tensor(object):  # CP done
         if hasattr(self, 'idxs'):
             return tn.Tensor(cores, Us=Us, idxs=self.idxs)
         return tn.Tensor(cores, Us=Us)
+
+    def numel(self):
+        """
+        Counts the total number of elements of this tensor network.
+
+        :return: an integer
+
+        """
+
+        result = 0
+        for n in range(self.ndim):
+            result += self.cores[n].numel()
+            if self.Us[n] is not None:
+                result += self.Us[n].numel()
+        return result
 
     def factor_orthogonalize(self, mu):
         """
@@ -560,6 +576,7 @@ class Tensor(object):  # CP done
         If the n-th core has CP form, this method transforms it (in place) into TT.
 
         :param n: an integer between 0 to N-1
+
         """
 
     def left_orthogonalize(self, mu):
@@ -644,11 +661,7 @@ class Tensor(object):  # CP done
         self.orthogonalize(0)
         for mu in range(N):
             if self.Us[mu] is None:
-                if rmax[mu] is None:
-                    self.left_orthogonalize(mu)
-                    continue
-                else:
-                    self.Us[mu] = torch.eye(self.shape[mu])
+                self.Us[mu] = torch.eye(self.shape[mu])
 
             # Send non-orthogonality to factor
             Q, R = torch.qr(torch.reshape(self.cores[mu].permute(0, 2, 1), [-1, self.cores[mu].shape[1]]))
@@ -666,12 +679,9 @@ class Tensor(object):  # CP done
             if mu < N-1:
                 self.left_orthogonalize(mu)
 
-
-    def round(self, eps=0, rmax=None, algorithm='svd', verbose=False):
+    def round_tt(self, eps=0, rmax=None, algorithm='svd', verbose=False):
         """
         Tries to recompress this tensor in place by reducing its TT ranks.
-
-        Note: this method does not attempt to reduce Tucker ranks.
 
         Note: this method will turn CP (or CP-Tucker) cores into TT (or TT-Tucker) ones.
 
@@ -687,7 +697,6 @@ class Tensor(object):  # CP done
             rmax = [rmax]*(N-1)
         assert len(rmax) == N-1
 
-        shape = self.shape
         start = time.time()
         self.orthogonalize(N-1)  # Make everything left-orthogonal
         self._cp_to_tt(N-1)
@@ -697,10 +706,26 @@ class Tensor(object):  # CP done
         for mu in range(N - 1, 0, -1):
             M = tn.right_unfolding(self.cores[mu])
             left, M = tn.truncated_svd(M, delta=delta, rmax=rmax[mu-1], left_ortho=False, algorithm=algorithm, verbose=verbose)
-            self.cores[mu] = torch.reshape(M, [-1, shape[mu], self.cores[mu].shape[2]])
+            self.cores[mu] = torch.reshape(M, [-1, self.cores[mu].shape[1], self.cores[mu].shape[2]])
             self.cores[mu-1] = torch.einsum('ijk,kl', (self.cores[mu-1], left))  # Pass factor to the left
 
-    def set_factors(self, name, modes='all', requires_grad=False):  # CP done
+    def round(self, eps=0, **kwargs):
+        """
+        General recompression. Attempts to reduce TT ranks first; then does Tucker rounding with the remaining error
+        budget.
+
+        :param eps:
+        :param kwargs: passed to `round_tt()` and `round_tucker()`
+
+        """
+
+        copy = self.clone()
+        self.round_tt(eps, **kwargs)
+        reached = tn.relative_error(copy, self)
+        if reached < eps:
+            self.round_tucker((1+eps) / (1+reached) - 1, **kwargs)
+
+    def set_factors(self, name, modes='all', requires_grad=False):
         """
         Sets factors Us of this tensor to be of a certain family.
 
