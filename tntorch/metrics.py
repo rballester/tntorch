@@ -12,6 +12,18 @@ def _process(gt, approx):
     return gt, approx
 
 
+def distance(t1, t2):
+    """
+    Euclidean distance between two tensors. Generally faster than tn.norm(t1-t2)
+
+    :param t1:
+    :param t2:
+    """
+
+    t1, t2 = _process(t1, t2)
+    return torch.sqrt(tn.dot(t1, t1) + tn.dot(t2, t2) - 2 * tn.dot(t1, t2))
+
+
 def relative_error(gt, approx):
     """
     Compute the relative error between two tensors (torch or tntorch)
@@ -23,9 +35,8 @@ def relative_error(gt, approx):
     """
 
     gt, approx = _process(gt, approx)
-    if isinstance(gt, torch.Tensor) and isinstance(approx, torch.Tensor):
-        return torch.norm(gt-approx) / torch.norm(gt)
-    return tn.norm(gt-approx) / tn.norm(gt)
+    dotgt = tn.dot(gt, gt)
+    return torch.sqrt(dotgt + tn.dot(approx, approx) - 2*tn.dot(gt, approx)) / torch.sqrt(dotgt)
 
 
 def rmse(gt, approx):
@@ -41,7 +52,7 @@ def rmse(gt, approx):
     gt, approx = _process(gt, approx)
     if isinstance(gt, torch.Tensor) and isinstance(approx, torch.Tensor):
         return torch.norm(gt-approx) / np.sqrt(gt.numel())
-    return (gt-approx).norm() / torch.sqrt(gt.size)
+    return tn.distance(gt, approx) / torch.sqrt(gt.size)
 
 
 def r_squared(gt, approx):
@@ -57,4 +68,4 @@ def r_squared(gt, approx):
     gt, approx = _process(gt, approx)
     if isinstance(gt, torch.Tensor) and isinstance(approx, torch.Tensor):
         return 1 - torch.norm(gt-approx)**2 / torch.norm(gt-torch.mean(gt))**2
-    return 1 - tn.normsq(gt-approx) / tn.normsq(gt-tn.mean(gt))
+    return 1 - tn.distance(gt, approx)**2 / tn.normsq(gt-tn.mean(gt))
