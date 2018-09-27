@@ -47,11 +47,11 @@ def undo_anova_decomposition(a):
     Us = []
     for n in range(a.ndim):
         if a.Us[n] is None:
-            cores.append(a.cores[n][:, 1:, :] + a.cores[n][:, 0:1, :])
+            cores.append(a.cores[n][..., 1:, :] + a.cores[n][..., 0:1, :])
             Us.append(None)
         else:
-            cores.append(a.cores[n])
-            Us.append(a.cores[n][1:, :] + a.cores[n][0:1, :])
+            cores.append(a.cores[n].clone())
+            Us.append(a.Us[n][1:, :] + a.Us[n][0:1, :])
     return tn.Tensor(cores, Us=Us)
 
 
@@ -82,7 +82,7 @@ def sobol(t, mask, marginals=None):
             m = marginals[n]
         m /= torch.sum(m)  # Make sure each marginal sums to 1
         if am.Us[n] is None:
-            am.cores[n][:, 1:, :] *= m[None, :, None]
+            am.cores[n][..., 1:, :] *= m[None, :, None]
         else:
             am.Us[n][1:, :] *= m[:, None]
     am_masked = tn.mask(am, mask)
