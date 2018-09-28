@@ -32,11 +32,14 @@ def partialset(t, order=1, mask=None, bounds=None):
 
     max_order = max(order)
     def diff(core, n):
-        zero_slice = torch.zeros([core.shape[0], 1, core.shape[2]])
+        if core.dim() == 3:
+            pad = torch.zeros(core.shape[0], 1, core.shape[2])
+        else:
+            pad = torch.zeros(1, core.shape[1])
         if core.shape[1] == 1:
-            return zero_slice
-        step = (bounds[n][1] - bounds[n][0]) / (core.shape[1] - 1)
-        return torch.cat(((core[:, 1:, :] - core[:, :-1, :]) / step, zero_slice), dim=1)
+            return pad
+        step = (bounds[n][1] - bounds[n][0]) / (core.shape[-2] - 1)
+        return torch.cat(((core[..., 1:, :] - core[..., :-1, :]) / step, pad), dim=-2)
     cores = []
     idxs = []
     for n in range(t.ndim):
@@ -47,10 +50,10 @@ def partialset(t, order=1, mask=None, bounds=None):
         idx = torch.zeros([t.shape[n]])
         for o in range(1, max_order+1):
             stack.append(diff(stack[-1], n))
-            idx = torch.cat((idx, torch.ones(stack[-1].shape[1])*o))
+            idx = torch.cat((idx, torch.ones(stack[-1].shape[-2])*o))
             if o == max_order:
                 break
-        cores.append(torch.cat(stack, dim=1))
+        cores.append(torch.cat(stack, dim=-2))
         idxs.append(idx)
     d = tn.Tensor(cores, idxs=idxs)
     wm = tn.automata.weight_mask(t.ndim, order, nsymbols=max_order+1)
@@ -85,12 +88,15 @@ def partial(t, modes, order=1, bounds=None):
         for o in range(1, order+1):
             step = (bounds[i][1] - bounds[i][0]) / (t.shape[mode]-1)
             if t2.Us[mode] is None:
-                t2.cores[mode] = (t2.cores[mode][:, 1:, :] - t2.cores[mode][:, :-1, :]) / step
-                t2.cores[mode] = torch.cat((t2.cores[mode], torch.zeros(t2.cores[mode].shape[0],
-                                                                        1, t2.cores[mode].shape[2])), dim=1)
+                t2.cores[mode] = (t2.cores[mode][..., 1:, :] - t2.cores[mode][..., :-1, :]) / step
+                if t2.cores[mode].dim() == 3:
+                    pad = torch.zeros(t2.cores[mode].shape[0], 1, t2.cores[mode].shape[2])
+                else:
+                    pad = torch.zeros(1, t2.cores[mode].shape[1])
+                t2.cores[mode] = torch.cat((t2.cores[mode], pad), dim=-2)
             else:
                 t2.Us[mode] = (t2.Us[mode][1:, :] - t2.Us[mode][:-1, :]) / step
-                t2.Us[mode] = torch.cat((t2.Us[mode], torch.zeros(1, t2.cores[mode].shape[1])), dim=0)
+                t2.Us[mode] = torch.cat((t2.Us[mode], torch.zeros(1, t2.cores[mode].shape[-2])), dim=0)
     return t2
 
 

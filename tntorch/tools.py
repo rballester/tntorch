@@ -308,12 +308,13 @@ def mask(t, mask):
         idx = np.array(idxs[n])
         idx[idx >= mask.shape[n]] = mask.shape[n]-1  # Clamp
         if mask.Us[n] is None:
-            cores.append(mask.cores[n][:, idx, :])
+            cores.append(mask.cores[n][..., idx, :])
             Us.append(None)
         else:
             cores.append(mask.cores[n])
             Us.append(mask.Us[n][idx, :])
-    return t*tn.Tensor(cores, Us)
+    mask = tn.Tensor(cores, Us)
+    return t*mask
 
 
 def right_unfolding(core):
