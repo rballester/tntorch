@@ -2,7 +2,15 @@
 
 [Welcome to *tntorch*](https://github.com/rballester/tntorch/blob/master/tutorials/introduction.ipynb), a PyTorch-powered modeling and learning library using tensor networks. Such networks are unique in that [they use *multilinear* neural units](https://arxiv.org/abs/1711.00811) (instead of non-linear activation units).
 
-The tensor networks currently supported are those in the *Tensor Train - Tucker* format. It is a flexible model that generalizes both the [Tucker](https://epubs.siam.org/doi/pdf/10.1137/S0895479898346995) and [tensor train (TT)](https://epubs.siam.org/doi/pdf/10.1137/090752286) formats --two of the most popular tensor decompositions. For example, the following networks both represent a 4D tensor (i.e. a real function that can take I1 x I2 x I3 x I4 possible values):
+[We support](https://github.com/rballester/tntorch/blob/master/tutorials/main_formats.ipynb):
+
+- [CANDECOMP/PARAFAC (CP)](https://epubs.siam.org/doi/pdf/10.1137/07070111X)
+- [Tucker](https://epubs.siam.org/doi/pdf/10.1137/S0895479898346995)
+- [Tensor train (TT)](https://epubs.siam.org/doi/abs/10.1137/090752286?journalCode=sjoce3)
+- Hybrids: CP-Tucker, TT-Tucker, etc. 
+- [Partial support](https://github.com/rballester/tntorch/blob/master/tutorials/other_formats.ipynb) for other decompositions such as [INDSCAL, CANDELINC, DEDICOM, PARATUCK2](https://epubs.siam.org/doi/pdf/10.1137/07070111X), and custom formats
+
+For example, the following networks both represent a 4D tensor (i.e. a real function that can take I1 x I2 x I3 x I4 possible values) in the TT and TT-Tucker formats:
 
 <p align="center"><img src="https://github.com/rballester/tntorch/blob/master/images/tensors.jpg" width="600" title="TT-Tucker"></p>
 
@@ -62,6 +70,8 @@ Check out the [introductory notebook](https://github.com/rballester/tntorch/blob
 - [Classification](https://github.com/rballester/tntorch/blob/master/tutorials/classification.ipynb)
 - [Differentiation](https://github.com/rballester/tntorch/blob/master/tutorials/derivatives.ipynb)
 - [Discrete/weighted finite automata](https://github.com/rballester/tntorch/blob/master/tutorials/automata.ipynb)
+- [Main tensor formats available](https://github.com/rballester/tntorch/blob/master/tutorials/main_formats.ipynb)
+- [Other custom formats](https://github.com/rballester/tntorch/blob/master/tutorials/other_formats.ipynb)
 - [Polynomial chaos expansions](https://github.com/rballester/tntorch/blob/master/tutorials/pce.ipynb)
 - [Tensor completion](https://github.com/rballester/tntorch/blob/master/tutorials/completion.ipynb)
 - [Tensor decomposition](https://github.com/rballester/tntorch/blob/master/tutorials/decompositions.ipynb)

@@ -25,7 +25,7 @@ class Tensor(object):
                 raise ValueError('All tensor cores must have 2 (for CP) or 3 (for TT) dimensions')
             for n in range(len(data)-1):
                 if (data[n+1].dim() == 3 and data[n].shape[-1] != data[n+1].shape[0]) or (data[n+1].dim() == 2 and data[n].shape[-1] != data[n+1].shape[1]):
-                    raise ValueError('Core ranks do not match: {}'.format(str))
+                    raise ValueError('Core ranks do not match')
             self.cores = data
         elif isinstance(data, np.ndarray):
             data = torch.Tensor(data)
@@ -52,7 +52,7 @@ class Tensor(object):
                 if Us[n] is None:
                     continue
                 assert Us[n].dim() == 2
-                assert self.cores[n].shape[1] == Us[n].shape[1]
+                assert self.cores[n].shape[-2] == Us[n].shape[1]
             self.Us = Us
         else:
             self.Us = [None]*self.ndim
@@ -60,6 +60,10 @@ class Tensor(object):
             self.idxs = idxs
         else:
             self.idxs = [torch.arange(sh) for sh in self.shape]
+
+    """
+    Arithmetic operations
+    """
 
     def __add__(self, other):
         if not isinstance(other, Tensor):
@@ -75,6 +79,13 @@ class Tensor(object):
         for n in range(self.ndim):
             core1 = self.cores[n]
             core2 = other.cores[n]
+            # CP + CP -> CP, other combinations -> TT
+            if core1.dim() == 2 and core2.dim() == 2:
+                core1 = core1[None, :, :]
+                core2 = core2[None, :, :]
+            else:
+                core1 = self._cp_to_tt(core1)
+                core2 = self._cp_to_tt(core2)
             if self.Us[n] is not None and other.Us[n] is not None:
                 # if core1.shape[1] + core2.shape[1] >= self.Us[n] and core1.shape[1] + core2.shape[1] >= self.Us[n]
                 slice1 = torch.cat([core1, torch.zeros([core2.shape[0], core1.shape[1], core1.shape[2]])], dim=0)
@@ -94,8 +105,19 @@ class Tensor(object):
             c = torch.cat([column1, column2], dim=2)
             cores.append(c)
             Us.append(None)
-        cores[0] = torch.sum(cores[0], dim=0, keepdim=True)
-        cores[-1] = torch.sum(cores[-1], dim=2, keepdim=True)
+
+        # First core should have first size 1 (if it's TT)
+        if not (self.cores[0].dim() == 2 and other.cores[0].dim() == 2):
+            cores[0] = torch.sum(cores[0], dim=0, keepdim=True)
+        # Similarly for the last core and last size
+        if not (self.cores[-1].dim() == 2 and other.cores[-1].dim() == 2):
+            cores[-1] = torch.sum(cores[-1], dim=2, keepdim=True)
+
+        # Set up cores that should be CP cores
+        for n in range(0, self.ndim):
+            if self.cores[n].dim() == 2 and other.cores[n].dim() == 2:
+                cores[n] = torch.sum(cores[n], dim=0, keepdim=False)
+
         return Tensor(cores, Us=Us)
 
     def __radd__(self, other):
@@ -122,24 +144,37 @@ class Tensor(object):
         cores = []
         Us = []
         for n in range(self.ndim):
+            core1 = self.cores[n]
+            core2 = other.cores[n]
+            # CP + CP -> CP, other combinations -> TT
+            if core1.dim() == 2 and core2.dim() == 2:
+                core1 = core1[None, :, :]
+                core2 = core2[None, :, :]
+            else:
+                core1 = self._cp_to_tt(core1)
+                core2 = self._cp_to_tt(core2)
+            # We do the product core along 3 axes, unless it would blow up
             if self.Us[n] is not None and other.Us[n] is not None and self.cores[n].shape[1]*other.cores[n].shape[1] < self.shape[n]:
-                cores.append(torch.reshape(torch.einsum('ijk,abc->iajbkc', (self.cores[n], other.cores[n])),
-                                           (self.cores[n].shape[0]*other.cores[n].shape[0],
-                                            self.cores[n].shape[1]*other.cores[n].shape[1],
-                                            self.cores[n].shape[2]*other.cores[n].shape[2])))
+                cores.append(torch.reshape(torch.einsum('ijk,abc->iajbkc', (core1, core2)),
+                                           (core1.shape[0]*core2.shape[0],
+                                            core1.shape[1]*core2.shape[1],
+                                            core1.shape[2]*core2.shape[2])))
                 Us.append(torch.reshape(torch.einsum('ij,ik->ijk', (self.Us[n], other.Us[n])),
                          (self.Us[n].shape[0], -1)))
-            else:
-                core1 = self.cores[n]
-                core2 = other.cores[n]
+            else:  # Decompress spatially, then do normal TT-TT slice-wise kronecker product
                 if self.Us[n] is not None:
                     core1 = torch.einsum('ijk,aj->iak', (core1, self.Us[n]))
                 if other.Us[n] is not None:
                     core2 = torch.einsum('ijk,aj->iak', (core2, other.Us[n]))
                 cores.append(tn.core_kron(core1, core2))
                 Us.append(None)
-
+            if self.cores[n].dim() == 2 and other.cores[n].dim() == 2:
+                cores[-1] = cores[-1][0, :, :]
         return tn.Tensor(cores, Us=Us)
+
+    """
+    Boolean logic
+    """
 
     def __rmul__(self, other):
         return self * other
@@ -165,6 +200,10 @@ class Tensor(object):
     def __ne__(self, other):
         return not self == other
 
+    """
+    Shapes and ranks
+    """
+
     @property
     def shape(self):
         shape = []
@@ -177,7 +216,11 @@ class Tensor(object):
 
     @property
     def ranks_tt(self):
-        return np.array([c.shape[0] for c in self.cores] + [self.cores[-1].shape[-1]])
+        if self.cores[0].dim() == 2:
+            first = self.cores[0].shape[1]
+        else:
+            first = self.cores[0].shape[0]
+        return np.array([first] + [c.shape[-1] for c in self.cores])
 
     @ranks_tt.setter
     def ranks_tt(self, value):
@@ -185,7 +228,7 @@ class Tensor(object):
 
     @property
     def ranks_tucker(self):
-        return np.array([c.shape[1] for c in self.cores])
+        return np.array([c.shape[-2] for c in self.cores])
 
     @ranks_tucker.setter
     def ranks_tucker(self, value):
@@ -201,11 +244,14 @@ class Tensor(object):
 
     def __repr__(self):
 
-        format = 'TT'
+        format = []
+        if any([c.dim() == 3 for c in self.cores]):
+            format.append('TT')
         if any([c.dim() == 2 for c in self.cores]):
-            format += '-CP'
+            format.append('CP')
         if any([U is not None for U in self.Us]):
-            format += '-Tucker'
+            format.append('Tucker')
+        format = '-'.join(format)
         s = '{}D {} tensor:\n'.format(self.ndim, format)
         s += '\n'
         ttr = self.ranks_tt
@@ -249,7 +295,7 @@ class Tensor(object):
         row = [' ']*(4*self.ndim-1)
         for n in range(self.ndim):
             if self.cores[n].dim() == 2:
-                nodestr = '[{}]'.format(n)
+                nodestr = '<{}>'.format(n)
             else:
                 nodestr = '({})'.format(n)
             lenn = len(nodestr)
@@ -261,7 +307,7 @@ class Tensor(object):
         s += ' / \\'*self.ndim
         s += '\n'
 
-        # Bottom: TT ranks
+        # Bottom: TT/CP ranks
         row = [' ']*(4*self.ndim)
         for n in range(self.ndim+1):
             lenr = len('{}'.format(ttr[n]))
@@ -271,8 +317,9 @@ class Tensor(object):
 
         return s
 
-    def dot(self, other):
-        return tn.dot(self, other)
+    """
+    Decompression
+    """
 
     def _process_key(self, key):
         if not hasattr(key, '__len__'):
@@ -297,8 +344,8 @@ class Tensor(object):
 
     def __getitem__(self, key):
         """
-        NumPy-style indexing for TT tensors. There are 5 accessors supported: slices, index arrays, integers, None, or
-        another Tensor (selection via binary indexing)
+        NumPy-style indexing for compressed tensors. There are 5 accessors supported: slices, index arrays, integers,
+        None, or another Tensor (selection via binary indexing)
 
         - Index arrays can be lists, tuples, or vectors
         - All index arrays must have the same length P
@@ -329,32 +376,44 @@ class Tensor(object):
             key = [key[:, col] for col in range(key.shape[1])]
         key = self._process_key(key)
         last_mode = None
-        index_done = False
-        factors = {'int': None, 'index': None}
+        factors = {'int': None, 'index': None, 'index_done': False}
         cores = []
         Us = []
         counter = 0
 
+        def join_cores(c1, c2):
+            if c1.dim() == 1 and c2.dim() == 2:
+                return torch.einsum('i,ai->ai', (c1, c2))
+            elif c1.dim() == 2 and c2.dim() == 2:
+                return torch.einsum('ij,aj->iaj', (c1, c2))
+            elif c1.dim() == 1 and c2.dim() == 3:
+                return torch.einsum('i,iaj->iaj', (c1, c2))
+            elif c1.dim() == 2 and c2.dim() == 3:
+                return torch.einsum('ij,jak->iak', (c1, c2))
+            else:
+                raise ValueError
+
         def insert_core(factors, core=None, key=None, U=None):
             if factors['index'] is not None:
                 if factors['int'] is not None:
-                    factors['index'] = torch.einsum('ij,jak->iak', (factors['int'], factors['index']))
+                    factors['index'] = join_cores(factors['int'], factors['index'])
                     factors['int'] = None
                 cores.append(factors['index'])
                 Us.append(None)
                 factors['index'] = None
+                factors['index_done'] = True
             if core is not None:
-                if factors['int'] is not None:
+                if factors['int'] is not None:  # There is a previous 1D/2D core (CP/Tucker) from an integer slicing
                     if U is None:
-                        cores.append(torch.einsum('ij,jak->iak', (factors['int'], core[:, key, :])))
+                        cores.append(join_cores(factors['int'], core[..., key, :]))
                         Us.append(None)
                     else:
-                        cores.append(torch.einsum('ij,jak->iak', (factors['int'], core)))
+                        cores.append(join_cores(factors['int'], core))
                         Us.append(U[key, :])
                     factors['int'] = None
-                else:
+                else:  # Easiest case
                     if U is None:
-                        cores.append(core[:, key, :])
+                        cores.append(core[..., key, :])
                         Us.append(None)
                     else:
                         cores.append(core)
@@ -362,12 +421,23 @@ class Tensor(object):
 
         def get_key(counter, key):
             if self.Us[counter] is None:
-                return self.cores[counter][:, key, :]
+                return self.cores[counter][..., key, :]
+                # if self.cores[counter].dim() == 3:
+                #     return self.cores[counter][:, key, :]
+                # else:
+                #     return self.cores[counter][None, key, :]
             else:
                 sl = self.Us[counter][key, :]
-                if sl.dim() == 1:
-                    return torch.einsum('ijk,j->ik', (self.cores[counter], sl))
-                return torch.einsum('ijk,aj->iak', (self.cores[counter], sl))
+                if sl.dim() == 1:  # key is an int
+                    if self.cores[counter].dim() == 3:
+                        return torch.einsum('ijk,j->ik', (self.cores[counter], sl))
+                    else:
+                        return torch.einsum('ji,j->i', (self.cores[counter], sl))#[None, :]  # TODO check
+                else:
+                    if self.cores[counter].dim() == 3:
+                        return torch.einsum('ijk,aj->iak', (self.cores[counter], sl))
+                    else:
+                        return torch.einsum('ji,aj->ai', (self.cores[counter], sl))
 
         for i in range(len(key)):
             if hasattr(key[i], '__len__'):
@@ -382,22 +452,33 @@ class Tensor(object):
                 raise IndexError
 
             if this_mode == 'none':
-                insert_core(factors, torch.eye(self.cores[counter].shape[0])[:, None, :], key=slice(None), U=None)
+                if self.cores[counter].dim() == 3:
+                    insert_core(factors, torch.eye(self.cores[counter].shape[0])[:, None, :], key=slice(None), U=None)
+                else:
+                    insert_core(factors, torch.eye(self.cores[counter].shape[1])[:, None, :], key=slice(None), U=None)
             elif this_mode == 'slice':
                 insert_core(factors, self.cores[counter], key=key[i], U=self.Us[counter])
                 counter += 1
             elif this_mode == 'index':
-                if index_done:
+                if factors['index_done']:
                     raise IndexError("All index arrays must appear contiguously")
                 if factors['index'] is None:
                     factors['index'] = get_key(counter, key[i])
                 else:
-                    if factors['index'].shape[1] != len(key[i]):
+                    if factors['index'].shape[-2] != len(key[i]):
                         raise ValueError("Index arrays must have the same length")
                     a1 = factors['index']
                     a2 = get_key(counter, key[i])
-                    # Until https://github.com/pytorch/pytorch/issues/10661 is resolved
-                    factors['index'] = torch.sum(a1[:, :, :, None]*a2.permute(1, 0, 2)[None, :, :, :], dim=2)
+                    if a1.dim() == 2 and a2.dim() == 2:
+                        factors['index'] = torch.einsum('ai,ai->ai', (a1, a2))
+                    elif a1.dim() == 2 and a2.dim() == 3:
+                        factors['index'] = torch.einsum('ai,iaj->iaj', (a1, a2))
+                    elif a1.dim() == 3 and a2.dim() == 2:
+                        factors['index'] = torch.einsum('iaj,aj->iaj', (a1, a2))
+                    elif a1.dim() == 3 and a2.dim() == 3:
+                        # Until https://github.com/pytorch/pytorch/issues/10661 is fully resolved # TODO check efficiency for other cases
+                        factors['index'] = torch.sum(a1[:, :, :, None]*a2.permute(1, 0, 2)[None, :, :, :], dim=2)
+                        # factors['index'] = torch.einsum('iaj,jak->iak', (a1, a2))
                 counter += 1
             elif this_mode == 'int':
                 if last_mode == 'index':
@@ -405,18 +486,38 @@ class Tensor(object):
                 if factors['int'] is None:
                     factors['int'] = get_key(counter, key[i])
                 else:
-                    factors['int'] = torch.einsum('ij,jk->ik', (factors['int'], get_key(counter, key[i])))
+                    c1 = factors['int']
+                    c2 = get_key(counter, key[i])
+                    if c1.dim() == 1 and c2.dim() == 1:
+                        factors['int'] = torch.einsum('i,i->i', (c1, c2))
+                    elif c1.dim() == 1 and c2.dim() == 2:
+                        factors['int'] = torch.einsum('i,ij->ij', (c1, c2))
+                    elif c1.dim() == 2 and c2.dim() == 1:
+                        factors['int'] = torch.einsum('ij,j->ij', (c1, c2))
+                    elif c1.dim() == 2 and c2.dim() == 2:
+                        factors['int'] = torch.einsum('ij,jk->ik', (c1, c2))
                 counter += 1
             last_mode = this_mode
 
+        # At the end: handle possibly pending factors
         if last_mode == 'index':
-            cores.append(factors['index'])
-            Us.append(None)
+            insert_core(factors, core=None, key=None, U=None)
+            # cores.append(factors['index']) # <- earlier #TODO
+            # Us.append(None)
         elif last_mode == 'int':
-            if len(cores) > 0:
-                cores[-1] = torch.einsum('ija,ak->ijk', (cores[-1], factors['int']))
-            else:
-                return factors['int'][0, 0]
+            if len(cores) > 0:  # We return a tensor: absorb existing cores with int factor
+                if cores[-1].dim() == 2 and factors['int'].dim() == 1:
+                    cores[-1] = torch.einsum('ai,i->ai', (cores[-1], factors['int']))
+                elif cores[-1].dim() == 2 and factors['int'].dim() == 2:
+                    cores[-1] = torch.einsum('ai,ij->aj', (cores[-1], factors['int']))
+                elif cores[-1].dim() == 3 and factors['int'].dim() == 1:
+                    cores[-1] = torch.einsum('iaj,j->ai', (cores[-1], factors['int']))
+                elif cores[-1].dim() == 3 and factors['int'].dim() == 2:
+                    cores[-1] = torch.einsum('iaj,jk->iak', (cores[-1], factors['int']))
+            else:  # We return a scalar
+                if factors['int'].numel() > 1:
+                    return torch.sum(factors['int'])
+                return torch.squeeze(factors['int'])
         return tn.Tensor(cores, Us=Us)
 
     def __setitem__(self, key, value):  # TODO not fully working yet
@@ -456,7 +557,7 @@ class Tensor(object):
         result = self - tn.Tensor(subtract_cores) + tn.Tensor(add_cores)
         self.__init__(result.cores, result.Us, self.idxs)
 
-    def full_tucker(self):
+    def full_tucker(self, _clone=True):
         """
         Decompresses this tensor only along the Tucker factors.
 
@@ -472,7 +573,10 @@ class Tensor(object):
                 else:
                     cores.append(torch.einsum('ijk,aj->iak', (self.cores[n], self.Us[n])))
             else:
-                cores.append(self.cores[n].clone())
+                if _clone:
+                    cores.append(self.cores[n].clone())
+                else:
+                    cores.append(self.cores[n])
         return tn.Tensor(cores, idxs=self.idxs)
 
     def full(self):
@@ -483,17 +587,17 @@ class Tensor(object):
 
         """
 
-        t = self.full_tucker()
+        t = self.full_tucker(_clone=False)
         shape = []
-        factor = torch.ones([1, 1])
+        factor = torch.ones(1, self.ranks_tt[0])
         for n in range(t.ndim):
             shape.append(t.cores[n].shape[-2])
-            if t.cores[n].dim() == 2:
+            if t.cores[n].dim() == 2:  # CP core
                 factor = torch.einsum('ai,bi->abi', (factor, t.cores[n]))
-            else:
+            else:  # TT core
                 factor = torch.einsum('ai,ibj->abj', (factor, t.cores[n]))
-            factor = factor.reshape([-1, t.cores[n].shape[-1]])
-        factor = factor[..., 0]
+            factor = factor.reshape([-1, factor.shape[-1]])
+        factor = torch.sum(factor, dim=-1)
         factor = factor.reshape(shape)
         return factor
 
@@ -507,57 +611,30 @@ class Tensor(object):
 
         return self.full().detach().numpy()
 
-    def clone(self):
+    def _cp_to_tt(self, factor=None):
         """
-        Creates a copy of this tensor (calls clone() on all internal tensor network nodes)
-
-        :return: another compressed tensor
-
-        """
-
-        cores = [self.cores[n].clone()for n in range(self.ndim)]
-        Us = []
-        for n in range(self.ndim):
-            if self.Us[n] is None:
-                Us.append(None)
-            else:
-                Us.append(self.Us[n].clone())
-        if hasattr(self, 'idxs'):
-            return tn.Tensor(cores, Us=Us, idxs=self.idxs)
-        return tn.Tensor(cores, Us=Us)
-
-    def numel(self):
-        """
-        Counts the total number of elements of this tensor network.
-
-        :return: an integer
+        Turn a CP factor into a TT core (each slice is a diagonal matrix)
+        :param factor: an integer between 0 to N-1. If None, all cores in this tensor will be converted
 
         """
 
-        result = 0
-        for n in range(self.ndim):
-            result += self.cores[n].numel()
-            if self.Us[n] is not None:
-                result += self.Us[n].numel()
-        return result
+        if factor is None:
+            if self.cores[0].dim() == 2:
+                self.cores[0] = self.cores[0][None, :, :]
+            for mu in range(1, self.ndim-1):
+                self.cores[mu] = self._cp_to_tt(self.cores[mu])
+            if self.cores[-1].dim() == 2:
+                self.cores[-1] = self.cores[-1].transpose(1, 0)[:, :, None]
+            return
+        if factor.dim() == 3:  # Already a TT core
+            return factor
+        core = torch.zeros(factor.shape[1], factor.shape[1] + 1, factor.shape[0])
+        core[:, 0, :] = factor.t()
+        return core.reshape(factor.shape[1] + 1, factor.shape[1], factor.shape[0]).permute(0, 2, 1)[:-1, :, :]
 
-    def mean(self):
-        return tn.mean(self)
-
-    def sum(self):
-        return tn.sum(self)
-
-    def var(self):
-        return tn.var(self)
-
-    def std(self):
-        return tn.std(self)
-
-    def norm(self):
-        return tn.norm(self)
-
-    def normsq(self):
-        return tn.normsq(self)
+    """
+    Rounding and orthogonalization
+    """
 
     def factor_orthogonalize(self, mu):
         """
@@ -575,14 +652,6 @@ class Tensor(object):
             self.cores[mu] = torch.einsum('jk,aj->ak', (self.cores[mu], R))
         else:
             self.cores[mu] = torch.einsum('ijk,aj->iak', (self.cores[mu], R))
-
-    def _cp_to_tt(self, n):
-        """
-        If the n-th core has CP form, this method transforms it (in place) into TT.
-
-        :param n: an integer between 0 to N-1
-
-        """
 
     def left_orthogonalize(self, mu):
         """
@@ -651,6 +720,8 @@ class Tensor(object):
         """
         Tries to recompress this tensor in place by reducing its Tucker ranks.
 
+        Note: this method will turn CP (or CP-Tucker) cores into TT (or TT-Tucker) ones.
+
         :param eps: this relative error will not be exceeded. Default is 0
         :param rmax: all ranks should be rmax at most (default: no limit)
         :param algorithm: 'svd' (default) or 'eig'. The latter can be faster, but less accurate
@@ -663,6 +734,7 @@ class Tensor(object):
             rmax = [rmax]*N
         assert len(rmax) == N
 
+        self._cp_to_tt()
         self.orthogonalize(0)
         for mu in range(N):
             if self.Us[mu] is None:
@@ -702,9 +774,9 @@ class Tensor(object):
             rmax = [rmax]*(N-1)
         assert len(rmax) == N-1
 
+        self._cp_to_tt()
         start = time.time()
         self.orthogonalize(N-1)  # Make everything left-orthogonal
-        self._cp_to_tt(N-1)
         if verbose:
             print('Orthogonalization time:', time.time() - start)
         delta = eps / max(1, np.sqrt(N - 1)) * torch.norm(self.cores[-1])
@@ -729,6 +801,35 @@ class Tensor(object):
         reached = tn.relative_error(copy, self)
         if reached < eps:
             self.round_tucker((1+eps) / (1+reached) - 1, **kwargs)
+
+    """
+    Convenience "methods"
+    """
+
+    def dot(self, other):
+        return tn.dot(self, other)
+
+    def mean(self):
+        return tn.mean(self)
+
+    def sum(self):
+        return tn.sum(self)
+
+    def var(self):
+        return tn.var(self)
+
+    def std(self):
+        return tn.std(self)
+
+    def norm(self):
+        return tn.norm(self)
+
+    def normsq(self):
+        return tn.normsq(self)
+
+    """
+    Miscellaneous
+    """
 
     def set_factors(self, name, modes='all', requires_grad=False):
         """
@@ -772,3 +873,37 @@ class Tensor(object):
                 self.cores[n] = self.cores[n].detach().clone().requires_grad_()
             else:
                 self.cores[n] = self.cores[n].detach().clone()
+
+    def clone(self):
+        """
+        Creates a copy of this tensor (calls clone() on all internal tensor network nodes)
+
+        :return: another compressed tensor
+
+        """
+
+        cores = [self.cores[n].clone()for n in range(self.ndim)]
+        Us = []
+        for n in range(self.ndim):
+            if self.Us[n] is None:
+                Us.append(None)
+            else:
+                Us.append(self.Us[n].clone())
+        if hasattr(self, 'idxs'):
+            return tn.Tensor(cores, Us=Us, idxs=self.idxs)
+        return tn.Tensor(cores, Us=Us)
+
+    def numel(self):
+        """
+        Counts the total number of elements of this tensor network.
+
+        :return: an integer
+
+        """
+
+        result = 0
+        for n in range(self.ndim):
+            result += self.cores[n].numel()
+            if self.Us[n] is not None:
+                result += self.Us[n].numel()
+        return result

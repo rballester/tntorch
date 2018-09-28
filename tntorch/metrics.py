@@ -38,21 +38,36 @@ def dot(t1, t2, k=None):  # TODO support partial dot products
 
     if k is None:
         k = min(t1.ndim, t2.ndim)
-    Lprod = torch.ones([1, 1])
+    Lprod = torch.ones([t1.cores[-1].shape[-1], t2.cores[-1].shape[-1]])
     for mu in range(t1.ndim-1, t1.ndim-1-k, -1):
         core1 = t1.cores[mu]
+        core2 = t2.cores[mu]
         if t1.Us[mu] is None:
-            core2 = t2.cores[mu]
             if t2.Us[mu] is not None:
-                core1 = torch.einsum('ijk,ja->iak', (core1, t2.Us[mu]))
+                if core1.dim() == 3:
+                    core1 = torch.einsum('iak,aj->ijk', (core1, t2.Us[mu]))
+                else:
+                    core1 = torch.einsum('ak,aj->jk', (core1, t2.Us[mu]))
         elif t2.Us[mu] is None:
-            core2 = torch.einsum('ijk,ja->iak', (t2.cores[mu], t1.Us[mu]))
+            if core2.dim() == 3:
+                core2 = torch.einsum('iak,aj->ijk', (core2, t1.Us[mu]))
+            else:
+                core2 = torch.einsum('ak,aj->jk', (core2, t1.Us[mu]))
         else:
-            core2 = torch.einsum('ijk,ar,aj->irk', (t2.cores[mu], t1.Us[mu], t2.Us[mu]))
-        Ucore = torch.einsum('ijk,ka->ija', (core1, Lprod))
+            if core2.dim() == 3:
+                core2 = torch.einsum('ijk,ar,aj->irk', (core2, t1.Us[mu], t2.Us[mu]))
+            else:
+                core2 = torch.einsum('jk,ar,aj->rk', (core2, t1.Us[mu], t2.Us[mu]))
+        if core1.dim() == 3:
+            Ucore = torch.einsum('ijk,ka->ija', (core1, Lprod))
+        else:
+            Ucore = torch.einsum('ji,ik->ijk', (core1, Lprod))
         Vcore = core2
-        Lprod = torch.mm(Ucore.reshape([Ucore.shape[0], -1]), torch.t(Vcore.reshape([Vcore.shape[0], -1])))
-    return torch.squeeze(Lprod)
+        if Vcore.dim() == 3:
+            Lprod = torch.mm(Ucore.reshape([Ucore.shape[0], -1]), torch.t(Vcore.reshape([Vcore.shape[0], -1])))
+        else:
+            Lprod = torch.einsum('ijs,js->is', (Ucore, Vcore))
+    return torch.sum(Lprod)
 
 
 def distance(t1, t2):
