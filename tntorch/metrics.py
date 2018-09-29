@@ -55,9 +55,9 @@ def dot(t1, t2, k=None):  # TODO support partial dot products
                 core2 = torch.einsum('ak,aj->jk', (core2, t1.Us[mu]))
         else:
             if core2.dim() == 3:
-                core2 = torch.einsum('ijk,ar,aj->irk', (core2, t1.Us[mu], t2.Us[mu]))
+                core2 = torch.einsum('ar,aj,ijk->irk', (t1.Us[mu], t2.Us[mu], core2))
             else:
-                core2 = torch.einsum('jk,ar,aj->rk', (core2, t1.Us[mu], t2.Us[mu]))
+                core2 = torch.einsum('ar,aj,jk->rk', (t1.Us[mu], t2.Us[mu], core2))
         if core1.dim() == 3:
             Ucore = torch.einsum('ijk,ka->ija', (core1, Lprod))
         else:
