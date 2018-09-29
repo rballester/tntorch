@@ -30,6 +30,8 @@ class Tensor(object):
         elif isinstance(data, np.ndarray):
             data = torch.Tensor(data)
         if isinstance(data, torch.Tensor):
+            if data.dim() == 0:
+                data = data*torch.ones(1)
             if eps is None:  # Naive TT formatting, don't even attempt to compress
                 self.cores = []
                 N = data.dim()
@@ -70,23 +72,22 @@ class Tensor(object):
             factor = other
             other = Tensor([torch.ones([1, self.shape[n], 1]) for n in range(self.ndim)])
             other.cores[0].data *= factor
-        if not np.array_equal(self.shape, other.shape):
-            raise ValueError("Element-wise addition requires tensors to have equal shape")
         if self.ndim == 1:  # Special case
             return Tensor([self.full_tucker().cores[0] + other.full_tucker().cores[0]])
+        this, other = _broadcast(self, other)
         cores = []
         Us = []
-        for n in range(self.ndim):
-            core1 = self.cores[n]
+        for n in range(this.ndim):
+            core1 = this.cores[n]
             core2 = other.cores[n]
             # CP + CP -> CP, other combinations -> TT
             if core1.dim() == 2 and core2.dim() == 2:
                 core1 = core1[None, :, :]
                 core2 = core2[None, :, :]
             else:
-                core1 = self._cp_to_tt(core1)
-                core2 = self._cp_to_tt(core2)
-            if self.Us[n] is not None and other.Us[n] is not None:
+                core1 = this._cp_to_tt(core1)
+                core2 = this._cp_to_tt(core2)
+            if this.Us[n] is not None and other.Us[n] is not None:
                 # if core1.shape[1] + core2.shape[1] >= self.Us[n] and core1.shape[1] + core2.shape[1] >= self.Us[n]
                 slice1 = torch.cat([core1, torch.zeros([core2.shape[0], core1.shape[1], core1.shape[2]])], dim=0)
                 slice1 = torch.cat([slice1, torch.zeros(core1.shape[0]+core2.shape[0], core1.shape[1], core2.shape[2])], dim=2)
@@ -96,7 +97,7 @@ class Tensor(object):
                 cores.append(c)
                 Us.append(torch.cat((self.Us[n], other.Us[n]), dim=1))
                 continue
-            if self.Us[n] is not None:
+            if this.Us[n] is not None:
                 core1 = torch.einsum('ijk,aj->iak', (core1, self.Us[n]))
             if other.Us[n] is not None:
                 core2 = torch.einsum('ijk,aj->iak', (core2, other.Us[n]))
@@ -107,15 +108,15 @@ class Tensor(object):
             Us.append(None)
 
         # First core should have first size 1 (if it's TT)
-        if not (self.cores[0].dim() == 2 and other.cores[0].dim() == 2):
+        if not (this.cores[0].dim() == 2 and other.cores[0].dim() == 2):
             cores[0] = torch.sum(cores[0], dim=0, keepdim=True)
         # Similarly for the last core and last size
-        if not (self.cores[-1].dim() == 2 and other.cores[-1].dim() == 2):
+        if not (this.cores[-1].dim() == 2 and other.cores[-1].dim() == 2):
             cores[-1] = torch.sum(cores[-1], dim=2, keepdim=True)
 
         # Set up cores that should be CP cores
-        for n in range(0, self.ndim):
-            if self.cores[n].dim() == 2 and other.cores[n].dim() == 2:
+        for n in range(0, this.ndim):
+            if this.cores[n].dim() == 2 and other.cores[n].dim() == 2:
                 cores[n] = torch.sum(cores[n], dim=0, keepdim=False)
 
         return Tensor(cores, Us=Us)
@@ -139,36 +140,35 @@ class Tensor(object):
             result = self.clone()
             result.cores[0].data *= other
             return result
-        if not np.array_equal(self.shape, other.shape):
-            raise ValueError("Element-wise multiplication requires tensors to have equal shape")
+        this, other = _broadcast(self, other)
         cores = []
         Us = []
-        for n in range(self.ndim):
-            core1 = self.cores[n]
+        for n in range(this.ndim):
+            core1 = this.cores[n]
             core2 = other.cores[n]
             # CP + CP -> CP, other combinations -> TT
             if core1.dim() == 2 and core2.dim() == 2:
                 core1 = core1[None, :, :]
                 core2 = core2[None, :, :]
             else:
-                core1 = self._cp_to_tt(core1)
-                core2 = self._cp_to_tt(core2)
+                core1 = this._cp_to_tt(core1)
+                core2 = this._cp_to_tt(core2)
             # We do the product core along 3 axes, unless it would blow up
-            if self.Us[n] is not None and other.Us[n] is not None and self.cores[n].shape[1]*other.cores[n].shape[1] < self.shape[n]:
+            if this.Us[n] is not None and other.Us[n] is not None and this.cores[n].shape[1]*other.cores[n].shape[1] < this.shape[n]:
                 cores.append(torch.reshape(torch.einsum('ijk,abc->iajbkc', (core1, core2)),
                                            (core1.shape[0]*core2.shape[0],
                                             core1.shape[1]*core2.shape[1],
                                             core1.shape[2]*core2.shape[2])))
-                Us.append(torch.reshape(torch.einsum('ij,ik->ijk', (self.Us[n], other.Us[n])),
-                         (self.Us[n].shape[0], -1)))
+                Us.append(torch.reshape(torch.einsum('ij,ik->ijk', (this.Us[n], other.Us[n])),
+                         (this.Us[n].shape[0], -1)))
             else:  # Decompress spatially, then do normal TT-TT slice-wise kronecker product
-                if self.Us[n] is not None:
-                    core1 = torch.einsum('ijk,aj->iak', (core1, self.Us[n]))
+                if this.Us[n] is not None:
+                    core1 = torch.einsum('ijk,aj->iak', (core1, this.Us[n]))
                 if other.Us[n] is not None:
                     core2 = torch.einsum('ijk,aj->iak', (core2, other.Us[n]))
                 cores.append(tn.core_kron(core1, core2))
                 Us.append(None)
-            if self.cores[n].dim() == 2 and other.cores[n].dim() == 2:
+            if this.cores[n].dim() == 2 and other.cores[n].dim() == 2:
                 cores[-1] = cores[-1][0, :, :]
         return tn.Tensor(cores, Us=Us)
 
@@ -522,12 +522,16 @@ class Tensor(object):
 
     def __setitem__(self, key, value):  # TODO not fully working yet
         key = self._process_key(key)
-
         scalar = False
         if isinstance(value, np.ndarray):
             value = tn.Tensor(torch.Tensor(value))
         elif isinstance(value, torch.Tensor):
-            value = tn.Tensor(value)
+            if value.dim() == 0:
+                value = value.item()
+                scalar = True
+                # value = value*torch.ones(self.shape)
+            else:
+                value = tn.Tensor(value)
         elif isinstance(value, tn.Tensor):
             pass
         else:  # It's a scalar
@@ -538,20 +542,26 @@ class Tensor(object):
         for i in range(len(key)):
             if not isinstance(key[i], slice) and not hasattr(key[i], '__len__'):
                 key[i] = slice(key[i], key[i]+1)
-            chunk = self.cores[i][:, key[i], :]
+            chunk = self.cores[i][..., key[i], :]
             subtract_core = torch.zeros_like(self.cores[i])
-            subtract_core[:, key[i], :] += chunk
+            subtract_core[..., key[i], :] += chunk
             subtract_cores.append(subtract_core)
             if scalar:
-                add_core = torch.zeros(1, self.shape[i], 1)
-                add_core[:, key[i], :] += 1
+                if self.cores[i].dim() == 3:
+                    add_core = torch.zeros(1, self.shape[i], 1)
+                else:
+                    add_core = torch.zeros(self.shape[i], 1)
+                add_core[..., key[i], :] += 1
                 if i == 0:
                     add_core *= value
             else:
                 if chunk.shape[1] != value.shape[i]:
                     raise ValueError('{}-th dimension mismatch in tensor assignment: {} (lhs) != {} (rhs)'.format(i, chunk.shape[1], value.shape[i]))
-                add_core = torch.zeros(value.cores[i].shape[0], self.shape[i], value.cores[i].shape[2])
-                add_core[:, key[i], :] += value.cores[i]
+                if self.cores[i].dim() == 3:
+                    add_core = torch.zeros(value.cores[i].shape[0], self.shape[i], value.cores[i].shape[2])
+                else:
+                    add_core = torch.zeros(self.shape[i], value.cores[i].shape[1])
+                add_core[..., key[i], :] += value.cores[i]
             add_cores.append(add_core)
         # print(tn.Tensor(subtract_cores), tn.Tensor(add_cores))
         result = self - tn.Tensor(subtract_cores) + tn.Tensor(add_cores)
@@ -907,3 +917,32 @@ class Tensor(object):
             if self.Us[n] is not None:
                 result += self.Us[n].numel()
         return result
+
+
+def _broadcast(a, b):
+    if a.shape == b.shape:
+        return a, b
+    elif a.ndim != b.ndim:
+        raise ValueError('Cannot broadcast: lhs has {} dimensions, rhs has {}'.format(a.ndim, b.ndim))
+    coresa = a.cores
+    coresb = b.cores
+    Usa = a.Us
+    Usb = b.Us
+
+    def repeat(coresa, Usa, howmany):
+        if Usa[n] is not None:
+            Usa[n] = Usa[n].repeat(howmany, 1)
+        else:
+            if coresa[n].dim() == 3:
+                coresa[n] = coresa[n].repeat(1, howmany, 1)
+            else:
+                coresa[n] = coresa[n].repeat(howmany, 1)
+
+    for n in range(a.ndim):
+        if a.shape[n] == 1 and b.shape[n] > 1:
+            repeat(coresa, Usa, b.shape[n])
+        elif a.shape[n] > 1 and b.shape[n] == 1:
+            repeat(coresb, Usb, a.shape[n])
+        elif a.shape[n] != b.shape[n]:
+            raise ValueError('Cannot broadcast: lhs has shape {} along dimension {}, whereas rhs has shape {}'.format(a.shape[n], n, b.shape[n]))
+    return tn.Tensor(coresa, Usa), tn.Tensor(coresb, Usb)
