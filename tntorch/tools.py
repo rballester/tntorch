@@ -551,3 +551,31 @@ def cat(ts, mode):
         else:
             result += t
     return result
+
+
+def transpose(t):
+    """
+    Inverts the dimension order of a tensor, e.g. I1 x I2 x I3 becomes I3 x I2 x I1.
+
+    :param t: a tensor
+    :return: another tensor, indexed by dimensions in inverse order
+
+    """
+
+    cores = []
+    Us = []
+    idxs = []
+    for n in range(t.ndim-1, -1, -1):
+        if t.cores[n].dim() == 3:
+            cores.append(t.cores[n].permute(2, 1, 0))
+        else:
+            cores.append(t.cores[n])
+        if t.Us[n] is None:
+            Us.append(None)
+        else:
+            Us.append(t.Us[n].clone())
+        if t.idxs[n] is None:
+            idxs.append(None)
+        else:
+            idxs.append(t.idxs[n].clone())
+    return tn.Tensor(cores, Us, idxs)
