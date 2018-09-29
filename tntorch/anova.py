@@ -27,7 +27,7 @@ def anova_decomposition(t, marginals=None):
         if t.Us[n] is None:
             U = torch.eye(t.shape[n])
         else:
-            U = t.Us[n].clone()
+            U = t.Us[n]
         expected = torch.sum(U * (marginals[n][:, None] / torch.sum(marginals[n])), dim=0, keepdim=True)
         Us.append(torch.cat((expected, U-expected), dim=0))
         idxs.append([0] + [1]*t.shape[n])
@@ -82,7 +82,10 @@ def sobol(t, mask, marginals=None):
             m = marginals[n]
         m /= torch.sum(m)  # Make sure each marginal sums to 1
         if am.Us[n] is None:
-            am.cores[n][..., 1:, :] *= m[None, :, None]
+            if am.cores[n].dim() == 3:
+                am.cores[n][:, 1:, :] *= m[None, :, None]
+            else:
+                am.cores[n][1:, :] *= m[:, None]
         else:
             am.Us[n][1:, :] *= m[:, None]
     am_masked = tn.mask(am, mask)

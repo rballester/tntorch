@@ -252,7 +252,7 @@ def _create(function, shape, ranks_tt=None, ranks_cp=None, ranks_tucker=None, re
             datashape = [datashape[0] * corespatials[n], datashape[1] // corespatials[n]]
     if not hasattr(ranks_tt, "__len__"):
         ranks_tt = [ranks_tt]*(N-1)
-    ranks_tt = [None] + ranks_tt + [None]
+    ranks_tt = [None] + list(ranks_tt) + [None]
     if not hasattr(ranks_cp, '__len__'):
         ranks_cp = [ranks_cp]*N
     coreranks = [r for r in ranks_tt]
