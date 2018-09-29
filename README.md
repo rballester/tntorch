@@ -14,7 +14,7 @@ For example, the following networks both represent a 4D tensor (i.e. a real func
 
 <p align="center"><img src="https://github.com/rballester/tntorch/blob/master/images/tensors.jpg" width="600" title="TT-Tucker"></p>
 
-With *tntorch* you can handle tensors in a transparent, yet super-compressed form as if they were plain NumPy arrays or PyTorch tensors:
+With *tntorch* you can handle super-compressed tensors in a transparent form, as if they were plain NumPy arrays or PyTorch tensors:
 
 ```
 > import tntorch as tn
@@ -73,7 +73,7 @@ Check out the [introductory notebook](https://github.com/rballester/tntorch/blob
 - [Main tensor formats available](https://github.com/rballester/tntorch/blob/master/tutorials/main_formats.ipynb)
 - [Other custom formats](https://github.com/rballester/tntorch/blob/master/tutorials/other_formats.ipynb)
 - [Polynomial chaos expansions](https://github.com/rballester/tntorch/blob/master/tutorials/pce.ipynb)
-- [Tensor completion](https://github.com/rballester/tntorch/blob/master/tutorials/completion.ipynb)
+- [Tensor completion and regression](https://github.com/rballester/tntorch/blob/master/tutorials/completion.ipynb)
 - [Tensor decomposition](https://github.com/rballester/tntorch/blob/master/tutorials/decompositions.ipynb)
 - [Sensitivity analysis](https://github.com/rballester/tntorch/blob/master/tutorials/sobol.ipynb)
 - [Vector field data](https://github.com/rballester/tntorch/blob/master/tutorials/vector_fields.ipynb)
