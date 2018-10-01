@@ -422,17 +422,13 @@ class Tensor(object):
         def get_key(counter, key):
             if self.Us[counter] is None:
                 return self.cores[counter][..., key, :]
-                # if self.cores[counter].dim() == 3:
-                #     return self.cores[counter][:, key, :]
-                # else:
-                #     return self.cores[counter][None, key, :]
             else:
                 sl = self.Us[counter][key, :]
                 if sl.dim() == 1:  # key is an int
                     if self.cores[counter].dim() == 3:
                         return torch.einsum('ijk,j->ik', (self.cores[counter], sl))
                     else:
-                        return torch.einsum('ji,j->i', (self.cores[counter], sl))#[None, :]  # TODO check
+                        return torch.einsum('ji,j->i', (self.cores[counter], sl))
                 else:
                     if self.cores[counter].dim() == 3:
                         return torch.einsum('ijk,aj->iak', (self.cores[counter], sl))
@@ -502,8 +498,6 @@ class Tensor(object):
         # At the end: handle possibly pending factors
         if last_mode == 'index':
             insert_core(factors, core=None, key=None, U=None)
-            # cores.append(factors['index']) # <- earlier #TODO
-            # Us.append(None)
         elif last_mode == 'int':
             if len(cores) > 0:  # We return a tensor: absorb existing cores with int factor
                 if cores[-1].dim() == 2 and factors['int'].dim() == 1:
