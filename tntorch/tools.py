@@ -6,69 +6,10 @@ import scipy.fftpack
 
 
 def core_kron(a, b):
+    # return torch.reshape(torch.einsum('iaj,kal->ikajl', (a, b)), [a.shape[0]*b.shape[0], -1, a.shape[2]*b.shape[2]])  # Seems slower
     c = a[:, None, :, :, None] * b[None, :, :, None, :]
     c = c.reshape([a.shape[0] * b.shape[0], -1, a.shape[-1] * b.shape[-1]])
     return c
-
-
-def mean(t):
-    """
-    Computes the mean of a tensor.
-
-    :param t: a tensor
-    :return: a scalar
-
-    """
-
-    return tn.sum(t) / t.size
-
-
-def var(t):
-    """
-    Computes the variance of a tensor.
-
-    :param t: a tensor
-    :return: a scalar >= 0
-
-    """
-
-    return tn.normsq(t-tn.mean(t)) / t.size
-
-
-def std(t):
-    """
-    Computes the standard deviation of a tensor.
-
-    :param t: a tensor
-    :return: a scalar >= 0
-
-    """
-
-    return torch.sqrt(tn.var(t))
-
-
-def normsq(t):
-    """
-    Computes the squared norm of a tensor.
-
-    :param t: a tensor
-    :return: a scalar >= 0
-
-    """
-
-    return tn.dot(t, t)
-
-
-def norm(t):
-    """
-    Computes the L^2 (Frobenius) norm of a tensor.
-
-    :param t: a tensor
-    :return: a scalar >= 0
-
-    """
-
-    return torch.sqrt(torch.clamp(tn.normsq(t), min=0))
 
 
 def sum(t, modes=None, keepdims=False):
@@ -504,7 +445,7 @@ def generate_basis(name, shape, orthonormal=False):
     if name == "dct":
         U = scipy.fftpack.dct(np.eye(shape[0]), norm="ortho")[:, :shape[1]]
     else:
-        eval_points = np.linspace(-1+(1./shape[0]), 1-(1./shape[0]), shape[0])
+        eval_points = np.linspace(-1, 1, shape[0])
         if name == "legendre":
             U = np.polynomial.legendre.legval(eval_points, np.eye(shape[0], shape[1])).T
         elif name == "chebyshev":

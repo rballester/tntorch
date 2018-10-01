@@ -53,7 +53,7 @@ def dot(t1, t2, k=None):  # TODO support partial dot products
                 core2 = torch.einsum('iak,aj->ijk', (core2, t1.Us[mu]))
             else:
                 core2 = torch.einsum('ak,aj->jk', (core2, t1.Us[mu]))
-        else:
+        else:  # Both have Tucker factors
             if core2.dim() == 3:
                 core2 = torch.einsum('ar,aj,ijk->irk', (t1.Us[mu], t2.Us[mu], core2))
             else:
@@ -133,3 +133,63 @@ def r_squared(gt, approx):
     if isinstance(gt, torch.Tensor) and isinstance(approx, torch.Tensor):
         return 1 - torch.norm(gt-approx)**2 / torch.norm(gt-torch.mean(gt))**2
     return 1 - tn.distance(gt, approx)**2 / tn.normsq(gt-tn.mean(gt))
+
+
+def mean(t):
+    """
+    Computes the mean of a tensor.
+
+    :param t: a tensor
+    :return: a scalar
+
+    """
+
+    return tn.sum(t) / t.size
+
+
+def var(t):
+    """
+    Computes the variance of a tensor.
+
+    :param t: a tensor
+    :return: a scalar >= 0
+
+    """
+
+    return tn.normsq(t-tn.mean(t)) / t.size
+
+
+def std(t):
+    """
+    Computes the standard deviation of a tensor.
+
+    :param t: a tensor
+    :return: a scalar >= 0
+
+    """
+
+    return torch.sqrt(tn.var(t))
+
+
+def normsq(t):
+    """
+    Computes the squared norm of a tensor.
+
+    :param t: a tensor
+    :return: a scalar >= 0
+
+    """
+
+    return tn.dot(t, t)
+
+
+def norm(t):
+    """
+    Computes the L^2 (Frobenius) norm of a tensor.
+
+    :param t: a tensor
+    :return: a scalar >= 0
+
+    """
+
+    return torch.sqrt(torch.clamp(tn.normsq(t), min=0))
