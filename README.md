@@ -70,6 +70,7 @@ Check out the [introductory notebook](https://github.com/rballester/tntorch/blob
 - [Classification](https://github.com/rballester/tntorch/blob/master/tutorials/classification.ipynb)
 - [Differentiation](https://github.com/rballester/tntorch/blob/master/tutorials/derivatives.ipynb)
 - [Discrete/weighted finite automata](https://github.com/rballester/tntorch/blob/master/tutorials/automata.ipynb)
+- [Exponential machines](https://github.com/rballester/tntorch/blob/master/tutorials/exponential_machines.ipynb)
 - [Main tensor formats available](https://github.com/rballester/tntorch/blob/master/tutorials/main_formats.ipynb)
 - [Other custom formats](https://github.com/rballester/tntorch/blob/master/tutorials/other_formats.ipynb)
 - [Polynomial chaos expansions](https://github.com/rballester/tntorch/blob/master/tutorials/pce.ipynb)
