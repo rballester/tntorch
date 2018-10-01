@@ -10,9 +10,9 @@ def test_orthogonalization():
         assert tn.relative_error(gt, t) <= 1e-7
         t.left_orthogonalize(0)
         assert tn.relative_error(gt, t) <= 1e-7
-        t.right_orthogonalize(t.ndim-1)
+        t.right_orthogonalize(t.dim()-1)
         assert tn.relative_error(gt, t) <= 1e-7
-        t.orthogonalize(np.random.randint(t.ndim))
+        t.orthogonalize(np.random.randint(t.dim()))
         assert tn.relative_error(gt, t) <= 1e-7
 
 

@@ -50,14 +50,14 @@ class Tensor(object):
             else:  # TT-SVD (or TT-EIG) algorithm
                 raise NotImplementedError
         if Us is not None:
-            for n in range(self.ndim):
+            for n in range(self.dim()):
                 if Us[n] is None:
                     continue
                 assert Us[n].dim() == 2
                 assert self.cores[n].shape[-2] == Us[n].shape[1]
             self.Us = Us
         else:
-            self.Us = [None]*self.ndim
+            self.Us = [None]*self.dim()
         if idxs is not None:
             self.idxs = idxs
         else:
@@ -70,14 +70,14 @@ class Tensor(object):
     def __add__(self, other):
         if not isinstance(other, Tensor):
             factor = other
-            other = Tensor([torch.ones([1, self.shape[n], 1]) for n in range(self.ndim)])
+            other = Tensor([torch.ones([1, self.shape[n], 1]) for n in range(self.dim())])
             other.cores[0].data *= factor
-        if self.ndim == 1:  # Special case
+        if self.dim() == 1:  # Special case
             return Tensor([self.full_tucker().cores[0] + other.full_tucker().cores[0]])
         this, other = _broadcast(self, other)
         cores = []
         Us = []
-        for n in range(this.ndim):
+        for n in range(this.dim()):
             core1 = this.cores[n]
             core2 = other.cores[n]
             # CP + CP -> CP, other combinations -> TT
@@ -115,7 +115,7 @@ class Tensor(object):
             cores[-1] = torch.sum(cores[-1], dim=2, keepdim=True)
 
         # Set up cores that should be CP cores
-        for n in range(0, this.ndim):
+        for n in range(0, this.dim()):
             if this.cores[n].dim() == 2 and other.cores[n].dim() == 2:
                 cores[n] = torch.sum(cores[n], dim=0, keepdim=False)
 
@@ -143,7 +143,7 @@ class Tensor(object):
         this, other = _broadcast(self, other)
         cores = []
         Us = []
-        for n in range(this.ndim):
+        for n in range(this.dim()):
             core1 = this.cores[n]
             core2 = other.cores[n]
             # CP + CP -> CP, other combinations -> TT
@@ -207,7 +207,7 @@ class Tensor(object):
     @property
     def shape(self):
         shape = []
-        for n in range(self.ndim):
+        for n in range(self.dim()):
             if self.Us[n] is None:
                 shape.append(self.cores[n].shape[-2])
             else:
@@ -234,8 +234,7 @@ class Tensor(object):
     def ranks_tucker(self, value):
         self.round_tucker(rmax=value)
 
-    @property
-    def ndim(self):
+    def dim(self):
         return len(self.cores)
 
     @property
@@ -252,7 +251,7 @@ class Tensor(object):
         if any([U is not None for U in self.Us]):
             format.append('Tucker')
         format = '-'.join(format)
-        s = '{}D {} tensor:\n'.format(self.ndim, format)
+        s = '{}D {} tensor:\n'.format(self.dim(), format)
         s += '\n'
         ttr = self.ranks_tt
         tuckerr = self.ranks_tucker
@@ -260,9 +259,9 @@ class Tensor(object):
         if any([U is not None for U in self.Us]):
 
             # Shape
-            row = [' ']*(4*self.ndim-1)
+            row = [' ']*(4*self.dim()-1)
             shape = self.shape
-            for n in range(self.ndim):
+            for n in range(self.dim()):
                 if self.Us[n] is None:
                     continue
                 lenn = len('{}'.format(shape[n]))
@@ -271,8 +270,8 @@ class Tensor(object):
             s += '\n'
 
         # Tucker ranks
-        row = [' ']*(4*self.ndim-1)
-        for n in range(self.ndim):
+        row = [' ']*(4*self.dim()-1)
+        for n in range(self.dim()):
             if self.Us[n] is None:
                 lenr = len('{}'.format(tuckerr[n]))
                 row[n*4-lenr//2+2:n*4-lenr//2+lenr+2] = '{}'.format(tuckerr[n])
@@ -281,8 +280,8 @@ class Tensor(object):
         s += ''.join(row)
         s += '\n'
 
-        row = [' ']*(4*self.ndim-1)
-        for n in range(self.ndim):
+        row = [' ']*(4*self.dim()-1)
+        for n in range(self.dim()):
             if self.Us[n] is None:
                 row[n*4+2:n*4+3] = '|'
             else:
@@ -292,8 +291,8 @@ class Tensor(object):
         s += '\n'
 
         # Nodes
-        row = [' ']*(4*self.ndim-1)
-        for n in range(self.ndim):
+        row = [' ']*(4*self.dim()-1)
+        for n in range(self.dim()):
             if self.cores[n].dim() == 2:
                 nodestr = '<{}>'.format(n)
             else:
@@ -304,12 +303,12 @@ class Tensor(object):
         s += '\n'
 
         # TT rank bars
-        s += ' / \\'*self.ndim
+        s += ' / \\'*self.dim()
         s += '\n'
 
         # Bottom: TT/CP ranks
-        row = [' ']*(4*self.ndim)
-        for n in range(self.ndim+1):
+        row = [' ']*(4*self.dim())
+        for n in range(self.dim()+1):
             lenr = len('{}'.format(ttr[n]))
             row[n*4:n*4+lenr] = '{}'.format(ttr[n])
         s += ''.join(row)
@@ -331,15 +330,15 @@ class Tensor(object):
         nonecount = sum(1 for k in key if k is None)
         for i in range(len(key)):
             if key[i] is Ellipsis:
-                key = key[:i] + [slice(None)] * (self.ndim - (len(key) - nonecount) + 1) + key[i + 1:]
+                key = key[:i] + [slice(None)] * (self.dim() - (len(key) - nonecount) + 1) + key[i + 1:]
                 break
         if any([k is Ellipsis for k in key]):
             raise IndexError("Only one ellipsis is allowed, at most")
-        if self.ndim - (len(key) - nonecount) < 0:
+        if self.dim() - (len(key) - nonecount) < 0:
             raise IndexError("Too many index entries")
 
         # Fill remaining unspecified dimensions with slice(None)
-        key = key + [slice(None)] * (self.ndim - (len(key) - nonecount))
+        key = key + [slice(None)] * (self.dim() - (len(key) - nonecount))
         return key
 
     def __getitem__(self, key):
@@ -359,7 +358,7 @@ class Tensor(object):
                 raise ValueError("When indexing via a mask tensor, that mask should have exactly 1 accepting string")
             s = tn.accepted_inputs(key)[0]
             slicing = []
-            for n in range(self.ndim):
+            for n in range(self.dim()):
                 idx = self.idxs[n].long()
                 idx[idx > 1] = 1
                 idx = np.where(idx == s[n])[0]
@@ -561,6 +560,18 @@ class Tensor(object):
         result = self - tn.Tensor(subtract_cores) + tn.Tensor(add_cores)
         self.__init__(result.cores, result.Us, self.idxs)
 
+    def tucker_core(self):
+        """
+        Returns the Tucker core as an explicit PyTorch tensor.
+
+        If this tensor does not have Tucker factors, then it returns the full decompressed tensor.
+
+        :return: a PyTorch tensor
+
+        """
+
+        return tn.Tensor(self.cores).full()
+
     def full_tucker(self, _clone=True):
         """
         Decompresses this tensor only along the Tucker factors.
@@ -570,7 +581,7 @@ class Tensor(object):
         """
 
         cores = []
-        for n in range(self.ndim):
+        for n in range(self.dim()):
             if self.Us[n] is not None:
                 if self.cores[n].dim() == 2:
                     cores.append(torch.einsum('jk,aj->ak', (self.cores[n], self.Us[n])))
@@ -594,7 +605,7 @@ class Tensor(object):
         t = self.full_tucker(_clone=False)
         shape = []
         factor = torch.ones(1, self.ranks_tt[0])
-        for n in range(t.ndim):
+        for n in range(t.dim()):
             shape.append(t.cores[n].shape[-2])
             if t.cores[n].dim() == 2:  # CP core
                 factor = torch.einsum('ai,bi->abi', (factor, t.cores[n]))
@@ -625,7 +636,7 @@ class Tensor(object):
         if factor is None:
             if self.cores[0].dim() == 2:
                 self.cores[0] = self.cores[0][None, :, :]
-            for mu in range(1, self.ndim-1):
+            for mu in range(1, self.dim()-1):
                 self.cores[mu] = self._cp_to_tt(self.cores[mu])
             if self.cores[-1].dim() == 2:
                 self.cores[-1] = self.cores[-1].transpose(1, 0)[:, :, None]
@@ -669,7 +680,7 @@ class Tensor(object):
         :return: the R factor
         """
 
-        assert 0 <= mu < self.ndim-1
+        assert 0 <= mu < self.dim()-1
         if self.cores[mu].dim() == 2:
             self.cores[mu] = self.cores
         self.factor_orthogonalize(mu)
@@ -691,7 +702,7 @@ class Tensor(object):
         :return: the L factor
         """
 
-        assert 1 <= mu < self.ndim
+        assert 1 <= mu < self.dim()
         self.factor_orthogonalize(mu)
         Q, L = torch.qr(tn.right_unfolding(self.cores[mu]).permute(1, 0))  # Torch has no rq() decomposition
         L = L.permute(1, 0)
@@ -716,7 +727,7 @@ class Tensor(object):
         R = torch.ones(1, 1)
         for i in range(0, mu):
             R = self.left_orthogonalize(i)
-        for i in range(self.ndim-1, mu, -1):
+        for i in range(self.dim()-1, mu, -1):
             L = self.right_orthogonalize(i)
         return R, L
 
@@ -733,7 +744,7 @@ class Tensor(object):
 
         """
 
-        N = self.ndim
+        N = self.dim()
         if not hasattr(rmax, '__len__'):
             rmax = [rmax]*N
         assert len(rmax) == N
@@ -773,7 +784,7 @@ class Tensor(object):
 
         """
 
-        N = self.ndim
+        N = self.dim()
         if not hasattr(rmax, '__len__'):
             rmax = [rmax]*(N-1)
         assert len(rmax) == N-1
@@ -846,7 +857,7 @@ class Tensor(object):
         """
 
         if modes == 'all':
-            modes = range(self.ndim)
+            modes = range(self.dim())
 
         for m in modes:
             if self.Us[m] is None:
@@ -867,7 +878,7 @@ class Tensor(object):
 
         """
 
-        for n in range(self.ndim):
+        for n in range(self.dim()):
             if self.Us[n] is not None:
                 if self.Us[n].requires_grad:
                     self.Us[n] = self.Us[n].detach().clone().requires_grad_()
@@ -886,9 +897,9 @@ class Tensor(object):
 
         """
 
-        cores = [self.cores[n].clone()for n in range(self.ndim)]
+        cores = [self.cores[n].clone()for n in range(self.dim())]
         Us = []
-        for n in range(self.ndim):
+        for n in range(self.dim()):
             if self.Us[n] is None:
                 Us.append(None)
             else:
@@ -906,7 +917,7 @@ class Tensor(object):
         """
 
         result = 0
-        for n in range(self.ndim):
+        for n in range(self.dim()):
             result += self.cores[n].numel()
             if self.Us[n] is not None:
                 result += self.Us[n].numel()
@@ -916,8 +927,8 @@ class Tensor(object):
 def _broadcast(a, b):
     if a.shape == b.shape:
         return a, b
-    elif a.ndim != b.ndim:
-        raise ValueError('Cannot broadcast: lhs has {} dimensions, rhs has {}'.format(a.ndim, b.ndim))
+    elif a.dim() != b.dim():
+        raise ValueError('Cannot broadcast: lhs has {} dimensions, rhs has {}'.format(a.dim(), b.dim()))
     coresa = a.cores
     coresb = b.cores
     Usa = a.Us
@@ -932,7 +943,7 @@ def _broadcast(a, b):
             else:
                 coresa[n] = coresa[n].repeat(howmany, 1)
 
-    for n in range(a.ndim):
+    for n in range(a.dim()):
         if a.shape[n] == 1 and b.shape[n] > 1:
             repeat(coresa, Usa, b.shape[n])
         elif a.shape[n] > 1 and b.shape[n] == 1:

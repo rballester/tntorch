@@ -42,7 +42,7 @@ def partialset(t, order=1, mask=None, bounds=None):
         return torch.cat(((core[..., 1:, :] - core[..., :-1, :]) / step, pad), dim=-2)
     cores = []
     idxs = []
-    for n in range(t.ndim):
+    for n in range(t.dim()):
         if t.Us[n] is None:
             stack = [t.cores[n]]
         else:
@@ -56,7 +56,7 @@ def partialset(t, order=1, mask=None, bounds=None):
         cores.append(torch.cat(stack, dim=-2))
         idxs.append(idx)
     d = tn.Tensor(cores, idxs=idxs)
-    wm = tn.automata.weight_mask(t.ndim, order, nsymbols=max_order+1)
+    wm = tn.automata.weight_mask(t.dim(), order, nsymbols=max_order+1)
     if mask is not None:
         wm = tn.mask(wm, mask)
     result = tn.mask(d, wm)
@@ -79,7 +79,7 @@ def partial(t, modes, order=1, bounds=None):
     if not hasattr(modes, '__len__'):
         modes = [modes]
     if bounds is None:
-        bounds = [[0, t.shape[n]-1] for n in range(t.ndim)]
+        bounds = [[0, t.shape[n]-1] for n in range(t.dim())]
     if not hasattr(bounds[0], '__len__'):
         bounds = [bounds]
 
@@ -113,7 +113,7 @@ def gradient(t, modes='all', bounds=None):
     """
 
     if modes == 'all':
-        modes = range(t.ndim)
+        modes = range(t.dim())
     if bounds is None:
         bounds = [[0, t.shape[mode]-1] for mode in modes]
     if not hasattr(bounds, '__len__'):
@@ -141,14 +141,14 @@ Single-Diode Solar Cell Model" (2017). Available: https://arxiv.org/pdf/1406.760
 
     grad = tn.gradient(t, modes='all')
 
-    M = torch.zeros(t.ndim, t.ndim)
-    for i in range(t.ndim):
-        for j in range(i, t.ndim):
+    M = torch.zeros(t.dim(), t.dim())
+    for i in range(t.dim()):
+        for j in range(i, t.dim()):
             M[i, j] = tn.dot(grad[i], grad[j]) / t.size
             M[j, i] = M[i, j]
 
     w, v = torch.symeig(M, eigenvectors=True)
-    idx = range(t.ndim-1, -1, -1)
+    idx = range(t.dim()-1, -1, -1)
     w = w[idx]
     v = v[:, idx]
     return w, v
@@ -164,7 +164,7 @@ def divergence(ts, bounds=None):
 
     """
 
-    assert ts[0].ndim == len(ts)
+    assert ts[0].dim() == len(ts)
     assert all([t.shape == ts[0].shape for t in ts[1:]])
     if bounds is None:
         bounds = [None]*len(ts)
@@ -185,7 +185,7 @@ def curl(ts, bounds=None):
 
     """
 
-    assert [t.ndim == 3 for t in ts]
+    assert [t.dim() == 3 for t in ts]
     assert len(ts) == 3
     if bounds is None:
         bounds = [None for n in range(3)]
@@ -209,9 +209,9 @@ def laplacian(t, bounds=None):
     """
 
     if bounds is None:
-        bounds = [None]*t.ndim
+        bounds = [None]*t.dim()
     elif not hasattr(bounds[0], '__len__'):
-        bounds = [bounds for n in range(t.ndim)]
-    assert len(bounds) == t.ndim
+        bounds = [bounds for n in range(t.dim())]
+    assert len(bounds) == t.dim()
 
-    return sum([tn.partial(t, n, order=2, bounds=bounds[n]) for n in range(t.ndim)])
+    return sum([tn.partial(t, n, order=2, bounds=bounds[n]) for n in range(t.dim())])

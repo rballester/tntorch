@@ -24,12 +24,12 @@ def sum(t, modes=None, keepdims=False):
     """
 
     if modes is None:
-        modes = np.arange(t.ndim)
+        modes = np.arange(t.dim())
     if not hasattr(modes, '__len__'):
         modes = [modes]
     cores = []
     Us = []
-    for n in range(t.ndim):
+    for n in range(t.dim()):
         if n in modes:
             if t.Us[n] is None:
                 cores.append(torch.sum(t.cores[n], dim=-2, keepdim=True))
@@ -66,7 +66,7 @@ def ttm(t, U, mode, transpose=False):
 
     cores = []
     Us = []
-    for n in range(t.ndim):
+    for n in range(t.dim()):
         if n in mode:
             if transpose:
                 factor = U[mode.index(n)].t
@@ -245,7 +245,7 @@ def mask(t, mask):
         idxs = t.idxs
     cores = []
     Us = []
-    for n in range(t.ndim):
+    for n in range(t.dim()):
         idx = np.array(idxs[n])
         idx[idx >= mask.shape[n]] = mask.shape[n]-1  # Clamp
         if mask.Us[n] is None:
@@ -366,7 +366,7 @@ def squeeze(t, modes=None):
         modes = np.where(t.shape == 1)[0]
     assert np.all(np.array(t.shape)[modes] == 1)
 
-    idx = [slice(None) for n in range(t.ndim)]
+    idx = [slice(None) for n in range(t.dim())]
     for m in modes:
         idx[m] = 0
     return t[idx]
@@ -396,14 +396,14 @@ def sample(t, P=1):  # TODO
         shiftand = np.logical_and(M[:, :-1] <= 0, M[:, 1:] > 0)  # Find where the sign switches
         return np.where(shiftand)[1]
 
-    Xs = torch.zeros([P, t.ndim])
+    Xs = torch.zeros([P, t.dim()])
     rights = [torch.ones(1)]
     for core in t.cores[::-1]:
         rights.append(torch.matmul(torch.sum(core, dim=1), rights[-1]))
     rights = rights[::-1]
     lefts = torch.ones([P, 1])
 
-    for mu in range(t.ndim):
+    for mu in range(t.dim()):
         fiber = torch.einsum('ijk,k->ij', (t.cores[mu], rights[mu + 1]))
         per_point = torch.einsum('ij,jk->ik', (lefts, fiber))
         rows = from_matrix(per_point)
@@ -425,7 +425,7 @@ def hash(t):
 
     gen = torch.Generator()
     gen.manual_seed(0)
-    cores = [torch.ones(1, 1, 1) for n in range(t.ndim)]
+    cores = [torch.ones(1, 1, 1) for n in range(t.dim())]
     Us = [torch.rand([sh, 1], generator=gen) for sh in t.shape]
     w = tn.Tensor(cores, Us)
     return t.dot(w)
@@ -471,7 +471,7 @@ def cat(ts, mode):
 
     if len(ts) == 1:
         return ts[0].clone()
-    if any([any([t.shape[n] != ts[0].shape[n] for n in np.delete(range(ts[0].ndim), mode)]) for t in ts[1:]]):
+    if any([any([t.shape[n] != ts[0].shape[n] for n in np.delete(range(ts[0].dim()), mode)]) for t in ts[1:]]):
         raise ValueError('To concatenate tensors, all must have the same shape along all but the given mode')
 
     shapes = np.array([t.shape[mode] for t in ts])
@@ -506,7 +506,7 @@ def transpose(t):
     cores = []
     Us = []
     idxs = []
-    for n in range(t.ndim-1, -1, -1):
+    for n in range(t.dim()-1, -1, -1):
         if t.cores[n].dim() == 3:
             cores.append(t.cores[n].permute(2, 1, 0))
         else:

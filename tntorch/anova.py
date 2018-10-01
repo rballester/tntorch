@@ -16,14 +16,14 @@ def anova_decomposition(t, marginals=None):
 
     marginals = copy.deepcopy(marginals)
     if marginals is None:
-        marginals = [None] * t.ndim
-    for n in range(t.ndim):
+        marginals = [None] * t.dim()
+    for n in range(t.dim()):
         if marginals[n] is None:
             marginals[n] = torch.ones([t.shape[n]]) / float(t.shape[n])
     cores = [c.clone() for c in t.cores]
     Us = []
     idxs = []
-    for n in range(t.ndim):
+    for n in range(t.dim()):
         if t.Us[n] is None:
             U = torch.eye(t.shape[n])
         else:
@@ -45,7 +45,7 @@ def undo_anova_decomposition(a):
 
     cores = []
     Us = []
-    for n in range(a.ndim):
+    for n in range(a.dim()):
         if a.Us[n] is None:
             cores.append(a.cores[n][..., 1:, :] + a.cores[n][..., 0:1, :])
             Us.append(None)
@@ -68,14 +68,14 @@ def sobol(t, mask, marginals=None):
     """
 
     if marginals is None:
-        marginals = [None] * t.ndim
+        marginals = [None] * t.dim()
 
     a = tn.anova_decomposition(t, marginals)
     a -= tn.Tensor([torch.cat((torch.ones(1, 1, 1),
                                torch.zeros(1, sh-1, 1)), dim=1)
-                    for sh in a.shape])*a[[0]*t.ndim]  # Set empty tuple to 0
+                    for sh in a.shape])*a[[0]*t.dim()]  # Set empty tuple to 0
     am = a.clone()
-    for n in range(t.ndim):
+    for n in range(t.dim()):
         if marginals[n] is None:
             m = torch.ones([t.shape[n]])
         else:
@@ -113,8 +113,8 @@ def mean_dimension(t, marginals=None):
 
     """
 
-    return tn.sobol(t, tn.weight(t.ndim), marginals=marginals)
+    return tn.sobol(t, tn.weight(t.dim()), marginals=marginals)
 
 
 def dimension_distribution(t, marginals=None):
-    return torch.Tensor([tn.sobol(t, tn.weight_mask(t.ndim, n), marginals=marginals) for n in range(1, t.ndim+1)])
+    return torch.Tensor([tn.sobol(t, tn.weight_mask(t.dim(), n), marginals=marginals) for n in range(1, t.dim()+1)])

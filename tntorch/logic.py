@@ -100,7 +100,7 @@ def relevant_symbols(t):
 
     cores = [torch.cat((c[:, 1:2, :]-c[:, 0:1, :], c), dim=1) for c in t.cores]
     t2 = tn.Tensor(cores)
-    return [n for n in range(t.ndim) if tn.norm(t2[[slice(1, 3)]*n + [0] + [slice(1, 3)]*(t.ndim-n-1)]) > 1e-10]
+    return [n for n in range(t.dim()) if tn.norm(t2[[slice(1, 3)]*n + [0] + [slice(1, 3)]*(t.dim()-n-1)]) > 1e-10]
 
 
 def irrelevant_symbols(t):
@@ -113,7 +113,7 @@ def irrelevant_symbols(t):
     """
 
     rel = relevant_symbols(t)
-    return [n for n in range(t.ndim) if n not in rel]
+    return [n for n in range(t.dim()) if n not in rel]
 
 
 def only(t):
@@ -129,7 +129,7 @@ def only(t):
 
     """
 
-    return tn.mask(t, absence(t.ndim, irrelevant_symbols(t)))
+    return tn.mask(t, absence(t.dim(), irrelevant_symbols(t)))
 
 
 def presence(N, which):

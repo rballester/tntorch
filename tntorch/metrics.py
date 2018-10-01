@@ -37,9 +37,9 @@ def dot(t1, t2, k=None):  # TODO support partial dot products
     assert np.array_equal(t1.shape, t2.shape)
 
     if k is None:
-        k = min(t1.ndim, t2.ndim)
+        k = min(t1.dim(), t2.dim())
     Lprod = torch.ones([t1.cores[-1].shape[-1], t2.cores[-1].shape[-1]])
-    for mu in range(t1.ndim-1, t1.ndim-1-k, -1):
+    for mu in range(t1.dim()-1, t1.dim()-1-k, -1):
         core1 = t1.cores[mu]
         core2 = t2.cores[mu]
         if t1.Us[mu] is None:

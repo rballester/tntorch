@@ -83,7 +83,7 @@ def dof(t):
     """
 
     result = 0
-    for n in range(t.ndim):
+    for n in range(t.dim()):
         if t.cores[n].requires_grad:
             result += t.cores[n].numel()
         if t.Us[n] is not None and t.Us[n].requires_grad:

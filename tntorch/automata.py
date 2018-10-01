@@ -72,7 +72,7 @@ def accepted_inputs(t):
     """
 
     def recursion(Xs, left, rights, bound, mu):
-        if mu == t.ndim:
+        if mu == t.dim():
             return
         fiber = torch.einsum('ijk,k->ij', (t.cores[mu], rights[mu + 1]))
         per_point = torch.matmul(left, fiber).round()
@@ -83,7 +83,7 @@ def accepted_inputs(t):
             Xs[bound+c[i]:bound+c[i+1], mu] = i
             recursion(Xs, torch.matmul(left, t.cores[mu][:, i, :]), rights, bound + c[i], mu+1)
 
-    Xs = torch.zeros([round(tn.sum(t).item()), t.ndim], dtype=torch.long)
+    Xs = torch.zeros([round(tn.sum(t).item()), t.dim()], dtype=torch.long)
     rights = [torch.ones(1)]  # Precomputed right-product chains
     for core in t.cores[::-1]:
         rights.append(torch.matmul(torch.sum(core, dim=1), rights[-1]))
