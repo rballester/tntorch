@@ -8,7 +8,7 @@ def _process(gt, approx):
     If only one of the arguments is a compressed tensor, we decompress it
     """
 
-    assert np.array_equal(gt.shape, approx.shape)
+    # assert np.array_equal(gt.shape, approx.shape)
     is1 = isinstance(gt, tn.Tensor)
     is2 = isinstance(approx, tn.Tensor)
     if is1 and is2:
@@ -20,13 +20,18 @@ def _process(gt, approx):
     return gt, approx
 
 
-def dot(t1, t2, k=None):  # TODO support partial dot products
+def dot(t1, t2):
     """
-    Computes the dot product between two tensors.
+    Computes the dot product between two tensors. If their dimensionalities N1 and N2 differ (say, N1 < N2), then only
+    the *trailing* N1 dimensions will be contracted; the result will have dimension N2 - N1.
+
+    Example:
+    tn.rand([2, 3, 4]).dot(tn.rand[3, 4])  # Result has shape [2]
+    tn.rand([3, 4]).dot(tn.rand[3, 4])  # Result is a scalar tensor
 
     :param t1: a tensor
     :param t2: a tensor
-    :return: a scalar
+    :return: a scalar or tensor
 
     """
 
@@ -34,30 +39,31 @@ def dot(t1, t2, k=None):  # TODO support partial dot products
     if isinstance(t1, torch.Tensor) and isinstance(t2, torch.Tensor):
         return t1.flatten().dot(t2.flatten())
 
-    assert np.array_equal(t1.shape, t2.shape)
-
-    if k is None:
-        k = min(t1.dim(), t2.dim())
+    if t1.dim() < t2.dim():
+        return tn.dot(t2, t1)
     Lprod = torch.ones([t1.cores[-1].shape[-1], t2.cores[-1].shape[-1]])
-    for mu in range(t1.dim()-1, t1.dim()-1-k, -1):
-        core1 = t1.cores[mu]
-        core2 = t2.cores[mu]
-        if t1.Us[mu] is None:
-            if t2.Us[mu] is not None:
+    k = min(t1.dim(), t2.dim())
+    for mu in range(k):
+        mu1 = t1.dim()-1-mu
+        mu2 = t2.dim()-1-mu
+        core1 = t1.cores[mu1]
+        core2 = t2.cores[mu2]
+        if t1.Us[mu1] is None:
+            if t2.Us[mu2] is not None:
                 if core1.dim() == 3:
-                    core1 = torch.einsum('iak,aj->ijk', (core1, t2.Us[mu]))
+                    core1 = torch.einsum('iak,aj->ijk', (core1, t2.Us[mu2]))
                 else:
-                    core1 = torch.einsum('ak,aj->jk', (core1, t2.Us[mu]))
-        elif t2.Us[mu] is None:
+                    core1 = torch.einsum('ak,aj->jk', (core1, t2.Us[mu2]))
+        elif t2.Us[mu2] is None:
             if core2.dim() == 3:
-                core2 = torch.einsum('iak,aj->ijk', (core2, t1.Us[mu]))
+                core2 = torch.einsum('iak,aj->ijk', (core2, t1.Us[mu1]))
             else:
-                core2 = torch.einsum('ak,aj->jk', (core2, t1.Us[mu]))
+                core2 = torch.einsum('ak,aj->jk', (core2, t1.Us[mu1]))
         else:  # Both have Tucker factors
             if core2.dim() == 3:
-                core2 = torch.einsum('ar,aj,ijk->irk', (t1.Us[mu], t2.Us[mu], core2))
+                core2 = torch.einsum('ar,aj,ijk->irk', (t1.Us[mu1], t2.Us[mu2], core2))
             else:
-                core2 = torch.einsum('ar,aj,jk->rk', (t1.Us[mu], t2.Us[mu], core2))
+                core2 = torch.einsum('ar,aj,jk->rk', (t1.Us[mu1], t2.Us[mu2], core2))
         if core1.dim() == 3:
             Ucore = torch.einsum('ijk,ka->ija', (core1, Lprod))
         else:
@@ -67,7 +73,15 @@ def dot(t1, t2, k=None):  # TODO support partial dot products
             Lprod = torch.mm(Ucore.reshape([Ucore.shape[0], -1]), torch.t(Vcore.reshape([Vcore.shape[0], -1])))
         else:
             Lprod = torch.einsum('ijs,js->is', (Ucore, Vcore))
-    return torch.sum(Lprod)
+    if k < t1.dim():
+        result = tn.Tensor(t1.cores[:t1.dim()-k], t1.Us[:t1.dim()-k]).clone()
+        if result.cores[-1].dim() == 3:
+            result.cores[-1] = torch.einsum('iaj,jk->iak', (result.cores[-1], Lprod))
+        else:
+            result.cores[-1] = torch.einsum('aj,jk->jak', (result.cores[-1], Lprod))
+        return result
+    else:
+        return torch.sum(Lprod)
 
 
 def distance(t1, t2):
