@@ -52,7 +52,7 @@ def optimize(tensors, loss_function, tol=1e-4, max_iter=10000, print_freq=500, v
         if iter == max_iter:
             break
         if verbose and iter % print_freq == 0:
-            print('iter: {: <6} | loss: '.format(iter), end='')
+            print('iter: {: <{}} | loss: '.format(iter, len('{}'.format(max_iter))), end='')
             print(' + '.join(['{:10.6f}'.format(l.item()) for l in loss]), end='')
             if len(loss) > 1:
                 print(' = {:10.4}'.format(losses[-1].item()), end='')
@@ -61,7 +61,7 @@ def optimize(tensors, loss_function, tol=1e-4, max_iter=10000, print_freq=500, v
         optimizer.step()
         iter += 1
     if verbose:
-        print('iter: {: <6} | loss: '.format(iter), end='')
+        print('iter: {: <{}} | loss: '.format(iter, len('{}'.format(max_iter))), end='')
         print(' + '.join(['{:10.6f}'.format(l.item()) for l in loss]), end='')
         if len(loss) > 1:
             print(' = {:10.4}'.format(losses[-1].item()), end='')
@@ -69,7 +69,7 @@ def optimize(tensors, loss_function, tol=1e-4, max_iter=10000, print_freq=500, v
         if converged:
             print(' <- converged (tol={})'.format(tol))
         else:
-            print(' <- max_iter was reached')
+            print(' <- max_iter was reached: {}'.format(max_iter))
 
 
 def dof(t):

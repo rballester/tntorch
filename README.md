@@ -14,7 +14,7 @@ For example, the following networks both represent a 4D tensor (i.e. a real func
 
 <p align="center"><img src="https://github.com/rballester/tntorch/blob/master/images/tensors.jpg" width="600" title="TT-Tucker"></p>
 
-With *tntorch* you can handle super-compressed tensors in a transparent form, as if they were plain NumPy arrays or PyTorch tensors:
+In *tntorch*, all tensors share the same outer interface, regardless of their format. You can handle them in a transparent form, as if they were plain NumPy arrays or PyTorch tensors:
 
 ```
 > import tntorch as tn

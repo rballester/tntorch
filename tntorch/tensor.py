@@ -5,11 +5,32 @@ torch.set_default_dtype(torch.float64)
 import time
 
 
+def _full_rank_tt(data):  # Naive TT formatting, don't even attempt to compress
+    shape = data.shape
+    result = []
+    N = data.dim()
+    resh = torch.reshape(torch.Tensor(data), [shape[0], -1])
+    for n in range(1, N):
+        if resh.shape[0] < resh.shape[1]:
+            result.append(torch.reshape(torch.eye(resh.shape[0]), [resh.shape[0] // shape[n - 1],
+                                                                       shape[n - 1], resh.shape[0]]))
+            resh = torch.reshape(resh, (resh.shape[0] * shape[n], resh.shape[1] // shape[n]))
+        else:
+            result.append(torch.reshape(resh, [resh.shape[0] // shape[n - 1],
+                                                   shape[n - 1], resh.shape[1]]))
+            resh = torch.reshape(torch.eye(resh.shape[1]), (resh.shape[1] * shape[n], resh.shape[1] // shape[n]))
+    result.append(torch.reshape(resh, [resh.shape[0] // shape[N - 1], shape[N - 1], 1]))
+    return result
+
+
 class Tensor(object):
 
     """
-    Handler class for all tensor networks. Currently we support TT, CP, and hybrid formats (TT-Tucker, CP-Tucker, or
-    combinations of those). N-dimensional tensors always have N cores, with each core following one of four options:
+    Handler class for all tensor networks. Currently we support TT, CP, Tucker, and hybrid formats.
+
+    * Internal representation *
+
+    N-dimensional tensors always have N cores, with each core following one of four options:
 
     - Size R_{n-1} x I_n x R_n (standard TT core)
     - Size R_{n-1} x S_n x R_n (TT-Tucker core), accompanied by an I_n x S_n factor matrix
@@ -17,51 +38,101 @@ class Tensor(object):
     - S_n x R_n (CP-Tucker core), accompanied by an I_n x S_n factor matrix
     """
 
-    def __init__(self, data, Us=None, idxs=None, eps=None):  # TODO requires_grad
+    def __init__(self, data, Us=None, idxs=None,
+                 ranks_cp=None, ranks_tucker=None, ranks_tt=None, eps=None,
+                 max_iter=25, tol=1e-4, verbose=False):
         if isinstance(data, (list, tuple)):
-            # data = [torch.Tensor(d) for d in data]
-            # TODO accept ndarrays
             if not all([2 <= d.dim() <= 3 for d in data]):
                 raise ValueError('All tensor cores must have 2 (for CP) or 3 (for TT) dimensions')
             for n in range(len(data)-1):
                 if (data[n+1].dim() == 3 and data[n].shape[-1] != data[n+1].shape[0]) or (data[n+1].dim() == 2 and data[n].shape[-1] != data[n+1].shape[1]):
                     raise ValueError('Core ranks do not match')
             self.cores = data
-        elif isinstance(data, np.ndarray):
+            N = len(data)
+        else:
             data = torch.Tensor(data)
+            N = data.dim()
+        if Us is None:
+            Us = [None]*N
+        self.Us = Us
         if isinstance(data, torch.Tensor):
             if data.dim() == 0:
                 data = data*torch.ones(1)
-            if eps is None:  # Naive TT formatting, don't even attempt to compress
-                self.cores = []
-                N = data.dim()
-                shape = data.shape
-                data = torch.reshape(torch.Tensor(data), [shape[0], -1])
-                for n in range(1, N):
-                    if data.shape[0] < data.shape[1]:
-                        self.cores.append(torch.reshape(torch.eye(data.shape[0]), [data.shape[0] // shape[n-1],
-                                                                                   shape[n - 1], data.shape[0]]))
-                        data = torch.reshape(data, (data.shape[0] * shape[n], data.shape[1] // shape[n]))
-                    else:
-                        self.cores.append(torch.reshape(data, [data.shape[0] // shape[n-1],
-                                                                                   shape[n - 1], data.shape[1]]))
-                        data = torch.reshape(torch.eye(data.shape[1]), (data.shape[1] * shape[n], data.shape[1] // shape[n]))
-                self.cores.append(torch.reshape(data, [data.shape[0] // shape[N - 1], shape[N-1], 1]))
-            else:  # TT-SVD (or TT-EIG) algorithm
-                raise NotImplementedError
-        if Us is not None:
-            for n in range(self.dim()):
-                if Us[n] is None:
-                    continue
-                assert Us[n].dim() == 2
-                assert self.cores[n].shape[-2] == Us[n].shape[1]
-            self.Us = Us
-        else:
-            self.Us = [None]*self.dim()
-        if idxs is not None:
-            self.idxs = idxs
-        else:
-            self.idxs = [torch.arange(sh) for sh in self.shape]
+            if ranks_cp is not None:  # Compute CP from full tensor: CP-ALS
+                if ranks_tt is not None:
+                    raise ValueError('ALS for CP-TT is not yet supported')
+                assert not hasattr(ranks_cp, '__len__')
+                start = time.time()
+                if verbose:
+                    print('ALS', end='')
+                if ranks_tucker is not None:  # CP on Tucker's core
+                    self.cores = _full_rank_tt(data)
+                    self.round_tucker(rmax=ranks_tucker)
+                    data = self.tucker_core()
+                    data_norm = tn.norm(data)
+                    self.cores = [torch.randn(sh, ranks_cp) for sh in data.shape]
+                else:  # We initialize CP factor to HOSVD
+                    data_norm = torch.norm(data)
+                    self.cores = []
+                    for n in range(data.dim()):
+                        gram = tn.unfolding(data, n)
+                        gram = gram.matmul(gram.t())
+                        eigvals, eigvecs = torch.symeig(gram, eigenvectors=True)
+                        # Sort eigenvectors in decreasing importance
+                        reverse = np.arange(len(eigvals)-1, -1, -1)  # Negative steps not yet supported in PyTorch
+                        idx = np.argsort(eigvals)[reverse[:ranks_cp]]
+                        self.cores.append(eigvecs[:, idx])
+                if verbose:
+                    print(' -- initialization time =', time.time() - start)
+                grams = [None] + [self.cores[n].t().matmul(self.cores[n]) for n in range(1, self.dim())]
+                errors = []
+                converged = False
+                for iter in range(max_iter):
+                    for n in range(self.dim()):
+                        khatri = torch.ones(1, ranks_cp)
+                        prod = torch.ones(ranks_cp, ranks_cp)
+                        for m in range(self.dim()-1, -1, -1):
+                            if m != n:
+                                prod *= grams[m]
+                                khatri = torch.reshape(torch.einsum('ir,jr->ijr', (self.cores[m], khatri)), [-1, ranks_cp])
+                        unfolding = tn.unfolding(data, n)
+                        self.cores[n] = torch.gesv(unfolding.matmul(khatri).t(), prod)[0].t()
+                        grams[n] = self.cores[n].t().matmul(self.cores[n])
+                    errors.append(torch.norm(data - tn.Tensor(self.cores).full()) / data_norm)
+                    if len(errors) >= 2 and errors[-2] - errors[-1] < tol:
+                        converged = True
+                    if verbose:
+                        print('iter: {: <{}} | eps: '.format(iter, len('{}'.format(max_iter))), end='')
+                        print('{:.8f}'.format(errors[-1]), end='')
+                        print(' | total time: {:9.4f}'.format(time.time() - start), end='')
+                        if converged:
+                            print(' <- converged (tol={})'.format(tol))
+                        elif iter == max_iter-1:
+                            print(' <- max_iter was reached: {}'.format(max_iter))
+                        else:
+                            print()
+                    if converged:
+                        break
+            else:
+                self.cores = _full_rank_tt(data)
+                self.Us = [None]*data.dim()
+                if ranks_tucker is not None:
+                    self.round_tucker(rmax=ranks_tucker)
+                if ranks_tt is not None:
+                    self.round_tt(rmax=ranks_tt)
+        # Check factor shapes
+        for n in range(self.dim()):
+            if Us[n] is None:
+                continue
+            assert Us[n].dim() == 2
+            assert self.cores[n].shape[-2] == Us[n].shape[1]
+        if idxs is None:
+            idxs = [torch.arange(sh) for sh in self.shape]
+        self.idxs = idxs
+        if eps is not None:  # TT-SVD (or TT-EIG) algorithm
+            if ranks_cp is not None or ranks_tucker is not None or ranks_tt is not None:
+                raise ValueError('Specify eps or ranks, but not both')
+            self.round(eps)
 
     """
     Arithmetic operations
@@ -471,7 +542,7 @@ class Tensor(object):
                     elif a1.dim() == 3 and a2.dim() == 2:
                         factors['index'] = torch.einsum('iaj,aj->iaj', (a1, a2))
                     elif a1.dim() == 3 and a2.dim() == 3:
-                        # Until https://github.com/pytorch/pytorch/issues/10661 is fully resolved # TODO check efficiency for other cases
+                        # Until https://github.com/pytorch/pytorch/issues/10661 is fully resolved  # TODO check efficiency for other cases
                         factors['index'] = torch.sum(a1[:, :, :, None]*a2.permute(1, 0, 2)[None, :, :, :], dim=2)
                         # factors['index'] = torch.einsum('iaj,jak->iak', (a1, a2))
                 counter += 1
@@ -572,17 +643,23 @@ class Tensor(object):
 
         return tn.Tensor(self.cores).full()
 
-    def full_tucker(self, _clone=True):
+    def full_tucker(self, modes='all', _clone=True):
         """
         Decompresses this tensor only along the Tucker factors.
 
+        :param modes: int, list, or 'all' (default)
         :return: a tensor in TT format
 
         """
 
+        if modes == 'all':
+            modes = range(self.dim())
+        if not hasattr(modes, '__len__'):
+            modes = [modes]*self.dim()
+
         cores = []
         for n in range(self.dim()):
-            if self.Us[n] is not None:
+            if n in modes and self.Us[n] is not None:
                 if self.cores[n].dim() == 2:
                     cores.append(torch.einsum('jk,aj->ak', (self.cores[n], self.Us[n])))
                 else:
@@ -608,11 +685,17 @@ class Tensor(object):
         for n in range(t.dim()):
             shape.append(t.cores[n].shape[-2])
             if t.cores[n].dim() == 2:  # CP core
-                factor = torch.einsum('ai,bi->abi', (factor, t.cores[n]))
+                if n < t.dim() - 1:
+                    factor = torch.einsum('ai,bi->abi', (factor, t.cores[n]))
+                else:
+                    factor = torch.einsum('ai,bi->ab', (factor, t.cores[n]))[..., None]
             else:  # TT core
                 factor = torch.einsum('ai,ibj->abj', (factor, t.cores[n]))
             factor = factor.reshape([-1, factor.shape[-1]])
-        factor = torch.sum(factor, dim=-1)
+        if factor.shape[-1] > 1:
+            factor = torch.sum(factor, dim=-1)
+        else:
+            factor = factor[..., 0]
         factor = factor.reshape(shape)
         return factor
 
@@ -731,7 +814,7 @@ class Tensor(object):
             L = self.right_orthogonalize(i)
         return R, L
 
-    def round_tucker(self, eps=0, rmax=None, algorithm='svd'):
+    def round_tucker(self, eps=0, rmax=None, modes='all', algorithm='svd'):
         """
         Tries to recompress this tensor in place by reducing its Tucker ranks.
 
@@ -748,8 +831,13 @@ class Tensor(object):
         if not hasattr(rmax, '__len__'):
             rmax = [rmax]*N
         assert len(rmax) == N
+        if modes == 'all':
+            modes = range(N)
+        if not hasattr(modes, '__len__'):
+            modes = [modes]*N
 
-        self._cp_to_tt()
+        for m in modes:
+            self.cores[m] = self._cp_to_tt(self.cores[m])
         self.orthogonalize(0)
         for mu in range(N):
             if self.Us[mu] is None:
@@ -761,7 +849,7 @@ class Tensor(object):
             self.Us[mu] = torch.matmul(self.Us[mu], R.t())
 
             # Split factor according to error budget
-            left, right = tn.truncated_svd(self.Us[mu], eps=eps/np.sqrt(N), rmax=rmax[mu], left_ortho=True, algorithm=algorithm)
+            left, right = tn.truncated_svd(self.Us[mu], eps=eps/np.sqrt(len(modes)), rmax=rmax[mu], left_ortho=True, algorithm=algorithm)
             self.Us[mu] = left
 
             # Push the (non-orthogonal) remainder to the core
@@ -910,7 +998,7 @@ class Tensor(object):
 
     def numel(self):
         """
-        Counts the total number of elements of this tensor network.
+        Counts the total number of compressed coefficients of this tensor.
 
         :return: an integer
 

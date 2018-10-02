@@ -258,6 +258,10 @@ def mask(t, mask):
     return t*mask
 
 
+def unfolding(data, n):
+    return data.permute([n] + list(range(n)) + list(range(n + 1, data.dim()))).reshape([data.shape[n], -1])
+
+
 def right_unfolding(core):
     return core.reshape([core.shape[0], -1])
 
