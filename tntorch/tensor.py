@@ -237,7 +237,7 @@ class Tensor(object):
                     core1 = torch.einsum('ijk,aj->iak', (core1, this.Us[n]))
                 if other.Us[n] is not None:
                     core2 = torch.einsum('ijk,aj->iak', (core2, other.Us[n]))
-                cores.append(tn.core_kron(core1, core2))
+                cores.append(_core_kron(core1, core2))
                 Us.append(None)
             if this.cores[n].dim() == 2 and other.cores[n].dim() == 2:
                 cores[-1] = cores[-1][0, :, :]
@@ -1047,3 +1047,10 @@ def _broadcast(a, b):
     result1 = a.repeat(*[int(round(max(sh2/sh1, 1))) for sh1, sh2 in zip(a.shape, b.shape)])
     result2 = b.repeat(*[int(round(max(sh1 / sh2, 1))) for sh1, sh2 in zip(a.shape, b.shape)])
     return result1, result2
+
+
+def _core_kron(a, b):
+    # return torch.reshape(torch.einsum('iaj,kal->ikajl', (a, b)), [a.shape[0]*b.shape[0], -1, a.shape[2]*b.shape[2]])  # Seems slower
+    c = a[:, None, :, :, None] * b[None, :, :, None, :]
+    c = c.reshape([a.shape[0] * b.shape[0], -1, a.shape[-1] * b.shape[-1]])
+    return c
