@@ -5,7 +5,7 @@ import time
 from functools import reduce
 
 
-def optimize(tensors, loss_function, tol=1e-4, max_iter=10000, print_freq=500, verbose=True):
+def optimize(tensors, loss_function, optimizer=torch.optim.Adam, tol=1e-4, max_iter=10000, print_freq=500, verbose=True):
     """
     High-level wrapper for iterative learning.
 
@@ -14,6 +14,7 @@ def optimize(tensors, loss_function, tol=1e-4, max_iter=10000, print_freq=500, v
 
     :param tensors: one or several tensors; will be fed to `loss_function`
     :param loss_function: must take `tensors` and return a scalar (or tuple thereof)
+    :param optimizer: one from https://pytorch.org/docs/stable/optim.html. Default is torch.optim.Adam
     :param tol: stopping criterion
     :param max_iter:
     :param print_freq: progress will be printed every this many iterations
@@ -30,7 +31,7 @@ def optimize(tensors, loss_function, tol=1e-4, max_iter=10000, print_freq=500, v
     if len(parameters) == 0:
         raise ValueError("There are no parameters to optimize. Did you forget a requires_grad=True somewhere?")
 
-    optimizer = torch.optim.Adam(parameters)
+    optimizer = optimizer(parameters)
     losses = []
     converged = False
     start = time.time()

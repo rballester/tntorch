@@ -601,7 +601,7 @@ def hash(t):
 
 def generate_basis(name, shape, orthonormal=False):
     """
-    Generate factor matrices that
+    Generate a factor matrix whose columns are functions of a truncated basis.
 
     :param name: 'dct', 'legendre', 'chebyshev' or 'hermite'
     :param shape: two integers
