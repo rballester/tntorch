@@ -89,6 +89,9 @@ def sobol(t, mask, marginals=None):
         else:
             am.Us[n][1:, :] *= m[:, None]
     am_masked = tn.mask(am, mask)
+    if am_masked.cores[-1].shape[-1] > 1:
+        am_masked.cores.append(torch.eye(am_masked.cores[-1].shape[-1])[:, :, None])
+        am_masked.Us.append(None)
     return tn.dot(a, am_masked) / tn.dot(a, am)
 
 
@@ -116,5 +119,17 @@ def mean_dimension(t, marginals=None):
     return tn.sobol(t, tn.weight(t.dim()), marginals=marginals)
 
 
-def dimension_distribution(t, marginals=None):
-    return torch.Tensor([tn.sobol(t, tn.weight_mask(t.dim(), n), marginals=marginals) for n in range(1, t.dim()+1)])
+def dimension_distribution(t, order=None, marginals=None):
+    """
+    Computes the dimension distribution of an N-D tensor.
+
+    :param t: input tensor
+    :param order: compute only this many order contributions. By default, all N are returned
+    :param marginals: PMFs for input variables. By default, uniform distributions
+    :return: a torch vector containing N elements
+
+    """
+
+    if order is None:
+        order = t.dim()
+    return tn.sobol(t, tn.weight_one_hot(t.dim(), order+1), marginals=marginals).full()[1:]

@@ -23,11 +23,11 @@ def _process(gt, approx):
 def dot(t1, t2):
     """
     Computes the dot product between two tensors. If their dimensionalities N1 and N2 differ (say, N1 < N2), then only
-    the *trailing* N1 dimensions will be contracted; the result will have dimension N2 - N1.
+    the *leading* N1 dimensions will be contracted; the result will have dimension N2 - N1.
 
     Example:
-    tn.rand([2, 3, 4]).dot(tn.rand[3, 4])  # Result has shape [2]
     tn.rand([3, 4]).dot(tn.rand[3, 4])  # Result is a scalar tensor
+    tn.rand([3, 4, 5]).dot(tn.rand[3, 4])  # Result has shape [5]
 
     :param t1: a tensor
     :param t2: a tensor
@@ -41,46 +41,46 @@ def dot(t1, t2):
 
     if t1.dim() < t2.dim():
         return tn.dot(t2, t1)
-    Lprod = torch.ones([t1.cores[-1].shape[-1], t2.cores[-1].shape[-1]])
+    Lprod = torch.ones([t2.ranks_tt[0], t1.ranks_tt[0]])
     k = min(t1.dim(), t2.dim())
-    if not np.array_equal(t1.shape[-k:], t2.shape[-k:]):
-        raise ValueError('Dot product requires trailing dimensions to be equal, but they are {} and {}'.format(t1.shape[-k:], t2.shape[-k:]))
+    if not np.array_equal(t1.shape[:k], t2.shape[:k]):
+        raise ValueError('Dot product requires leading dimensions to be equal, but they are {} and {}'.format(t1.shape[:k], t2.shape[:k]))
     for mu in range(k):
-        mu1 = t1.dim()-1-mu
-        mu2 = t2.dim()-1-mu
-        core1 = t1.cores[mu1]
-        core2 = t2.cores[mu2]
-        if t1.Us[mu1] is None:
-            if t2.Us[mu2] is not None:
+        core1 = t1.cores[mu]
+        core2 = t2.cores[mu]
+        # First part: deal with Tucker factors
+        if t1.Us[mu] is None:
+            if t2.Us[mu] is not None:
                 if core1.dim() == 3:
-                    core1 = torch.einsum('iak,aj->ijk', (core1, t2.Us[mu2]))
+                    core1 = torch.einsum('iak,aj->ijk', (core1, t2.Us[mu]))
                 else:
-                    core1 = torch.einsum('ak,aj->jk', (core1, t2.Us[mu2]))
-        elif t2.Us[mu2] is None:
+                    core1 = torch.einsum('ak,aj->jk', (core1, t2.Us[mu]))
+        elif t2.Us[mu] is None:
             if core2.dim() == 3:
-                core2 = torch.einsum('iak,aj->ijk', (core2, t1.Us[mu1]))
+                core2 = torch.einsum('iak,aj->ijk', (core2, t1.Us[mu]))
             else:
-                core2 = torch.einsum('ak,aj->jk', (core2, t1.Us[mu1]))
+                core2 = torch.einsum('ak,aj->jk', (core2, t1.Us[mu]))
         else:  # Both have Tucker factors
             if core2.dim() == 3:
-                core2 = torch.einsum('ar,aj,ijk->irk', (t1.Us[mu1], t2.Us[mu2], core2))
+                core2 = torch.einsum('ar,aj,ijk->irk', (t1.Us[mu], t2.Us[mu], core2))
             else:
-                core2 = torch.einsum('ar,aj,jk->rk', (t1.Us[mu1], t2.Us[mu2], core2))
+                core2 = torch.einsum('ar,aj,jk->rk', (t1.Us[mu], t2.Us[mu], core2))
+        # Second part: advance running factor `Lprod`
         if core1.dim() == 3:
-            Ucore = torch.einsum('ijk,ka->ija', (core1, Lprod))
+            Ucore = torch.einsum('ai,ijk->ajk', (Lprod, core1))
         else:
-            Ucore = torch.einsum('ji,ik->ijk', (core1, Lprod))
+            Ucore = torch.einsum('ik,jk->ijk', (Lprod, core1))
         Vcore = core2
         if Vcore.dim() == 3:
-            Lprod = torch.mm(Ucore.reshape([Ucore.shape[0], -1]), torch.t(Vcore.reshape([Vcore.shape[0], -1])))
+            Lprod = torch.matmul(tn.left_unfolding(Vcore).t(), tn.left_unfolding(Ucore))
         else:
-            Lprod = torch.einsum('ijs,js->is', (Ucore, Vcore))
+            Lprod = torch.einsum('js,sjk->sk', (Vcore, Ucore))
     if k < t1.dim():
-        result = tn.Tensor(t1.cores[:t1.dim()-k], t1.Us[:t1.dim()-k]).clone()
-        if result.cores[-1].dim() == 3:
-            result.cores[-1] = torch.einsum('iaj,jk->iak', (result.cores[-1], Lprod))
+        result = tn.Tensor(t1.cores[k:], t1.Us[k:]).clone()
+        if result.cores[0].dim() == 3:
+            result.cores[0] = torch.einsum('ij,jak->iak', (Lprod, result.cores[0]))
         else:
-            result.cores[-1] = torch.einsum('aj,jk->jak', (result.cores[-1], Lprod))
+            result.cores[0] = torch.einsum('ij,aj->iaj', (Lprod, result.cores[-1]))
         return result
     else:
         return torch.sum(Lprod)

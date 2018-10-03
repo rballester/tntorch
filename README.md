@@ -97,3 +97,12 @@ The main dependencies are *NumPy* and *PyTorch*. To download and install *tntorc
 git clone https://github.com/rballester/tntorch.git
 pip install -e tntorch
 ```
+
+## Testing
+
+We use [*pytest*](https://docs.pytest.org/en/latest/). Simply run:
+
+```
+cd tests/
+pytest
+```

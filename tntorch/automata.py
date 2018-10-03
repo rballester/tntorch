@@ -13,15 +13,22 @@ def weight_mask(N, weight, nsymbols=2):
 
     """
 
-    if not hasattr(nsymbols, '__len__'):
-        nsymbols = [nsymbols]*N
     if not hasattr(weight, '__len__'):
         weight = [weight]
     weight = torch.Tensor(weight).long()
     assert weight[0] >= 0
-    assert len(nsymbols) == N
+    t = tn.weight_one_hot(N, int(max(weight) + 1), nsymbols)
+    t.cores[-1] = torch.sum(t.cores[-1][:, :, weight], dim=2, keepdim=True)
+    return t
 
-    r = int(max(weight) + 1)
+
+def weight_one_hot(N, r=None, nsymbols=2):
+    if not hasattr(nsymbols, '__len__'):
+        nsymbols = [nsymbols]*N
+    assert len(nsymbols) == N
+    if r is None:
+        r = N+1
+
     cores = []
     for n in range(N):
         core = torch.zeros([r, nsymbols[n], r])
@@ -30,10 +37,7 @@ def weight_mask(N, weight, nsymbols=2):
             core[:, s, s:] = torch.eye(r)[:, :-s]
         cores.append(core)
     cores[0] = cores[0][0:1, :, :]
-    cores[-1] = torch.sum(cores[-1][:, :, weight], dim=2, keepdim=True)
-    t = tn.Tensor(cores)
-    # t.round()
-    return t
+    return tn.Tensor(cores)
 
 
 def weight(N, nsymbols=2):
