@@ -524,3 +524,28 @@ def transpose(t):
         else:
             idxs.append(t.idxs[n].clone())
     return tn.Tensor(cores, Us, idxs)
+
+
+def meshgrid(axes):
+    """
+    Like NumPy's or PyTorch's `meshgrid()`.
+
+    :param axes: a list of N ints or torch vectors
+    :return: N tensors
+
+    """
+
+    if not hasattr(axes, '__len__'):
+        axes = [axes]
+    axes = axes.copy()
+    N = len(axes)
+    for n in range(N):
+        if not hasattr(axes[n], '__len__'):
+            axes[n] = torch.arange(axes[n]).double()
+
+    tensors = []
+    for n in range(N):
+        cores = [torch.ones(1, len(ax), 1) for ax in axes]
+        cores[n] = torch.Tensor(axes[n])[None, :, None]
+        tensors.append(tn.Tensor(cores))
+    return tensors
