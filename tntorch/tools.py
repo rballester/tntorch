@@ -146,6 +146,10 @@ def rand(shape, **kwargs):
     return _create(torch.rand, shape, **kwargs)
 
 
+def rand_like(tensor, **kwargs):
+    return _create(torch.rand, tensor.shape, **kwargs)
+
+
 def randn(shape, **kwargs):
     """
     Like `rand()`, but entries are distributed as a normal with mu=0, sigma=1
@@ -154,22 +158,24 @@ def randn(shape, **kwargs):
     return _create(torch.randn, shape, **kwargs)
 
 
+def randn_like(tensor, **kwargs):
+    return _create(torch.randn, tensor.shape, **kwargs)
+
+
 def ones(shape, **kwargs):
     return _create(torch.ones, shape, ranks_tt=1, **kwargs)
-    # return tn.Tensor([torch.ones(1, 1, 1) for sh in shape], Us=[torch.ones(1, sh, 1) for sh in shape])
 
 
-def ones_like(tensor):
-    return ones(tensor.shape)
+def ones_like(tensor, **kwargs):
+    return ones(tensor.shape, **kwargs)
 
 
 def zeros(shape, **kwargs):
     return _create(torch.zeros, shape, ranks_tt=1, **kwargs)
-    # return tn.Tensor([torch.zeros(1, 1, 1) for sh in shape], Us=[torch.zeros(1, sh, 1) for sh in shape])
 
 
-def zeros_like(tensor):
-    return zeros(tensor.shape)
+def zeros_like(tensor, **kwargs):
+    return zeros(tensor.shape, **kwargs)
 
 
 def _create(function, shape, ranks_tt=None, ranks_cp=None, ranks_tucker=None, requires_grad=False, device=None):
@@ -528,7 +534,7 @@ def transpose(t):
 
 def meshgrid(axes):
     """
-    Like NumPy's or PyTorch's `meshgrid()`.
+    See NumPy's or PyTorch's `meshgrid()`.
 
     :param axes: a list of N ints or torch vectors
     :return: N tensors
@@ -549,3 +555,29 @@ def meshgrid(axes):
         cores[n] = torch.Tensor(axes[n])[None, :, None]
         tensors.append(tn.Tensor(cores))
     return tensors
+
+
+def flip(t, dims):
+    """
+    Reverses the order of a tensor along one or several dimensions; see NumPy's or PyTorch's `flip()`.
+
+    :param t: a tensor
+    :param dims: an int or list of ints
+    :return: another tensor of the same shape
+
+    """
+
+    if not hasattr(dims, '__len__'):
+        dims = [dims]
+
+    shape = t.shape
+    result = t.clone()
+    for d in dims:
+        print(d, shape)
+        idx = np.arange(shape[d]-1, -1, -1)
+        if result.Us[d] is not None:
+            result.Us[d] = result.Us[d][idx, :]
+        else:
+            print(idx, result.cores[d].shape)
+            result.cores[d] = result.cores[d][..., idx, :]
+    return result
