@@ -156,8 +156,8 @@ class Tensor(object):
                 core1 = core1[None, :, :]
                 core2 = core2[None, :, :]
             else:
-                core1 = this._cp_to_tt(core1)
-                core2 = this._cp_to_tt(core2)
+                core1 = self._cp_to_tt(core1)
+                core2 = self._cp_to_tt(core2)
             if this.Us[n] is not None and other.Us[n] is not None:
                 # if core1.shape[1] + core2.shape[1] >= self.Us[n] and core1.shape[1] + core2.shape[1] >= self.Us[n]
                 slice1 = torch.cat([core1, torch.zeros([core2.shape[0], core1.shape[1], core1.shape[2]])], dim=0)
@@ -172,8 +172,8 @@ class Tensor(object):
                 core1 = torch.einsum('ijk,aj->iak', (core1, self.Us[n]))
             if other.Us[n] is not None:
                 core2 = torch.einsum('ijk,aj->iak', (core2, other.Us[n]))
-            column1 = torch.cat([core1, torch.zeros([core2.shape[0], self.shape[n], core1.shape[2]])], dim=0)
-            column2 = torch.cat([torch.zeros([core1.shape[0], self.shape[n], core2.shape[2]]), core2], dim=0)
+            column1 = torch.cat([core1, torch.zeros([core2.shape[0], this.shape[n], core1.shape[2]])], dim=0)
+            column2 = torch.cat([torch.zeros([core1.shape[0], this.shape[n], core2.shape[2]]), core2], dim=0)
             c = torch.cat([column1, column2], dim=2)
             cores.append(c)
             Us.append(None)
@@ -1011,31 +1011,39 @@ class Tensor(object):
                 result += self.Us[n].numel()
         return result
 
+    def repeat(self, *rep):
+        """
+        Returns another tensor repeated along one or more axes; works like PyTorch's `repeat()`.
+
+        :param rep: a list, possibly longer than the tensor's number of dimensions
+        :return: another tensor
+
+        """
+
+        assert len(rep) >= self.dim()
+        assert all([r >= 1 for r in rep])
+
+        t = self.clone()
+        if len(rep) > self.dim():  # If requested, we add trailing new dimensions. We use CP as is cheaper
+            for n in range(self.dim(), len(rep)):
+                t.cores.append(torch.ones(rep[n], self.cores[-1].shape[-1]))
+                t.Us.append(None)
+        for n in range(self.dim()):
+            if t.Us[n] is not None:
+                t.Us[n] = t.Us[n].repeat(rep[n], 1)
+            else:
+                if t.cores[n].dim() == 3:
+                    t.cores[n] = t.cores[n].repeat(1, rep[n], 1)
+                else:
+                    t.cores[n] = t.cores[n].repeat(rep[n], 1)
+        return t
+
 
 def _broadcast(a, b):
     if a.shape == b.shape:
         return a, b
     elif a.dim() != b.dim():
         raise ValueError('Cannot broadcast: lhs has {} dimensions, rhs has {}'.format(a.dim(), b.dim()))
-    coresa = a.cores
-    coresb = b.cores
-    Usa = a.Us
-    Usb = b.Us
-
-    def repeat(coresa, Usa, howmany):
-        if Usa[n] is not None:
-            Usa[n] = Usa[n].repeat(howmany, 1)
-        else:
-            if coresa[n].dim() == 3:
-                coresa[n] = coresa[n].repeat(1, howmany, 1)
-            else:
-                coresa[n] = coresa[n].repeat(howmany, 1)
-
-    for n in range(a.dim()):
-        if a.shape[n] == 1 and b.shape[n] > 1:
-            repeat(coresa, Usa, b.shape[n])
-        elif a.shape[n] > 1 and b.shape[n] == 1:
-            repeat(coresb, Usb, a.shape[n])
-        elif a.shape[n] != b.shape[n]:
-            raise ValueError('Cannot broadcast: lhs has shape {} along dimension {}, whereas rhs has shape {}'.format(a.shape[n], n, b.shape[n]))
-    return tn.Tensor(coresa, Usa), tn.Tensor(coresb, Usb)
+    result1 = a.repeat(*[int(round(max(sh2/sh1, 1))) for sh1, sh2 in zip(a.shape, b.shape)])
+    result2 = b.repeat(*[int(round(max(sh1 / sh2, 1))) for sh1, sh2 in zip(a.shape, b.shape)])
+    return result1, result2
