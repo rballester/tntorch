@@ -20,70 +20,91 @@ def _process(gt, approx):
     return gt, approx
 
 
-def dot(t1, t2):
+def dot(t1, t2, k=None):
     """
-    Computes the dot product between two tensors. If their dimensionalities N1 and N2 differ (say, N1 < N2), then only
-    the *leading* N1 dimensions will be contracted; the result will have dimension N2 - N1.
+    Generalized tensor dot product: contracts the k leading dimensions of two tensors of dimension N1 and N2.
 
-    Example:
-    tn.rand([3, 4]).dot(tn.rand[3, 4])  # Result is a scalar tensor
-    tn.rand([3, 4, 5]).dot(tn.rand[3, 4])  # Result has shape [5]
+    If k is None:
+        If N1 == N2, returns a scalar (dot product between the two tensors)
+        If N1 < N2, the result will have dimension N2 - N1
+        If N2 < N1, the result will have dimension N1 - N2
+
+        Example: suppose t1 has shape 3 x 4 and t2 has shape 3 x 4 x 5 x 6. Then, tn.dot(t1, t2) will have shape
+        5 x 6.
+
+    If k is given:
+        The trailing (N1-k) dimensions from the 1st tensor will be sorted backwards, and then the trailing (N2-k)
+        dimensions from the 2nd tensor will be appended to them.
+
+        Example: suppose t1 has shape 3 x 4 x 5 x 6 and t2 has shape 3 x 4 x 10 x 11. Then, tn.dot(t1, t2, k=2) will
+        have shape 6 x 5 x 10 x 11.
 
     :param t1: a tensor
     :param t2: a tensor
-    :return: a scalar (if `t1` and `t2` have the same number of dimensions) or tensor otherwise
+    :param k: an int (default: None)
+    :return: a scalar (if k is None and t1.dim() == t2.dim()), a tensor otherwise
 
     """
+
+    def _project_spatial(core, M):
+        if core.dim() == 3:
+            return torch.einsum('iak,aj->ijk', (core, M))
+        else:
+            return torch.einsum('ak,aj->jk', (core, M))
+
+    def _project_left(core, M):
+        if core.dim() == 3:
+            return torch.einsum('sr,rai->sai', (M, core))
+        else:
+            return torch.einsum('sr,ar->sar', (M, core))
 
     t1, t2 = _process(t1, t2)
     if isinstance(t1, torch.Tensor) and isinstance(t2, torch.Tensor):
         return t1.flatten().dot(t2.flatten())
-
-    if t1.dim() < t2.dim():
-        return tn.dot(t2, t1)
     Lprod = torch.ones([t2.ranks_tt[0], t1.ranks_tt[0]])
-    k = min(t1.dim(), t2.dim())
+    if k is None:
+        k = min(t1.dim(), t2.dim())
+    assert k <= t1.dim() and k <= t2.dim()
     if not np.array_equal(t1.shape[:k], t2.shape[:k]):
         raise ValueError('Dot product requires leading dimensions to be equal, but they are {} and {}'.format(t1.shape[:k], t2.shape[:k]))
+
+    # Crunch first k dimensions of both tensors
     for mu in range(k):
         core1 = t1.cores[mu]
         core2 = t2.cores[mu]
-        # First part: deal with Tucker factors
+        # First part: absorb Tucker factors
         if t1.Us[mu] is None:
             if t2.Us[mu] is not None:
-                if core1.dim() == 3:
-                    core1 = torch.einsum('iak,aj->ijk', (core1, t2.Us[mu]))
-                else:
-                    core1 = torch.einsum('ak,aj->jk', (core1, t2.Us[mu]))
+                core1 = _project_spatial(core1, t2.Us[mu])
         elif t2.Us[mu] is None:
-            if core2.dim() == 3:
-                core2 = torch.einsum('iak,aj->ijk', (core2, t1.Us[mu]))
-            else:
-                core2 = torch.einsum('ak,aj->jk', (core2, t1.Us[mu]))
+            core2 = _project_spatial(core2, t1.Us[mu])
         else:  # Both have Tucker factors
-            if core2.dim() == 3:
-                core2 = torch.einsum('ar,aj,ijk->irk', (t1.Us[mu], t2.Us[mu], core2))
-            else:
-                core2 = torch.einsum('ar,aj,jk->rk', (t1.Us[mu], t2.Us[mu], core2))
+            core2 = _project_spatial(core2, torch.matmul(t2.Us[mu].t(), t1.Us[mu]))
         # Second part: advance running factor `Lprod`
-        if core1.dim() == 3:
-            Ucore = torch.einsum('ai,ijk->ajk', (Lprod, core1))
-        else:
-            Ucore = torch.einsum('ik,jk->ijk', (Lprod, core1))
+        Ucore = _project_left(core1, Lprod)
         Vcore = core2
         if Vcore.dim() == 3:
             Lprod = torch.matmul(tn.left_unfolding(Vcore).t(), tn.left_unfolding(Ucore))
         else:
-            Lprod = torch.einsum('js,sjk->sk', (Vcore, Ucore))
+            Lprod = torch.einsum('as,sar->sr', (Vcore, Ucore))
+
+    # Deal with unprocessed dimensions, if any
     if k < t1.dim():
-        result = tn.Tensor(t1.cores[k:], t1.Us[k:]).clone()
-        if result.cores[0].dim() == 3:
-            result.cores[0] = torch.einsum('ij,jak->iak', (Lprod, result.cores[0]))
+        t1trail = tn.Tensor(t1.cores[k:], t1.Us[k:]).clone()
+        t1trail.cores[0] = _project_left(t1trail.cores[0], Lprod)
+        if k == t2.dim():
+            return t1trail
         else:
-            result.cores[0] = torch.einsum('ij,aj->iaj', (Lprod, result.cores[-1]))
-        return result
+            t2trail = tn.Tensor(t2.cores[k:], t2.Us[k:]).clone()
+            t1trail = tn.transpose(t1trail)
+            return tn.Tensor(t1trail.cores + t2trail.cores, Us=t1trail.Us + t2trail.Us)
     else:
-        return torch.sum(Lprod)
+        if k == t2.dim():
+            return torch.sum(Lprod)
+        else:
+            t2trail = tn.Tensor(t2.cores[k:], t2.Us[k:])#.clone()
+            t2trail.cores[0] = _project_left(t2trail.cores[0], Lprod.t())
+            return t2trail
 
 
 def dist(t1, t2):

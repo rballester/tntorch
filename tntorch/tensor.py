@@ -764,8 +764,6 @@ class Tensor(object):
         """
 
         assert 0 <= mu < self.dim()-1
-        if self.cores[mu].dim() == 2:
-            self.cores[mu] = self.cores
         self.factor_orthogonalize(mu)
         Q, R = torch.qr(tn.left_unfolding(self.cores[mu]))
         self.cores[mu] = torch.reshape(Q, self.cores[mu].shape[:-1] + (Q.shape[1], ))
@@ -806,6 +804,10 @@ class Tensor(object):
         :returns L, R: left and right factors
         """
 
+        if mu < 0:
+            mu += self.dim()
+
+        self._cp_to_tt()
         L = torch.ones(1, 1)
         R = torch.ones(1, 1)
         for i in range(0, mu):
@@ -909,8 +911,8 @@ class Tensor(object):
     Convenience "methods"
     """
 
-    def dot(self, other):
-        return tn.dot(self, other)
+    def dot(self, other, **kwargs):
+        return tn.dot(self, other, **kwargs)
 
     def mean(self):
         return tn.mean(self)

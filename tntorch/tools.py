@@ -200,10 +200,10 @@ def transpose(t):
             Us.append(None)
         else:
             Us.append(t.Us[n].clone())
-        if t.idxs[n] is None:
-            idxs.append(None)
-        else:
+        try:
             idxs.append(t.idxs[n].clone())
+        except Exception:
+            idxs.append(None)
     return tn.Tensor(cores, Us, idxs)
 
 
@@ -436,12 +436,12 @@ def sum(t, modes=None, keepdims=False):
         return tn.squeeze(result, modes)
 
 
-def ttm(t, U, mode, transpose=False):
+def ttm(t, U, dim=None, transpose=False):
     """
     Tensor-times-matrix (TTM) along one or several modes
 
     :param U: one or several factors
-    :param mode: one or several modes (may be vectors or matrices)
+    :param dim: one or several modes (may be vectors or matrices). If None, the first len(U) modes are assumed
     :param transpose: if False (default) the contraction is performed
      along U's rows, else along its columns
     :return: transformed TT
@@ -450,28 +450,30 @@ def ttm(t, U, mode, transpose=False):
 
     if not isinstance(U, (list, tuple)):
         U = [U]
-    if not hasattr(mode, '__len__'):
-        mode = [mode]
+    if dim is None:
+        dim = range(len(U))
+    if not hasattr(dim, '__len__'):
+        dim = [dim]
 
     cores = []
     Us = []
     for n in range(t.dim()):
-        if n in mode:
+        if n in dim:
             if transpose:
-                factor = U[mode.index(n)].t
+                factor = U[dim.index(n)].t.double()
             else:
-                factor = U[mode.index(n)]
+                factor = U[dim.index(n)].double()
             if factor.dim() == 1:
                 factor = factor[None, :]
-            if t.Us[mode[n]] is None:
-                if t.cores[mode[n]].dim() == 3:
-                    cores.append(torch.einsum('iak,ja->ijk', (t.cores[mode[n]], factor)))
+            if t.Us[n] is None:
+                if t.cores[n].dim() == 3:
+                    cores.append(torch.einsum('iak,ja->ijk', (t.cores[n], factor)))
                 else:
-                    cores.append(torch.einsum('ai,ja->ji', (t.cores[mode[n]], factor)))
+                    cores.append(torch.einsum('ai,ja->ji', (t.cores[n], factor)))
                 Us.append(None)
             else:
                 cores.append(t.cores[n].clone())
-                Us.append(torch.matmul(factor, t.Us[mode[n]]))
+                Us.append(torch.matmul(factor, t.Us[n]))
         else:
             cores.append(t.cores[n].clone())
             if t.Us[n] is None:
@@ -612,6 +614,8 @@ def generate_basis(name, shape, orthonormal=False):
 
     if name == "dct":
         U = scipy.fftpack.dct(np.eye(shape[0]), norm="ortho")[:, :shape[1]]
+    elif name == 'identity':
+        U = np.eye(shape[0], shape[1])
     else:
         eval_points = np.linspace(-1, 1, shape[0])
         if name == "legendre":

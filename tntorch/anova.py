@@ -95,7 +95,7 @@ def sobol(t, mask, marginals=None):
     return tn.dot(a, am_masked) / tn.dot(a, am)
 
 
-def mean_dimension(t, marginals=None):
+def mean_dimension(t, mask=None, marginals=None):
     """
     Computes the mean dimension of a given tensor with given marginal distributions. This quantity measures how well the
     represented function can be expressed as a sum of low-parametric functions. For example, mean dimension 1 (the
@@ -116,14 +116,18 @@ def mean_dimension(t, marginals=None):
 
     """
 
-    return tn.sobol(t, tn.weight(t.dim()), marginals=marginals)
+    if mask is None:
+        return tn.sobol(t, tn.weight(t.dim()), marginals=marginals)
+    else:
+        return tn.sobol(t, tn.mask(tn.weight(t.dim()), mask), marginals=marginals) / tn.sobol(t, mask, marginals=marginals)
 
 
-def dimension_distribution(t, order=None, marginals=None):
+def dimension_distribution(t, mask=None, order=None, marginals=None):
     """
     Computes the dimension distribution of an N-D tensor.
 
     :param t: input tensor
+    :param mask: an optional mask to restrict to
     :param order: compute only this many order contributions. By default, all N are returned
     :param marginals: PMFs for input variables. By default, uniform distributions
     :return: a torch vector containing N elements
@@ -132,4 +136,8 @@ def dimension_distribution(t, order=None, marginals=None):
 
     if order is None:
         order = t.dim()
-    return tn.sobol(t, tn.weight_one_hot(t.dim(), order+1), marginals=marginals).full()[1:]
+    if mask is None:
+        return tn.sobol(t, tn.weight_one_hot(t.dim(), order+1), marginals=marginals).full()[1:]
+    else:
+        mask2 = tn.mask(tn.weight_one_hot(t.dim(), order+1), mask)
+        return tn.sobol(t, mask2, marginals=marginals).full()[1:] / tn.sobol(t, mask, marginals=marginals)
