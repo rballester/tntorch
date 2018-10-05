@@ -27,54 +27,79 @@ def false(N):
     return tn.Tensor([torch.zeros([1, 2, 1]) for n in range(N)])
 
 
-def all(N):
+def all(N, which=None):
     """
     Create a formula (N-dimensional tensor) that is satisfied iff all symbols are true
 
     :param N: an integer
+    :param which: list of integers to consider (default: all)
     :return: a 2^N tensor
 
     """
 
-    return tn.Tensor([torch.cat([torch.zeros([1, 1, 1]), torch.ones([1, 1, 1])], dim=1) for n in range(N)])
+    if which is None:
+        which = list(range(N))
+
+    cores = []
+    for n in range(N):
+        if n in which:
+            cores.append(torch.cat([torch.zeros(1, 1, 1), torch.ones(1, 1, 1)], dim=1))
+        else:
+            cores.append(torch.ones(1, 2, 1))
+    return tn.Tensor(cores)
 
 
-def none(N):
+def none(N, which=None):
     """
     Create a formula (N-dimensional tensor) that is satisfied iff all symbols are false
 
     :param N: an integer
+    :param which: list of integers to consider (default: all)
     :return: a 2^N tensor
 
     """
 
-    return tn.Tensor([torch.cat([torch.ones([1, 1, 1]), torch.zeros([1, 1, 1])], dim=1) for n in range(N)])
+    if which is None:
+        which = list(range(N))
+
+    cores = []
+    for n in range(N):
+        if n in which:
+            cores.append(torch.cat([torch.ones(1, 1, 1), torch.zeros(1, 1, 1)], dim=1))
+        else:
+            cores.append(torch.ones(1, 2, 1))
+    return tn.Tensor(cores)
 
 
-def any(N):
+def any(N, which=None):
     """
     Create a formula (N-dimensional tensor) that is satisfied iff at least one symbol is true
 
     :param N: an integer
+    :param which: list of integers to consider (default: all)
     :return: a 2^N tensor
 
     """
 
-    return ~none(N)
+    return ~none(N, which)
 
 
-def one(N):
+def one(N, which=None):
     """
     Create a formula (N-dimensional tensor) that is satisfied iff one and only one input is true.
 
     Also known as "n-ary exclusive or".
 
     :param N: an integer
+    :param which: list of integers to consider (default: all)
     :return: a 2^N tensor
 
     """
 
-    return tn.automata.weight_mask(N, 1)
+    if which is None:
+        return tn.automata.weight_mask(N, 1)
+    else:
+        return tn.automata.weight_mask(N, 1) & tn.any(N, which)
 
 
 def symbols(N):
