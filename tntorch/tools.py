@@ -135,13 +135,13 @@ def squeeze(t, modes=None):
     """
 
     if modes is None:
-        modes = np.where(t.shape == 1)[0]
+        modes = np.where([s == 1 for s in t.shape])[0]
     assert np.all(np.array(t.shape)[modes] == 1)
 
     idx = [slice(None) for n in range(t.dim())]
     for m in modes:
         idx[m] = 0
-    return t[idx]
+    return t[tuple(idx)]
 
 
 def cat(ts, mode):
@@ -248,12 +248,10 @@ def flip(t, dims):
     shape = t.shape
     result = t.clone()
     for d in dims:
-        print(d, shape)
         idx = np.arange(shape[d]-1, -1, -1)
         if result.Us[d] is not None:
             result.Us[d] = result.Us[d][idx, :]
         else:
-            print(idx, result.cores[d].shape)
             result.cores[d] = result.cores[d][..., idx, :]
     return result
 

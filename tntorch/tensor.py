@@ -394,8 +394,16 @@ class Tensor(object):
     def _process_key(self, key):
         if not hasattr(key, '__len__'):
             key = (key,)
-        if isinstance(key, tuple) or any([not isinstance(k, int) for k in key]):
+        fancy = False
+        if isinstance(key, torch.Tensor):
+            key = key.detach().numpy()
+        if any([not np.isscalar(k) for k in key]):  # Fancy
             key = list(key)
+            fancy = True
+        if isinstance(key, tuple):
+            key = list(key)
+        elif not fancy:
+            key = [key]
 
         # Process ellipsis, if any
         nonecount = sum(1 for k in key if k is None)
@@ -450,7 +458,6 @@ class Tensor(object):
         cores = []
         Us = []
         counter = 0
-        # print([c.shape for c in self.cores], key)
 
         def join_cores(c1, c2):
             if c1.dim() == 1 and c2.dim() == 2:
