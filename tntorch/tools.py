@@ -10,7 +10,7 @@ Initializations
 """
 
 
-def rand(shape, **kwargs):
+def rand(*shape, **kwargs):
     """
     Generate a TT with random cores (and optionally factors), whose entries are uniform in [0, 1]
 
@@ -24,42 +24,44 @@ def rand(shape, **kwargs):
 
     """
 
-    return _create(torch.rand, shape, **kwargs)
+    return _create(torch.rand, *shape, **kwargs)
 
 
 def rand_like(tensor, **kwargs):
     return _create(torch.rand, tensor.shape, **kwargs)
 
 
-def randn(shape, **kwargs):
+def randn(*shape, **kwargs):
     """
     Like `rand()`, but entries are distributed as a normal with mu=0, sigma=1
     """
 
-    return _create(torch.randn, shape, **kwargs)
+    return _create(torch.randn, *shape, **kwargs)
 
 
 def randn_like(tensor, **kwargs):
     return _create(torch.randn, tensor.shape, **kwargs)
 
 
-def ones(shape, **kwargs):
-    return _create(torch.ones, shape, ranks_tt=1, **kwargs)
+def ones(*shape, **kwargs):
+    return _create(torch.ones, *shape, ranks_tt=1, **kwargs)
 
 
 def ones_like(tensor, **kwargs):
     return ones(tensor.shape, **kwargs)
 
 
-def zeros(shape, **kwargs):
-    return _create(torch.zeros, shape, ranks_tt=1, **kwargs)
+def zeros(*shape, **kwargs):
+    return _create(torch.zeros, *shape, ranks_tt=1, **kwargs)
 
 
 def zeros_like(tensor, **kwargs):
     return zeros(tensor.shape, **kwargs)
 
 
-def _create(function, shape, ranks_tt=None, ranks_cp=None, ranks_tucker=None, requires_grad=False, device=None):
+def _create(function, *shape, ranks_tt=None, ranks_cp=None, ranks_tucker=None, requires_grad=False, device=None):
+    if hasattr(shape[0], '__len__'):
+        shape = shape[0]
     N = len(shape)
     if not hasattr(ranks_tucker, "__len__"):
         ranks_tucker = [ranks_tucker for n in range(len(shape))]
