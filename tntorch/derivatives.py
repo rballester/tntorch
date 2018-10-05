@@ -64,65 +64,65 @@ def partialset(t, order=1, mask=None, bounds=None):
     return result
 
 
-def partial(t, modes, order=1, bounds=None):
+def partial(t, dim, order=1, bounds=None):
     """
     Compute a single partial derivative.
 
     :param t: a tensor
-    :param modes: int or list of ints
+    :param dim: int or list of ints
     :param order: how many times to derive. Default is 1
     :param bounds: variable(s) range bounds (to compute the derivative step). If None (default), step 1 will be assumed
     :return: a tensor
 
     """
 
-    if not hasattr(modes, '__len__'):
-        modes = [modes]
+    if not hasattr(dim, '__len__'):
+        dim = [dim]
     if bounds is None:
         bounds = [[0, t.shape[n]-1] for n in range(t.dim())]
     if not hasattr(bounds[0], '__len__'):
         bounds = [bounds]
 
     t2 = t.clone()
-    for i, mode in enumerate(modes):
+    for i, d in enumerate(dim):
         for o in range(1, order+1):
-            step = (bounds[i][1] - bounds[i][0]) / (t.shape[mode]-1)
-            if t2.Us[mode] is None:
-                t2.cores[mode] = (t2.cores[mode][..., 1:, :] - t2.cores[mode][..., :-1, :]) / step
-                if t2.cores[mode].dim() == 3:
-                    pad = torch.zeros(t2.cores[mode].shape[0], 1, t2.cores[mode].shape[2])
+            step = (bounds[i][1] - bounds[i][0]) / (t.shape[d]-1)
+            if t2.Us[d] is None:
+                t2.cores[d] = (t2.cores[d][..., 1:, :] - t2.cores[d][..., :-1, :]) / step
+                if t2.cores[d].dim() == 3:
+                    pad = torch.zeros(t2.cores[d].shape[0], 1, t2.cores[d].shape[2])
                 else:
-                    pad = torch.zeros(1, t2.cores[mode].shape[1])
-                t2.cores[mode] = torch.cat((t2.cores[mode], pad), dim=-2)
+                    pad = torch.zeros(1, t2.cores[d].shape[1])
+                t2.cores[d] = torch.cat((t2.cores[d], pad), dim=-2)
             else:
-                t2.Us[mode] = (t2.Us[mode][1:, :] - t2.Us[mode][:-1, :]) / step
-                t2.Us[mode] = torch.cat((t2.Us[mode], torch.zeros(1, t2.cores[mode].shape[-2])), dim=0)
+                t2.Us[d] = (t2.Us[d][1:, :] - t2.Us[d][:-1, :]) / step
+                t2.Us[d] = torch.cat((t2.Us[d], torch.zeros(1, t2.cores[d].shape[-2])), dim=0)
     return t2
 
 
-def gradient(t, modes='all', bounds=None):
+def gradient(t, dim='all', bounds=None):
     """
     Compute the gradient of a tensor
 
     :param t: a tensor
-    :param modes: an integer (or list of integers). Default is all modes
+    :param dim: an integer (or list of integers). Default is all
     :param bounds: a pair (or list of pairs) of reals, or None. The bounds for each variable
 
     :return: a tensor (or a list of tensors)
 
     """
 
-    if modes == 'all':
-        modes = range(t.dim())
+    if dim == 'all':
+        dim = range(t.dim())
     if bounds is None:
-        bounds = [[0, t.shape[mode]-1] for mode in modes]
+        bounds = [[0, t.shape[d]-1] for d in dim]
     if not hasattr(bounds, '__len__'):
-        bounds = [bounds]*len(modes)
+        bounds = [bounds]*len(dim)
 
-    if not hasattr(modes, '__len__'):
-        return partial(t, modes, bounds)
+    if not hasattr(dim, '__len__'):
+        return partial(t, dim, bounds)
     else:
-        return [partial(t, mode, order=1, bounds=b) for mode, b in zip(modes, bounds)]
+        return [partial(t, d, order=1, bounds=b) for d, b in zip(dim, bounds)]
 
 
 def active_subspace(t):
@@ -139,7 +139,7 @@ Single-Diode Solar Cell Model" (2017). Available: https://arxiv.org/pdf/1406.760
 
     """
 
-    grad = tn.gradient(t, modes='all')
+    grad = tn.gradient(t, dim='all')
 
     M = torch.zeros(t.dim(), t.dim())
     for i in range(t.dim()):

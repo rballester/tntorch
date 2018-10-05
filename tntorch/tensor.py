@@ -526,10 +526,7 @@ class Tensor(object):
                 raise IndexError
 
             if this_mode == 'none':
-                if self.cores[counter].dim() == 3:
-                    insert_core(factors, torch.eye(self.cores[counter].shape[0])[:, None, :], key=slice(None), U=None)
-                else:
-                    insert_core(factors, torch.eye(self.cores[counter].shape[1])[:, None, :], key=slice(None), U=None)
+                insert_core(factors, torch.eye(self.ranks_tt[counter].item())[:, None, :], key=slice(None), U=None)
             elif this_mode == 'slice':
                 insert_core(factors, self.cores[counter], key=key[i], U=self.Us[counter])
                 counter += 1
@@ -651,23 +648,23 @@ class Tensor(object):
 
         return tn.Tensor(self.cores).full()
 
-    def full_tucker(self, modes='all', _clone=True):
+    def full_tucker(self, dim='all', _clone=True):
         """
         Decompresses this tensor only along the Tucker factors.
 
-        :param modes: int, list, or 'all' (default)
+        :param dim: int, list, or 'all' (default)
         :return: a tensor in TT format
 
         """
 
-        if modes == 'all':
-            modes = range(self.dim())
-        if not hasattr(modes, '__len__'):
-            modes = [modes]*self.dim()
+        if dim == 'all':
+            dim = range(self.dim())
+        if not hasattr(dim, '__len__'):
+            dim = [dim]*self.dim()
 
         cores = []
         for n in range(self.dim()):
-            if n in modes and self.Us[n] is not None:
+            if n in dim and self.Us[n] is not None:
                 if self.cores[n].dim() == 2:
                     cores.append(torch.einsum('jk,aj->ak', (self.cores[n], self.Us[n])))
                 else:
@@ -824,7 +821,7 @@ class Tensor(object):
             L = self.right_orthogonalize(i)
         return R, L
 
-    def round_tucker(self, eps=0, rmax=None, modes='all', algorithm='svd'):
+    def round_tucker(self, eps=0, rmax=None, dim='all', algorithm='svd'):
         """
         Tries to recompress this tensor in place by reducing its Tucker ranks.
 
@@ -841,12 +838,12 @@ class Tensor(object):
         if not hasattr(rmax, '__len__'):
             rmax = [rmax]*N
         assert len(rmax) == N
-        if modes == 'all':
-            modes = range(N)
-        if not hasattr(modes, '__len__'):
-            modes = [modes]*N
+        if dim == 'all':
+            dim = range(N)
+        if not hasattr(dim, '__len__'):
+            dim = [dim]*N
 
-        for m in modes:
+        for m in dim:
             self.cores[m] = self._cp_to_tt(self.cores[m])
         self.orthogonalize(-1)
         for mu in range(N-1, -1, -1):
@@ -859,7 +856,7 @@ class Tensor(object):
             self.Us[mu] = torch.matmul(self.Us[mu], R.t())
 
             # Split factor according to error budget
-            left, right = tn.truncated_svd(self.Us[mu], eps=eps/np.sqrt(len(modes)), rmax=rmax[mu], left_ortho=True, algorithm=algorithm)
+            left, right = tn.truncated_svd(self.Us[mu], eps=eps/np.sqrt(len(dim)), rmax=rmax[mu], left_ortho=True, algorithm=algorithm)
             self.Us[mu] = left
 
             # Push the (non-orthogonal) remainder to the core
@@ -944,20 +941,20 @@ class Tensor(object):
     Miscellaneous
     """
 
-    def set_factors(self, name, modes='all', requires_grad=False):
+    def set_factors(self, name, dim='all', requires_grad=False):
         """
         Sets factors Us of this tensor to be of a certain family.
 
         :param name: See `generate_basis()`
-        :param modes: list of factors to set; default is 'all'
+        :param dim: list of factors to set; default is 'all'
         :param requires_grad: whether the new factors should be optimizable. Default is False
 
         """
 
-        if modes == 'all':
-            modes = range(self.dim())
+        if dim == 'all':
+            dim = range(self.dim())
 
-        for m in modes:
+        for m in dim:
             if self.Us[m] is None:
                 self.Us[m] = tn.generate_basis(name, (self.shape[m], self.shape[m]))
             else:

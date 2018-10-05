@@ -126,52 +126,52 @@ Array-like manipulations
 """
 
 
-def squeeze(t, modes=None):
+def squeeze(t, dim=None):
     """
     Removes singleton dimensions
 
-    :param modes: which modes to delete. By default, all that have size 1
+    :param dim: which dim to delete. By default, all that have size 1
     :return: Another TT tensor, without dummy (singleton) indices
     """
 
-    if modes is None:
-        modes = np.where([s == 1 for s in t.shape])[0]
-    assert np.all(np.array(t.shape)[modes] == 1)
+    if dim is None:
+        dim = np.where([s == 1 for s in t.shape])[0]
+    assert np.all(np.array(t.shape)[dim] == 1)
 
     idx = [slice(None) for n in range(t.dim())]
-    for m in modes:
+    for m in dim:
         idx[m] = 0
     return t[tuple(idx)]
 
 
-def cat(ts, mode):
+def cat(ts, dim):
     """
-    Concatenate two or more tensors along a given mode, similarly to PyTorch's `cat()`.
+    Concatenate two or more tensors along a given dim, similarly to PyTorch's `cat()`.
 
     :param ts: a list of tensors
-    :param mode: an int
-    :return: a tensor of the same shape as all tensors in the list, except along `mode` where it has the sum of shapes
+    :param dim: an int
+    :return: a tensor of the same shape as all tensors in the list, except along `dim` where it has the sum of shapes
 
     """
 
     if len(ts) == 1:
         return ts[0].clone()
-    if any([any([t.shape[n] != ts[0].shape[n] for n in np.delete(range(ts[0].dim()), mode)]) for t in ts[1:]]):
-        raise ValueError('To concatenate tensors, all must have the same shape along all but the given mode')
+    if any([any([t.shape[n] != ts[0].shape[n] for n in np.delete(range(ts[0].dim()), dim)]) for t in ts[1:]]):
+        raise ValueError('To concatenate tensors, all must have the same shape along all but the given dim')
 
-    shapes = np.array([t.shape[mode] for t in ts])
+    shapes = np.array([t.shape[dim] for t in ts])
     sumshapes = np.concatenate([np.array([0]), np.cumsum(shapes)])
     for i in range(len(ts)):
         t = ts[i].clone()
-        if t.Us[mode] is None:
-            if t.cores[mode].dim() == 2:
-                t.cores[mode] = torch.zeros(sumshapes[-1], t.cores[mode].shape[-1])
+        if t.Us[dim] is None:
+            if t.cores[dim].dim() == 2:
+                t.cores[dim] = torch.zeros(sumshapes[-1], t.cores[dim].shape[-1])
             else:
-                t.cores[mode] = torch.zeros(t.cores[mode].shape[0], sumshapes[-1], t.cores[mode].shape[-1])
-            t.cores[mode][..., sumshapes[i]:sumshapes[i+1], :] += ts[i].cores[mode]
+                t.cores[dim] = torch.zeros(t.cores[dim].shape[0], sumshapes[-1], t.cores[dim].shape[-1])
+            t.cores[dim][..., sumshapes[i]:sumshapes[i+1], :] += ts[i].cores[dim]
         else:
-            t.Us[mode] = torch.zeros(sumshapes[-1], t.Us[mode].shape[-1])
-            t.Us[mode][sumshapes[i]:sumshapes[i+1], :] += ts[i].Us[mode]
+            t.Us[dim] = torch.zeros(sumshapes[-1], t.Us[dim].shape[-1])
+            t.Us[dim][sumshapes[i]:sumshapes[i+1], :] += ts[i].Us[dim]
         if i == 0:
             result = t
         else:
@@ -399,47 +399,35 @@ Multilinear algebra
 """
 
 
-def sum(t, modes=None, keepdims=False):
+def sum(t, dim=None, keepdims=False):
     """
     Compute the sum of a tensor along all (or some) dimensions.
 
     :param t: a tensor
-    :param modes: an int or list of ints. By default, all modes will be summed
+    :param dim: an int or list of ints. By default, all dims will be summed
     :param keepdims: if True, summed dimensions will be kept as singletons. Default is False
-    :return: a scalar
+    :return: a scalar (if keepdims is False and all dims were chosen) or tensor otherwise
 
     """
 
-    if modes is None:
-        modes = np.arange(t.dim())
-    if not hasattr(modes, '__len__'):
-        modes = [modes]
-    cores = []
-    Us = []
-    for n in range(t.dim()):
-        if n in modes:
-            if t.Us[n] is None:
-                cores.append(torch.sum(t.cores[n], dim=-2, keepdim=True))
-                Us.append(None)
-            else:
-                cores.append(t.cores[n].clone())
-                Us.append(torch.sum(t.Us[n], dim=0, keepdim=True))
-        else:
-            cores.append(t.cores[n].clone())
-            Us.append(t.Us[n].clone())
-    result = tn.Tensor(cores, Us=Us)
+    if dim is None:
+        dim = np.arange(t.dim())
+    if not hasattr(dim, '__len__'):
+        dim = [dim]
+    us = [torch.ones(t.shape[d]) for d in dim]
+    result = tn.ttm(t, us, dim)
     if keepdims:
         return result
     else:
-        return tn.squeeze(result, modes)
+        return tn.squeeze(result, dim)
 
 
 def ttm(t, U, dim=None, transpose=False):
     """
-    Tensor-times-matrix (TTM) along one or several modes
+    Tensor-times-matrix (TTM) along one or several dimensions
 
     :param U: one or several factors
-    :param dim: one or several modes (may be vectors or matrices). If None, the first len(U) modes are assumed
+    :param dim: one or several dimensions (may be vectors or matrices). If None, the first len(U) dims are assumed
     :param transpose: if False (default) the contraction is performed
      along U's rows, else along its columns
     :return: transformed TT
@@ -452,6 +440,10 @@ def ttm(t, U, dim=None, transpose=False):
         dim = range(len(U))
     if not hasattr(dim, '__len__'):
         dim = [dim]
+    dim = list(dim)
+    for i in range(len(dim)):
+        if dim[i] < 0:
+            dim[i] += t.dim()
 
     cores = []
     Us = []
@@ -481,21 +473,21 @@ def ttm(t, U, dim=None, transpose=False):
     return tn.Tensor(cores, Us=Us, idxs=t.idxs)
 
 
-def cumsum(t, modes):
+def cumsum(t, dim):
     """
-    Computes the cumulative sum of a tensor along one or several modes, similarly to PyTorch's `cumsum()`.
+    Computes the cumulative sum of a tensor along one or several dims, similarly to PyTorch's `cumsum()`.
 
     :param t: a tensor
-    :param modes: an int or list of ints
+    :param dim: an int or list of ints
     :return: a tensor of the same shape
 
     """
 
-    if not hasattr(modes, '__len__'):
-        modes = [modes]
+    if not hasattr(dim, '__len__'):
+        dim = [dim]
 
     t = t.clone()
-    for n in modes:
+    for n in dim:
         if t.Us[n] is None:
             t.cores[n] = torch.cumsum(t.cores[n], dim=-2)
         else:

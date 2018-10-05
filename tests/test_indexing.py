@@ -50,6 +50,10 @@ def test_mixed():
         idxs.append((slice(None), slice(None), slice(None), 0))
         idxs.append((slice(None), slice(None), [0, 1], 0))
         idxs.append((0, np.array([0]), None, 0))
+        idxs.append((slice(None), slice(None), slice(None), slice(None), None))
+        idxs.append((None, slice(None), slice(None), slice(None), slice(None), None))
+        idxs.append((None, slice(None), slice(None), slice(None), slice(None)))
+
 
         for idx in idxs:
             check(x, t, idx)
