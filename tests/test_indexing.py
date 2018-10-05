@@ -23,7 +23,7 @@ def test_squeeze():
 
 def test_slicing():
 
-    t = tn.rand(shape=[1, 3, 1, 2, 1], ranks_tt=3, ranks_tucker=2)
+    t = tn.rand([1, 3, 1, 2, 1], ranks_tt=3, ranks_tucker=2)
     x = t.numpy()
     idx = slice(None)
     check(x, t, idx)
@@ -58,14 +58,14 @@ def test_mixed():
         for idx in idxs:
             check(x, t, idx)
 
-    check_one_tensor(tn.rand(shape=[6, 7, 8, 9], ranks_tt=3, ranks_tucker=2))
-    check_one_tensor(tn.rand(shape=[6, 7, 8, 9], ranks_tt=None, ranks_tucker=2, ranks_cp=3))
-    check_one_tensor(tn.rand(shape=[6, 7, 8, 9], ranks_tt=[4, None, None], ranks_tucker=2, ranks_cp=[None, None, 3, 3]))
-    check_one_tensor(tn.rand(shape=[6, 7, 8, 9], ranks_tt=[4, None, None], ranks_tucker=[2, None, 2, None], ranks_cp=[None, None, 3, 3]))
-    check_one_tensor(tn.rand(shape=[6, 7, 8, 9], ranks_tt=[None, 4, 4], ranks_tucker=2, ranks_cp=[3, None, None, None]))
+    check_one_tensor(tn.rand([6, 7, 8, 9], ranks_tt=3, ranks_tucker=2))
+    check_one_tensor(tn.rand([6, 7, 8, 9], ranks_tt=None, ranks_tucker=2, ranks_cp=3))
+    check_one_tensor(tn.rand([6, 7, 8, 9], ranks_tt=[4, None, None], ranks_tucker=2, ranks_cp=[None, None, 3, 3]))
+    check_one_tensor(tn.rand([6, 7, 8, 9], ranks_tt=[4, None, None], ranks_tucker=[2, None, 2, None], ranks_cp=[None, None, 3, 3]))
+    check_one_tensor(tn.rand([6, 7, 8, 9], ranks_tt=[None, 4, 4], ranks_tucker=2, ranks_cp=[3, None, None, None]))
 
     for i in range(100):
-        check_one_tensor(random_format(shape=[6, 7, 8, 9]))
+        check_one_tensor(random_format([6, 7, 8, 9]))
 
     t = tn.rand([6, 7, 8, 9], ranks_cp=[3, 3, 3, 3])
     t.cores[-1] = t.cores[-1].permute(1, 0)[:, :, None]

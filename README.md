@@ -18,7 +18,7 @@ In *tntorch*, **all tensor decompositions share the same interface**. You can ha
 
 ```
 > import tntorch as tn
-> t = tn.randn([32]*4, ranks_tt=5)  # Random 4D TT tensor of shape 32 x 32 x 32 x 32 and TT-rank 5
+> t = tn.randn(32, 32, 32, 32, ranks_tt=5)  # Random 4D TT tensor of shape 32 x 32 x 32 x 32 and TT-rank 5
 > print(t)
 
 4D TT tensor:

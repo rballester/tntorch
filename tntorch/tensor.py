@@ -886,15 +886,15 @@ class Tensor(object):
 
         self._cp_to_tt()
         start = time.time()
-        self.orthogonalize(0)  # Make everything left-orthogonal
+        self.orthogonalize(N-1)  # Make everything left-orthogonal
         if verbose:
             print('Orthogonalization time:', time.time() - start)
         delta = eps / max(1, np.sqrt(N - 1)) * torch.norm(self.cores[-1])
-        for mu in range(N-1):
-            M = tn.left_unfolding(self.cores[mu])
-            left, right = tn.truncated_svd(M, delta=delta, rmax=rmax[mu-1], left_ortho=True, algorithm=algorithm, verbose=verbose)
-            self.cores[mu] = torch.reshape(left, [self.cores[mu].shape[0], self.cores[mu].shape[1], -1])
-            self.cores[mu+1] = torch.einsum('li,ijk->ljk', (right, self.cores[mu+1]))  # Pass factor to the right
+        for mu in range(N - 1, 0, -1):
+            M = tn.right_unfolding(self.cores[mu])
+            left, right = tn.truncated_svd(M, delta=delta, rmax=rmax[mu-1], left_ortho=False, algorithm=algorithm, verbose=verbose)
+            self.cores[mu] = torch.reshape(right, [-1, self.cores[mu].shape[1], self.cores[mu].shape[2]])
+            self.cores[mu-1] = torch.einsum('ijk,kl', (self.cores[mu-1], left))  # Pass factor to the left
 
     def round(self, eps=0, **kwargs):
         """
