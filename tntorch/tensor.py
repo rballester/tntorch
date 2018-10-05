@@ -450,6 +450,7 @@ class Tensor(object):
         cores = []
         Us = []
         counter = 0
+        # print([c.shape for c in self.cores], key)
 
         def join_cores(c1, c2):
             if c1.dim() == 1 and c2.dim() == 2:
@@ -573,7 +574,7 @@ class Tensor(object):
                 if cores[-1].dim() == 2 and factors['int'].dim() == 1:
                     cores[-1] = torch.einsum('ai,i->ai', (cores[-1], factors['int']))
                 elif cores[-1].dim() == 2 and factors['int'].dim() == 2:
-                    cores[-1] = torch.einsum('ai,ij->aj', (cores[-1], factors['int']))
+                    cores[-1] = torch.einsum('ai,ij->iaj', (cores[-1], factors['int']))
                 elif cores[-1].dim() == 3 and factors['int'].dim() == 1:
                     cores[-1] = torch.einsum('iaj,j->ai', (cores[-1], factors['int']))
                 elif cores[-1].dim() == 3 and factors['int'].dim() == 2:
@@ -840,8 +841,8 @@ class Tensor(object):
 
         for m in modes:
             self.cores[m] = self._cp_to_tt(self.cores[m])
-        self.orthogonalize(0)
-        for mu in range(N):
+        self.orthogonalize(-1)
+        for mu in range(N-1, -1, -1):
             if self.Us[mu] is None:
                 self.Us[mu] = torch.eye(self.shape[mu])
 
@@ -858,8 +859,8 @@ class Tensor(object):
             self.cores[mu] = torch.einsum('ijk,aj->iak', (self.cores[mu], right))
 
             # Prepare next iteration
-            if mu < N-1:
-                self.left_orthogonalize(mu)
+            if mu > 0:
+                self.right_orthogonalize(mu)
 
     def round_tt(self, eps=0, rmax=None, algorithm='svd', verbose=False):
         """
@@ -881,15 +882,15 @@ class Tensor(object):
 
         self._cp_to_tt()
         start = time.time()
-        self.orthogonalize(N-1)  # Make everything left-orthogonal
+        self.orthogonalize(0)  # Make everything left-orthogonal
         if verbose:
             print('Orthogonalization time:', time.time() - start)
         delta = eps / max(1, np.sqrt(N - 1)) * torch.norm(self.cores[-1])
-        for mu in range(N - 1, 0, -1):
-            M = tn.right_unfolding(self.cores[mu])
-            left, M = tn.truncated_svd(M, delta=delta, rmax=rmax[mu-1], left_ortho=False, algorithm=algorithm, verbose=verbose)
-            self.cores[mu] = torch.reshape(M, [-1, self.cores[mu].shape[1], self.cores[mu].shape[2]])
-            self.cores[mu-1] = torch.einsum('ijk,kl', (self.cores[mu-1], left))  # Pass factor to the left
+        for mu in range(N-1):
+            M = tn.left_unfolding(self.cores[mu])
+            left, right = tn.truncated_svd(M, delta=delta, rmax=rmax[mu-1], left_ortho=True, algorithm=algorithm, verbose=verbose)
+            self.cores[mu] = torch.reshape(left, [self.cores[mu].shape[0], self.cores[mu].shape[1], -1])
+            self.cores[mu+1] = torch.einsum('li,ijk->ljk', (right, self.cores[mu+1]))  # Pass factor to the right
 
     def round(self, eps=0, **kwargs):
         """

@@ -57,3 +57,7 @@ def test_mixed():
     check_one_tensor(tn.rand(shape=[6, 7, 8, 9], ranks_tt=[4, None, None], ranks_tucker=2, ranks_cp=[None, None, 3, 3]))
     check_one_tensor(tn.rand(shape=[6, 7, 8, 9], ranks_tt=[4, None, None], ranks_tucker=[2, None, 2, None], ranks_cp=[None, None, 3, 3]))
     check_one_tensor(tn.rand(shape=[6, 7, 8, 9], ranks_tt=[None, 4, 4], ranks_tucker=2, ranks_cp=[3, None, None, None]))
+
+    t = tn.rand([6, 7, 8, 9], ranks_cp=[3, 3, 3, 3])
+    t.cores[-1] = t.cores[-1].permute(1, 0)[:, :, None]
+    check_one_tensor(t)

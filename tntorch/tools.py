@@ -460,7 +460,7 @@ def ttm(t, U, dim=None, transpose=False):
     for n in range(t.dim()):
         if n in dim:
             if transpose:
-                factor = U[dim.index(n)].t.double()
+                factor = U[dim.index(n)].t().double()
             else:
                 factor = U[dim.index(n)].double()
             if factor.dim() == 1:
