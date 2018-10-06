@@ -38,7 +38,7 @@ class Tensor(object):
     - S_n x R_n (CP-Tucker core), accompanied by an I_n x S_n factor matrix
     """
 
-    def __init__(self, data, Us=None, idxs=None,
+    def __init__(self, data, Us=None, idxs=None, device=None,
                  ranks_cp=None, ranks_tucker=None, ranks_tt=None, eps=None,
                  max_iter=25, tol=1e-4, verbose=False):
         if isinstance(data, (list, tuple)):
@@ -50,7 +50,7 @@ class Tensor(object):
             self.cores = data
             N = len(data)
         else:
-            data = torch.Tensor(data)
+            data = torch.Tensor(data, device=device)
             N = data.dim()
         if Us is None:
             Us = [None]*N
@@ -70,7 +70,7 @@ class Tensor(object):
                     self.round_tucker(rmax=ranks_tucker)
                     data = self.tucker_core()
                     data_norm = tn.norm(data)
-                    self.cores = [torch.randn(sh, ranks_cp) for sh in data.shape]
+                    self.cores = [torch.randn(sh, ranks_cp, device=device) for sh in data.shape]
                 else:  # We initialize CP factor to HOSVD
                     data_norm = torch.norm(data)
                     self.cores = []
@@ -89,8 +89,8 @@ class Tensor(object):
                 converged = False
                 for iter in range(max_iter):
                     for n in range(self.dim()):
-                        khatri = torch.ones(1, ranks_cp)
-                        prod = torch.ones(ranks_cp, ranks_cp)
+                        khatri = torch.ones(1, ranks_cp, device=device)
+                        prod = torch.ones(ranks_cp, ranks_cp, device=device)
                         for m in range(self.dim()-1, -1, -1):
                             if m != n:
                                 prod *= grams[m]
@@ -127,7 +127,7 @@ class Tensor(object):
             assert Us[n].dim() == 2
             assert self.cores[n].shape[-2] == Us[n].shape[1]
         if idxs is None:
-            idxs = [torch.arange(sh) for sh in self.shape]
+            idxs = [torch.arange(sh, device=device) for sh in self.shape]
         self.idxs = idxs
         if eps is not None:  # TT-SVD (or TT-EIG) algorithm
             if ranks_cp is not None or ranks_tucker is not None or ranks_tt is not None:
