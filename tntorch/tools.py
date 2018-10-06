@@ -51,6 +51,14 @@ def ones_like(tensor, **kwargs):
     return ones(tensor.shape, **kwargs)
 
 
+def full(*shape, fill_value, **kwargs):
+    return fill_value*tn.ones(*shape, **kwargs)
+
+
+def full_like(tensor, fill_value, **kwargs):
+    return tn.full(tensor.shape, fill_value=fill_value, **kwargs)
+
+
 def zeros(*shape, **kwargs):
     return _create(torch.zeros, *shape, ranks_tt=1, **kwargs)
 

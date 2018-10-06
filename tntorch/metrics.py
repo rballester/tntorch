@@ -14,9 +14,9 @@ def _process(gt, approx):
     if is1 and is2:
         return gt, approx
     if is1:
-        gt = gt.full()
+        gt = gt.torch()
     if is2:
-        approx = approx.full()
+        approx = approx.torch()
     return gt, approx
 
 

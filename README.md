@@ -41,7 +41,7 @@ tensor(9632.3726)
 Decompressing tensors is easy:  
 
 ```
-> print(t.full().shape)
+> print(t.torch().shape)
 torch.Size([32, 32, 32, 32])
 ```
 
@@ -49,7 +49,7 @@ Thanks to PyTorch's automatic differentiation, you can easily define all sorts o
 
 ```
 def loss(t):
-    return torch.norm(t[:, 0, 10:, [3, 4]].full())  # NumPy-like "fancy indexing" for arrays
+    return torch.norm(t[:, 0, 10:, [3, 4]].torch())  # NumPy-like "fancy indexing" for arrays
 ```
 
 Most importantly, loss functions can be defined on **compressed** tensors as well:

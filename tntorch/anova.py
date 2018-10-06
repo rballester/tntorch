@@ -137,7 +137,7 @@ def dimension_distribution(t, mask=None, order=None, marginals=None):
     if order is None:
         order = t.dim()
     if mask is None:
-        return tn.sobol(t, tn.weight_one_hot(t.dim(), order+1), marginals=marginals).full()[1:]
+        return tn.sobol(t, tn.weight_one_hot(t.dim(), order+1), marginals=marginals).torch()[1:]
     else:
         mask2 = tn.mask(tn.weight_one_hot(t.dim(), order+1), mask)
-        return tn.sobol(t, mask2, marginals=marginals).full()[1:] / tn.sobol(t, mask, marginals=marginals)
+        return tn.sobol(t, mask2, marginals=marginals).torch()[1:] / tn.sobol(t, mask, marginals=marginals)

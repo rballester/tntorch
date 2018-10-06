@@ -98,7 +98,7 @@ class Tensor(object):
                         unfolding = tn.unfolding(data, n)
                         self.cores[n] = torch.gesv(unfolding.matmul(khatri).t(), prod)[0].t()
                         grams[n] = self.cores[n].t().matmul(self.cores[n])
-                    errors.append(torch.norm(data - tn.Tensor(self.cores).full()) / data_norm)
+                    errors.append(torch.norm(data - tn.Tensor(self.cores).torch()) / data_norm)
                     if len(errors) >= 2 and errors[-2] - errors[-1] < tol:
                         converged = True
                     if verbose:
@@ -144,7 +144,7 @@ class Tensor(object):
             other = Tensor([torch.ones([1, self.shape[n], 1]) for n in range(self.dim())])
             other.cores[0].data *= factor
         if self.dim() == 1:  # Special case
-            return Tensor([self.full_tucker().cores[0] + other.full_tucker().cores[0]])
+            return Tensor([self.decompress_tucker_factors().cores[0] + other.decompress_tucker_factors().cores[0]])
         this, other = _broadcast(self, other)
         cores = []
         Us = []
@@ -646,11 +646,11 @@ class Tensor(object):
 
         """
 
-        return tn.Tensor(self.cores).full()
+        return tn.Tensor(self.cores).torch()
 
-    def full_tucker(self, dim='all', _clone=True):
+    def decompress_tucker_factors(self, dim='all', _clone=True):
         """
-        Decompresses this tensor only along the Tucker factors.
+        Decompresses this tensor along the Tucker factors only.
 
         :param dim: int, list, or 'all' (default)
         :return: a tensor in TT format
@@ -676,7 +676,19 @@ class Tensor(object):
                     cores.append(self.cores[n])
         return tn.Tensor(cores, idxs=self.idxs)
 
-    def full(self):
+    def tt(self):
+        """
+        Casts this tensor as a pure TT format.
+
+        :return: a torch tensor in the TT format
+
+        """
+
+        t = self.decompress_tucker_factors()
+        t._cp_to_tt()
+        return t
+
+    def torch(self):
         """
         Decompresses this tensor into a torch tensor.
 
@@ -684,7 +696,7 @@ class Tensor(object):
 
         """
 
-        t = self.full_tucker(_clone=False)
+        t = self.decompress_tucker_factors(_clone=False)
         shape = []
         factor = torch.ones(1, self.ranks_tt[0])
         for n in range(t.dim()):
@@ -712,7 +724,7 @@ class Tensor(object):
 
         """
 
-        return self.full().detach().numpy()
+        return self.torch().detach().numpy()
 
     def _cp_to_tt(self, factor=None):
         """

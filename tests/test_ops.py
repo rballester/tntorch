@@ -5,8 +5,8 @@ from util import random_format
 
 
 def check(t1, t2):
-    x1 = t1.full()
-    x2 = t2.full()
+    x1 = t1.torch()
+    x2 = t2.torch()
     assert tn.relative_error(t1+t2, x1+x2) <= 1e-7
     assert tn.relative_error(t1-t2, x1-x2) <= 1e-7
     assert tn.relative_error(t1*t2, x1*x2) <= 1e-7
@@ -49,8 +49,8 @@ def test_broadcast():
 def test_dot():
 
     def check():
-        x1 = t1.full()
-        x2 = t2.full()
+        x1 = t1.torch()
+        x2 = t2.torch()
         gt = torch.dot(x1.flatten(), x2.flatten())
         assert tn.relative_error(tn.dot(t1, t2), gt) <= 1e-7
 
@@ -84,7 +84,7 @@ def test_dot():
 def test_stats():
 
     def check():
-        x = t.full()
+        x = t.torch()
         assert tn.relative_error(tn.mean(t), torch.mean(x)) <= 1e-3
         assert tn.relative_error(tn.var(t), torch.var(x)) <= 1e-3
         assert tn.relative_error(tn.norm(t), torch.norm(x)) <= 1e-3
