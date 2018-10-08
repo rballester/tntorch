@@ -50,14 +50,19 @@ class Tensor(object):
             self.cores = data
             N = len(data)
         else:
-            data = torch.Tensor(data, device=device)
+            if isinstance(data, np.ndarray):
+                data = torch.Tensor(data, device=device)
+            elif isinstance(data, torch.Tensor):
+                data = data.to(device)
+            else:
+                raise ValueError('A tntorch.Tensor may be built either from a list of cores, one NumPy ndarray, or one PyTorch tensor')
             N = data.dim()
         if Us is None:
             Us = [None]*N
         self.Us = Us
         if isinstance(data, torch.Tensor):
             if data.dim() == 0:
-                data = data*torch.ones(1)
+                data = data*torch.ones(1, device=device)
             if ranks_cp is not None:  # Compute CP from full tensor: CP-ALS
                 if ranks_tt is not None:
                     raise ValueError('ALS for CP-TT is not yet supported')
