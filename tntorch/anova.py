@@ -73,7 +73,7 @@ def sobol(t, mask, marginals=None):
     a = tn.anova_decomposition(t, marginals)
     a -= tn.Tensor([torch.cat((torch.ones(1, 1, 1),
                                torch.zeros(1, sh-1, 1)), dim=1)
-                    for sh in a.shape])*a[[0]*t.dim()]  # Set empty tuple to 0
+                    for sh in a.shape])*a[(0,)*t.dim()]  # Set empty tuple to 0
     am = a.clone()
     for n in range(t.dim()):
         if marginals[n] is None:
