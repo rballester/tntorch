@@ -172,14 +172,14 @@ Multilinear algebra
 """
 
 
-def sum(t, dim=None, keepdims=False):
+def sum(t, dim=None, keepdim=False):
     """
     Compute the sum of a tensor along all (or some) dimensions.
 
     :param t: a tensor
     :param dim: an int or list of ints. By default, all dims will be summed
-    :param keepdims: if True, summed dimensions will be kept as singletons. Default is False
-    :return: a scalar (if keepdims is False and all dims were chosen) or tensor otherwise
+    :param keepdim: if True, summed dimensions will be kept as singletons. Default is False
+    :return: a scalar (if keepdim is False and all dims were chosen) or tensor otherwise
 
     """
 
@@ -189,7 +189,7 @@ def sum(t, dim=None, keepdims=False):
         dim = [dim]
     us = [torch.ones(t.shape[d]) for d in dim]
     result = tn.ttm(t, us, dim)
-    if keepdims:
+    if keepdim:
         return result
     else:
         return tn.squeeze(result, dim)

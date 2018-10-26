@@ -26,8 +26,11 @@ def optimize(tensors, loss_function, optimizer=torch.optim.Adam, tol=1e-4, max_i
         tensors = [tensors]
     parameters = []
     for t in tensors:
-        parameters.extend([c for c in t.cores if c.requires_grad])
-        parameters.extend([U for U in t.Us if U is not None and U.requires_grad])
+        if isinstance(t, tn.Tensor):
+            parameters.extend([c for c in t.cores if c.requires_grad])
+            parameters.extend([U for U in t.Us if U is not None and U.requires_grad])
+        elif t.requires_grad:
+            parameters.append(t)
     if len(parameters) == 0:
         raise ValueError("There are no parameters to optimize. Did you forget a requires_grad=True somewhere?")
 
