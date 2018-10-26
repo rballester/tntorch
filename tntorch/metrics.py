@@ -172,16 +172,19 @@ def r_squared(gt, approx):
     return 1 - tn.dist(gt, approx)**2 / tn.normsq(gt-tn.mean(gt))
 
 
-def mean(t):
+def mean(t, dim=None, keepdim=False):
     """
-    Computes the mean of a tensor.
+    Computes the mean of a tensor along all or some of its dimensions.
 
     :param t: a tensor
+    :param dim: an int or list of ints (default: all)
+    :param keepdim: whether to keep the same number of dimensions
     :return: a scalar
 
     """
 
-    return tn.sum(t) / t.size
+    summed = tn.sum(t, dim, keepdim)
+    return summed / summed.size
 
 
 def var(t):
