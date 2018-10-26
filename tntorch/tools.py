@@ -28,7 +28,7 @@ def squeeze(t, dim=None):
     return t[tuple(idx)]
 
 
-def cat(ts, dim):
+def cat(*ts, dim):
     """
     Concatenate two or more tensors along a given dim, similarly to PyTorch's `cat()`.
 
@@ -38,6 +38,8 @@ def cat(ts, dim):
 
     """
 
+    if hasattr(ts[0], '__len__'):
+        ts = ts[0]
     if len(ts) == 1:
         return ts[0].clone()
     if any([any([t.shape[n] != ts[0].shape[n] for n in np.delete(range(ts[0].dim()), dim)]) for t in ts[1:]]):
@@ -392,3 +394,44 @@ def generate_basis(name, shape, orthonormal=False):
     if orthonormal:
         U / np.sqrt(np.sum(U*U, axis=0))
     return torch.from_numpy(U)
+
+
+def reduce(ts, function, eps=0, rmax=np.iinfo(np.int32).max, verbose=False, **kwargs):
+    """
+    Apply a function to all tensors in a list.
+
+    Example (addition):
+
+    > import operator
+    > tn.reduce([t1, t2], operator.add)
+
+    Example (cat with rounding):
+
+    > tn.reduce([t1, t2], tn.cat, eps=1e-3)
+
+    :param ts: A generator (or list) of TT-tensors, all with the same shape
+    :param eps: Intermediate tensors will be rounded to this value when climbing up the hierarchy
+    :return: the reduced result
+
+    """
+
+    d = dict()
+    for i, elem in enumerate(ts):
+        if verbose and i % 100 == 0:
+            print("reduce: {}-th element".format(i))
+        climb = 0  # For going up the tree
+        other = elem
+        while climb in d:
+            if verbose:
+                print("Hierarchy level:", climb)
+            other = tn.round(function(d[climb], other, **kwargs), eps=eps, rmax=rmax)
+            d.pop(climb)
+            climb += 1
+        d[climb] = other
+    result = None
+    for key in d:
+        if result is None:
+            result = d[key]
+        else:
+            result = function(result, d[key], **kwargs)
+    return tn.round(result, eps=eps, rmax=rmax)
