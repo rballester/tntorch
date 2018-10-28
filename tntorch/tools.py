@@ -307,7 +307,7 @@ def mask(t, mask):
     return t*mask
 
 
-def sample(t, P=1):  # TODO
+def sample(t, P=1):
     """
     Generate P points (with replacement) from a joint PDF distribution represented by this tensor.
 
@@ -320,7 +320,7 @@ def sample(t, P=1):  # TODO
 
     def from_matrix(M):
         """
-        Treat each row of a matrix M as a pdf and select a column per row according to it
+        Treat each row of a matrix M as a PMF and select a column per row according to it
         """
 
         M /= torch.sum(M, dim=1)[:, None]  # Normalize row-wise
@@ -331,18 +331,20 @@ def sample(t, P=1):  # TODO
         shiftand = np.logical_and(M[:, :-1] <= 0, M[:, 1:] > 0)  # Find where the sign switches
         return np.where(shiftand)[1]
 
-    Xs = torch.zeros([P, t.dim()])
+    N = t.dim()
+    tsum = tn.sum(t, dim=np.arange(N), keepdim=True).decompress_tucker_factors()
+    Xs = torch.zeros([P, N])
     rights = [torch.ones(1)]
-    for core in t.cores[::-1]:
+    for core in tsum.cores[::-1]:
         rights.append(torch.matmul(torch.sum(core, dim=1), rights[-1]))
     rights = rights[::-1]
     lefts = torch.ones([P, 1])
-
+    t = t.decompress_tucker_factors()
     for mu in range(t.dim()):
         fiber = torch.einsum('ijk,k->ij', (t.cores[mu], rights[mu + 1]))
         per_point = torch.einsum('ij,jk->ik', (lefts, fiber))
         rows = from_matrix(per_point)
-        Xs[:, mu] = rows
+        Xs[:, mu] = torch.Tensor(rows)
         lefts = torch.einsum('ij,jik->ik', (lefts, t.cores[mu][:, rows, :]))
 
     return Xs
@@ -398,40 +400,37 @@ def generate_basis(name, shape, orthonormal=False):
 
 def reduce(ts, function, eps=0, rmax=np.iinfo(np.int32).max, verbose=False, **kwargs):
     """
-    Apply a function to all tensors in a list.
+    Compute a tensor as a function to all tensors in a sequence.
 
-    Example (addition):
+    Example 1 (addition):
 
     > import operator
     > tn.reduce([t1, t2], operator.add)
 
-    Example (cat with rounding):
+    Example 2 (cat with bounded rank):
 
-    > tn.reduce([t1, t2], tn.cat, eps=1e-3)
+    > tn.reduce([t1, t2], tn.cat, rmax=10)
 
-    :param ts: A generator (or list) of TT-tensors, all with the same shape
-    :param eps: Intermediate tensors will be rounded to this value when climbing up the hierarchy
+    :param ts: A generator (or list) of tensors
+    :param eps: intermediate tensors will be rounded at this error when climbing up the hierarchy
+    :param rmax: no node should exceed this number of ranks
     :return: the reduced result
 
     """
 
     d = dict()
+    start = time.time()
     for i, elem in enumerate(ts):
         if verbose and i % 100 == 0:
-            print("reduce: {}-th element".format(i))
+            print("reduce: element {}, time={:g}".format(i, time.time()-start))
         climb = 0  # For going up the tree
-        other = elem
         while climb in d:
-            if verbose:
-                print("Hierarchy level:", climb)
-            other = tn.round(function(d[climb], other, **kwargs), eps=eps, rmax=rmax)
+            elem = tn.round(function(d[climb], elem, **kwargs), eps=eps, rmax=rmax)
             d.pop(climb)
             climb += 1
-        d[climb] = other
-    result = None
-    for key in d:
-        if result is None:
-            result = d[key]
-        else:
-            result = function(result, d[key], **kwargs)
-    return tn.round(result, eps=eps, rmax=rmax)
+        d[climb] = elem
+    keys = list(d.keys())
+    result = keys[0]
+    for key in keys[1:]:
+        result = tn.round(function(result, d[key], **kwargs), eps=eps, rmax=rmax)
+    return result
