@@ -61,6 +61,40 @@ def zeros_like(tensor, **kwargs):
     return zeros(tensor.shape, **kwargs)
 
 
+def gaussian(*shape, sigma_factor=0.2):
+    """
+    Create a multivariate Gaussian that is axis-aligned (i.e. with diagonal covariance matrix).
+
+    :param shape:
+    :param sigma_factor: a real (or list of reals) encoding the ratio sigma / shape. Default is 0.2, i.e. one fifth along each dimension
+    :return: a tensor that sums to 1
+
+    """
+
+    if hasattr(shape[0], '__len__'):
+        shape = shape[0]
+    N = len(shape)
+    if not hasattr(sigma_factor, '__len__'):
+        sigma_factor = [sigma_factor]*N
+
+    cores = [torch.ones(1, 1, 1) for n in range(N)]
+    Us = []
+    for n in range(N):
+        sigma = sigma_factor[n] * shape[n]
+        if shape[n] == 1:
+            x = torch.Tensor([0])
+        else:
+            x = torch.linspace(-shape[n] / 2, shape[n] / 2, shape[n])
+        U = torch.exp(-x**2 / (2*sigma**2))
+        U = U[:, None] / torch.sum(U)
+        Us.append(U)
+    return tn.Tensor(cores, Us)
+
+
+def gaussian_like(tensor, **kwargs):
+    return gaussian(tensor.shape, **kwargs)
+
+
 def _create(function, *shape, ranks_tt=None, ranks_cp=None, ranks_tucker=None, requires_grad=False, device=None):
     if hasattr(shape[0], '__len__'):
         shape = shape[0]
