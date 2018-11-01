@@ -93,7 +93,7 @@ def transpose(t):
     return tn.Tensor(cores, Us, idxs)
 
 
-def meshgrid(axes):
+def meshgrid(*axes):
     """
     See NumPy's or PyTorch's `meshgrid()`.
 
@@ -104,7 +104,9 @@ def meshgrid(axes):
 
     if not hasattr(axes, '__len__'):
         axes = [axes]
-    axes = axes.copy()
+    if hasattr(axes[0], '__len__'):
+        axes = axes[0]
+    axes = list(axes)
     N = len(axes)
     for n in range(N):
         if not hasattr(axes[n], '__len__'):
@@ -398,7 +400,7 @@ def generate_basis(name, shape, orthonormal=False):
     return torch.from_numpy(U)
 
 
-def reduce(ts, function, eps=0, rmax=np.iinfo(np.int32).max, verbose=False, **kwargs):
+def reduce(ts, function, eps=0, rmax=np.iinfo(np.int32).max, algorithm='svd', verbose=False, **kwargs):
     """
     Compute a tensor as a function to all tensors in a sequence.
 
@@ -425,12 +427,12 @@ def reduce(ts, function, eps=0, rmax=np.iinfo(np.int32).max, verbose=False, **kw
             print("reduce: element {}, time={:g}".format(i, time.time()-start))
         climb = 0  # For going up the tree
         while climb in d:
-            elem = tn.round(function(d[climb], elem, **kwargs), eps=eps, rmax=rmax)
+            elem = tn.round(function(d[climb], elem, **kwargs), eps=eps, rmax=rmax, algorithm=algorithm)
             d.pop(climb)
             climb += 1
         d[climb] = elem
     keys = list(d.keys())
     result = keys[0]
     for key in keys[1:]:
-        result = tn.round(function(result, d[key], **kwargs), eps=eps, rmax=rmax)
+        result = tn.round(function(result, d[key], **kwargs), eps=eps, rmax=rmax, algorithm=algorithm)
     return result
