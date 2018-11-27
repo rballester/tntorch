@@ -703,7 +703,8 @@ class Tensor(object):
 
         t = self.decompress_tucker_factors(_clone=False)
         shape = []
-        factor = torch.ones(1, self.ranks_tt[0])
+        device = t.cores[0].device
+        factor = torch.ones(1, self.ranks_tt[0]).to(device)
         for n in range(t.dim()):
             shape.append(t.cores[n].shape[-2])
             if t.cores[n].dim() == 2:  # CP core

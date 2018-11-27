@@ -191,7 +191,8 @@ def sum(t, dim=None, keepdim=False):
         dim = np.arange(t.dim())
     if not hasattr(dim, '__len__'):
         dim = [dim]
-    us = [torch.ones(t.shape[d]) for d in dim]
+    device = t.cores[0].device
+    us = [torch.ones(t.shape[d]).to(device) for d in dim]
     result = tn.ttm(t, us, dim)
     if keepdim:
         return result
