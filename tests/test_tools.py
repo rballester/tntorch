@@ -13,7 +13,7 @@ def test_cat():
         t1 = tn.rand(shape1, ranks_tt=2, ranks_tucker=2)
         t2 = tn.rand(shape2, ranks_tt=2)
         gt = np.concatenate([t1.numpy(), t2.numpy()], mode)
-        assert np.linalg.norm(gt - tn.cat([t1, t2], mode).numpy()) <= 1e-7
+        assert np.linalg.norm(gt - tn.cat([t1, t2], dim=mode).numpy()) <= 1e-7
 
 
 def test_cumsum():

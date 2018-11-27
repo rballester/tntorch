@@ -93,3 +93,4 @@ def test_stats():
     for i in range(100):
         t = random_format(shape)
         check()
+

@@ -9,16 +9,18 @@ def _full_rank_tt(data):  # Naive TT formatting, don't even attempt to compress
     shape = data.shape
     result = []
     N = data.dim()
-    resh = torch.reshape(torch.Tensor(data), [shape[0], -1])
+    data = torch.Tensor(data) if type(data) is not torch.Tensor else data
+    device = data.device
+    resh = torch.reshape(data, [shape[0], -1])
     for n in range(1, N):
         if resh.shape[0] < resh.shape[1]:
-            result.append(torch.reshape(torch.eye(resh.shape[0]), [resh.shape[0] // shape[n - 1],
+            result.append(torch.reshape(torch.eye(resh.shape[0]).to(device), [resh.shape[0] // shape[n - 1],
                                                                        shape[n - 1], resh.shape[0]]))
             resh = torch.reshape(resh, (resh.shape[0] * shape[n], resh.shape[1] // shape[n]))
         else:
             result.append(torch.reshape(resh, [resh.shape[0] // shape[n - 1],
                                                    shape[n - 1], resh.shape[1]]))
-            resh = torch.reshape(torch.eye(resh.shape[1]), (resh.shape[1] * shape[n], resh.shape[1] // shape[n]))
+            resh = torch.reshape(torch.eye(resh.shape[1]).to(device), (resh.shape[1] * shape[n], resh.shape[1] // shape[n]))
     result.append(torch.reshape(resh, [resh.shape[0] // shape[N - 1], shape[N - 1], 1]))
     return result
 
@@ -703,7 +705,8 @@ class Tensor(object):
 
         t = self.decompress_tucker_factors(_clone=False)
         shape = []
-        factor = torch.ones(1, self.ranks_tt[0])
+        device = t.cores[0].device
+        factor = torch.ones(1, self.ranks_tt[0]).to(device)
         for n in range(t.dim()):
             shape.append(t.cores[n].shape[-2])
             if t.cores[n].dim() == 2:  # CP core
@@ -865,7 +868,8 @@ class Tensor(object):
         self.orthogonalize(-1)
         for mu in range(N-1, -1, -1):
             if self.Us[mu] is None:
-                self.Us[mu] = torch.eye(self.shape[mu])
+                device = self.cores[mu].device
+                self.Us[mu] = torch.eye(self.shape[mu]).to(device)
 
             # Send non-orthogonality to factor
             Q, R = torch.qr(torch.reshape(self.cores[mu].permute(0, 2, 1), [-1, self.cores[mu].shape[1]]))
