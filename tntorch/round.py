@@ -22,6 +22,10 @@ def round(t, **kwargs):
     return t2
 
 
+def as_default_dtype(t):
+    return t.type(torch.Tensor([0.]).dtype) # hack to get default dtype
+
+
 def truncated_svd(M, delta=None, eps=None, rmax=None, left_ortho=True, algorithm='svd', verbose=False):
     """
     Decompose a matrix M (size (m x n) in two factors U and V (sizes m x r and r x n) with bounded error (or given r)
@@ -40,7 +44,7 @@ def truncated_svd(M, delta=None, eps=None, rmax=None, left_ortho=True, algorithm
     if delta is not None and eps is not None:
         raise ValueError('Provide either `delta` or `eps`')
     if delta is None and eps is not None:
-        delta = eps*torch.norm(M)
+        delta = as_default_dtype(eps*torch.norm(M))
     if delta is None and eps is None:
         delta = 0
     if rmax is None:
