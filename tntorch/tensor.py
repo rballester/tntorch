@@ -910,7 +910,7 @@ class Tensor(object):
         self.orthogonalize(N-1)  # Make everything left-orthogonal
         if verbose:
             print('Orthogonalization time:', time.time() - start)
-        delta = eps / max(1, np.sqrt(N - 1)) * torch.norm(self.cores[-1])
+        delta = eps / max(1, torch.sqrt(torch.Tensor([N - 1]))) * torch.norm(self.cores[-1])
         for mu in range(N - 1, 0, -1):
             M = tn.right_unfolding(self.cores[mu])
             left, right = tn.truncated_svd(M, delta=delta, rmax=rmax[mu-1], left_ortho=False, algorithm=algorithm, verbose=verbose)
