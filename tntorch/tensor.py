@@ -940,23 +940,23 @@ class Tensor(object):
     def dot(self, other, **kwargs):
         return tn.dot(self, other, **kwargs)
 
-    def mean(self):
-        return tn.mean(self)
+    def mean(self, **kwargs):
+        return tn.mean(self, **kwargs)
 
-    def sum(self):
-        return tn.sum(self)
+    def sum(self, **kwargs):
+        return tn.sum(self, **kwargs)
 
-    def var(self):
-        return tn.var(self)
+    def var(self, **kwargs):
+        return tn.var(self, **kwargs)
 
-    def std(self):
-        return tn.std(self)
+    def std(self, **kwargs):
+        return tn.std(self, **kwargs)
 
-    def norm(self):
-        return tn.norm(self)
+    def norm(self, **kwargs):
+        return tn.norm(self, **kwargs)
 
-    def normsq(self):
-        return tn.normsq(self)
+    def normsq(self, **kwargs):
+        return tn.normsq(self, **kwargs)
 
     """
     Miscellaneous
