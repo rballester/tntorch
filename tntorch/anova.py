@@ -1,4 +1,5 @@
 import copy
+import numpy as np
 import torch
 import tntorch as tn
 
@@ -38,7 +39,7 @@ def undo_anova_decomposition(a):
     """
     Undo the transformation done by `anova_decomposition()`
 
-    :param a: a tensor obtained with `ànova_decomposition()`
+    :param a: a tensor obtained with `anova_decomposition()`
     :return: a tensor t that has `a` as its ANOVA tensor
 
     """
@@ -53,6 +54,36 @@ def undo_anova_decomposition(a):
             cores.append(a.cores[n].clone())
             Us.append(a.Us[n][1:, :] + a.Us[n][0:1, :])
     return tn.Tensor(cores, Us=Us)
+
+
+def truncate_anova(t, mask, keepdim=False, marginals=None):
+    """
+    Given a tensor and a mask, return the function that results after deleting all ANOVA terms that do not satisfy the
+    mask.
+
+    Example:
+
+    > t = ...  # an ND tensor
+    > x = tn.symbols(t.dim())[0]
+    > t2 = tn.truncate_anova(t, mask=tn.only(x), keepdim=False)  # This tensor will depend on one variable only
+
+    :param t:
+    :param mask:
+    :param keepdim: if True, all dummy dimensions will be preserved, otherwise they will disappear. Default is False
+    :param marginals: see `anova_decomposition()`
+    :return: a tensor
+
+    """
+
+    t = tn.undo_anova_decomposition(tn.mask(tn.anova_decomposition(t, marginals=marginals), mask=mask))
+    if not keepdim:
+        N = t.dim()
+        affecting = torch.sum(torch.Tensor(tn.accepted_inputs(mask).double()), dim=0)
+        slices = [0 for n in range(N)]
+        for i in np.where(affecting)[0]:
+            slices[int(i)] = slice(None)
+        t = t[slices]
+    return t
 
 
 def sobol(t, mask, marginals=None):
