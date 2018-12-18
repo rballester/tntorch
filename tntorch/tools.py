@@ -228,9 +228,9 @@ def ttm(t, U, dim=None, transpose=False):
     for n in range(t.dim()):
         if n in dim:
             if transpose:
-                factor = U[dim.index(n)].t().double()
+                factor = U[dim.index(n)].t()
             else:
-                factor = U[dim.index(n)].double()
+                factor = U[dim.index(n)]
             if factor.dim() == 1:
                 factor = factor[None, :]
             if t.Us[n] is None:

@@ -85,7 +85,6 @@ Check out the [introductory notebook](https://github.com/rballester/tntorch/blob
 - Dynamical systems
 - Gibbs sampling
 - Hidden Markov models
-- Polyharmonic regression
 - Ridge regression
 - Tensor weight regression/classification
 
@@ -106,3 +105,9 @@ We use [*pytest*](https://docs.pytest.org/en/latest/). Simply run:
 cd tests/
 pytest
 ```
+
+## Contributing
+
+Pull requests are welcome! 
+
+Besides using the [issue tracker](https://github.com/rballester/tntorch/issues), feel also free to contact me at <rballester@ifi.uzh.ch>.
