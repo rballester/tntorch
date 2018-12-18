@@ -82,7 +82,7 @@ def truncated_svd(M, delta=None, eps=None, rmax=None, left_ortho=True, algorithm
 
     S = svd[1]**2
     reverse = np.arange(len(S)-1, -1, -1)
-    where = np.where(np.cumsum(S[reverse]) <= delta**2)[0]
+    where = np.where(torch.cumsum(S[reverse], dim=0) <= delta**2)[0]
     if len(where) == 0:
         rank = max(1, int(min(rmax, len(S))))
     else:

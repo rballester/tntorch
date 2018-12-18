@@ -877,7 +877,7 @@ class Tensor(object):
             self.Us[mu] = torch.matmul(self.Us[mu], R.t())
 
             # Split factor according to error budget
-            left, right = tn.truncated_svd(self.Us[mu], eps=eps/np.sqrt(len(dim)), rmax=rmax[mu], left_ortho=True, algorithm=algorithm)
+            left, right = tn.truncated_svd(self.Us[mu], eps=eps/torch.sqrt(torch.Tensor([len(dim)])), rmax=rmax[mu], left_ortho=True, algorithm=algorithm)
             self.Us[mu] = left
 
             # Push the (non-orthogonal) remainder to the core
