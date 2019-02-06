@@ -17,7 +17,7 @@ with open('HISTORY.rst') as history_file:
 setup(
     name='tntorch',
     version='0.1.0',
-    description="High-dimensional learning using tensor train networks",
+    description="Tensor Network Learning with PyTorch",
     long_description=readme + '\n\n' + history,
     url='https://github.com/rballester/tntorch',
     author="Rafael Ballester-Ripoll",
@@ -30,8 +30,7 @@ setup(
         'future',
         'numpy',
         'scipy',
-	    'ttpy',
-        # 'pytorch'
+        'torch'
     ],
     license="LGPL",
     zip_safe=False,
@@ -48,5 +47,5 @@ setup(
         'Programming Language :: Python :: 3.6',
     ],
     test_suite='tests',
-    tests_require='nose'
+    tests_require='pytest'
 )
