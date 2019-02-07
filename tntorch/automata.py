@@ -4,13 +4,13 @@ import tntorch as tn
 
 def weight_mask(N, weight, nsymbols=2):
     """
-    Accepts a string iff its number of 1's equals k (or is in a list)
+    Accepts a string iff its number of 1's equals (or is in) `weight`
 
     :param N: number of dimensions
     :param weight: an integer (or list thereof): recognized weight(s)
     :param nsymbols: slices per core (default is 2)
-    :return: a mask tensor
 
+    :return: a mask tensor
     """
 
     if not hasattr(weight, '__len__'):
@@ -23,6 +23,16 @@ def weight_mask(N, weight, nsymbols=2):
 
 
 def weight_one_hot(N, r=None, nsymbols=2):
+    """
+    Given a string with :math:`k` 1's, it produces a vector that represents :math:`k` in `one hot encoding <https://en.wikipedia.org/wiki/One-hot>`_
+
+    :param N: number of dimensions
+    :param r:
+    :param nsymbols:
+
+    :return: a vector of N zeros, except its :math:`k`-th element which is a 1
+    """
+
     if not hasattr(nsymbols, '__len__'):
         nsymbols = [nsymbols]*N
     assert len(nsymbols) == N
@@ -46,8 +56,8 @@ def weight(N, nsymbols=2):
 
     :param N: number of dimensions
     :param nsymbols: slices per core (default is 2)
-    :return: a mask tensor
 
+    :return: a mask tensor
     """
 
     cores = []
@@ -61,6 +71,12 @@ def weight(N, nsymbols=2):
 
 
 def length(N):  # TODO
+    """
+    :todo:
+
+    :param N:
+    :return:
+    """
     raise NotImplementedError
 
 
@@ -71,8 +87,8 @@ def accepted_inputs(t):
     Note: each string s will appear as many times as the value t[s]
 
     :param t: a tensor
-    :return Xs: a Torch matrix, each row is one string
 
+    :return Xs: a Torch matrix, each row is one string
     """
 
     def recursion(Xs, left, rights, bound, mu):

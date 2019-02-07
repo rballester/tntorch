@@ -5,59 +5,141 @@ import numpy as np
 
 def rand(*shape, **kwargs):
     """
-    Generate a TT with random cores (and optionally factors), whose entries are uniform in [0, 1]
+    Generate a TT with random cores (and optionally factors), whose entries are uniform in :math:`[0, 1]`.
 
-    :param shape: N ints
+    :Example:
+
+    >>> tn.rand([10, 10], ranks_tt=3)  # Rank-3 TT tensor of shape 10x10
+
+    :param shape: N ints (or a list of ints)
     :param ranks_tt: an integer or list of N-1 ints
     :param ranks_cp: an int or list. If a list, will be interleaved with ranks_tt
     :param ranks_tucker: an int or list
     :param requires_grad:
     :param device:
 
-    :return:
-
+    :return: a random tensor
     """
 
     return _create(torch.rand, *shape, **kwargs)
 
 
-def rand_like(tensor, **kwargs):
-    return _create(torch.rand, tensor.shape, **kwargs)
+def rand_like(t, **kwargs):
+    """
+    Calls :meth:`rand()` with the shape of a given tensor.
+
+    :param t: a tensor
+    :param kwargs:
+
+    :return: a tensor
+    """
+
+    return _create(torch.rand, t.shape, **kwargs)
 
 
 def randn(*shape, **kwargs):
     """
-    Like `rand()`, but entries are distributed as a normal with mu=0, sigma=1
+    Like :meth:`rand()`, but entries are normally distributed with :math:`\\mu=0, \\sigma=1`.
     """
 
     return _create(torch.randn, *shape, **kwargs)
 
 
 def randn_like(tensor, **kwargs):
+    """
+    Calls :meth:`randn()` with the shape of a given tensor.
+
+    :param t: a tensor
+    :param kwargs:
+
+    :return: a tensor
+    """
+
     return _create(torch.randn, tensor.shape, **kwargs)
 
 
 def ones(*shape, **kwargs):
+    """
+    Generate a tensor filled with ones.
+
+    :Example:
+
+    >>> tn.ones(10)  # Vector of ones
+
+    :param shape: N ints (or a list of ints)
+    :param requires_grad:
+    :param device:
+
+    :return: a TT tensor of rank 1
+    """
+
     return _create(torch.ones, *shape, ranks_tt=1, **kwargs)
 
 
 def ones_like(tensor, **kwargs):
+    """
+    Calls :meth:`ones()` with the shape of a given tensor.
+
+    :param t: a tensor
+    :param kwargs:
+
+    :return: a tensor
+    """
+
     return ones(tensor.shape, **kwargs)
 
 
 def full(*shape, fill_value, **kwargs):
+    """
+    Generate a tensor filled with a constant.
+
+    :param shape: N ints (or a list of ints)
+    :param requires_grad:
+    :param device:
+
+    :return: a TT tensor of rank 1
+    """
+
     return fill_value*tn.ones(*shape, **kwargs)
 
 
 def full_like(tensor, fill_value, **kwargs):
+    """
+    Calls :meth:`full()` with the shape of a given tensor.
+
+    :param t: a tensor
+    :param kwargs:
+
+    :return: a tensor
+    """
+
     return tn.full(tensor.shape, fill_value=fill_value, **kwargs)
 
 
 def zeros(*shape, **kwargs):
+    """
+    Generate a tensor filled with zeros.
+
+    :param shape: N ints (or a list of ints)
+    :param requires_grad:
+    :param device:
+
+    :return: a TT tensor of rank 1
+    """
+
     return _create(torch.zeros, *shape, ranks_tt=1, **kwargs)
 
 
 def zeros_like(tensor, **kwargs):
+    """
+    Calls :meth:`zeros()` with the shape of a given tensor.
+
+    :param t: a tensor
+    :param kwargs:
+
+    :return: a tensor
+    """
+
     return zeros(tensor.shape, **kwargs)
 
 
@@ -67,8 +149,8 @@ def gaussian(*shape, sigma_factor=0.2):
 
     :param shape:
     :param sigma_factor: a real (or list of reals) encoding the ratio sigma / shape. Default is 0.2, i.e. one fifth along each dimension
-    :return: a tensor that sums to 1
 
+    :return: a tensor that sums to 1
     """
 
     if hasattr(shape[0], '__len__'):
@@ -92,6 +174,15 @@ def gaussian(*shape, sigma_factor=0.2):
 
 
 def gaussian_like(tensor, **kwargs):
+    """
+    Calls :meth:`gaussian()` with the shape of a given tensor.
+
+    :param t: a tensor
+    :param kwargs:
+
+    :return: a tensor
+    """
+
     return gaussian(tensor.shape, **kwargs)
 
 
@@ -152,8 +243,24 @@ def _create(function, *shape, ranks_tt=None, ranks_cp=None, ranks_tucker=None, r
 
 
 def linspace(**kwargs):
+    """
+    Creates a 1D tensor with evenly spaced values.
+
+    :param kwargs: passed to PyTorch's `linspace()`
+
+    :return: a 1D tensor
+    """
+
     return tn.Tensor([torch.linspace(**kwargs)[None, :, None]])
 
 
 def logspace(**kwargs):
+    """
+    Creates a 1D tensor with logarithmically spaced values.
+
+    :param kwargs: passed to PyTorch's `logspace()`
+
+    :return: a 1D tensor
+    """
+
     return tn.Tensor([torch.logspace(**kwargs)[None, :, None]])

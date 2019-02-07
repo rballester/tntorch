@@ -5,21 +5,20 @@ import time
 from functools import reduce
 
 
-def optimize(tensors, loss_function, optimizer=torch.optim.Adam, tol=1e-4, max_iter=10000, print_freq=500, verbose=True):
+def optimize(tensors, loss_function, optimizer=torch.optim.Adam, tol=1e-4, max_iter=1e4, print_freq=500, verbose=True):
     """
     High-level wrapper for iterative learning.
 
     Default stopping criterion: either the absolute (or relative) loss improvement must fall below `tol`.
     In addition, the rate loss improvement must be slowing down.
 
-    :param tensors: one or several tensors; will be fed to `loss_function`
+    :param tensors: one or several tensors; will be fed to `loss_function` and optimized in place
     :param loss_function: must take `tensors` and return a scalar (or tuple thereof)
     :param optimizer: one from https://pytorch.org/docs/stable/optim.html. Default is torch.optim.Adam
     :param tol: stopping criterion
-    :param max_iter:
+    :param max_iter: default is 1e4
     :param print_freq: progress will be printed every this many iterations
     :param verbose:
-
     """
 
     if not isinstance(tensors, (list, tuple)):
@@ -82,8 +81,9 @@ def dof(t):
 
     It is the sum of sizes of all its tensor nodes that have the requires_grad=True flag.
 
-    :return: an integer
+    :param t: input tensor
 
+    :return: an integer
     """
 
     result = 0

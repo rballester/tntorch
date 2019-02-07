@@ -24,15 +24,15 @@ def dot(t1, t2, k=None):
     """
     Generalized tensor dot product: contracts the k leading dimensions of two tensors of dimension N1 and N2.
 
-    If k is None:
-        If N1 == N2, returns a scalar (dot product between the two tensors)
-        If N1 < N2, the result will have dimension N2 - N1
-        If N2 < N1, the result will have dimension N1 - N2
+    - If k is None:
+        - If N1 == N2, returns a scalar (dot product between the two tensors)
+        - If N1 < N2, the result will have dimension N2 - N1
+        - If N2 < N1, the result will have dimension N1 - N2
 
         Example: suppose t1 has shape 3 x 4 and t2 has shape 3 x 4 x 5 x 6. Then, tn.dot(t1, t2) will have shape
         5 x 6.
 
-    If k is given:
+    - If k is given:
         The trailing (N1-k) dimensions from the 1st tensor will be sorted backwards, and then the trailing (N2-k)
         dimensions from the 2nd tensor will be appended to them.
 
@@ -42,8 +42,8 @@ def dot(t1, t2, k=None):
     :param t1: a tensor
     :param t2: a tensor
     :param k: an int (default: None)
-    :return: a scalar (if k is None and t1.dim() == t2.dim()), a tensor otherwise
 
+    :return: a scalar (if k is None and t1.dim() == t2.dim()), a tensor otherwise
     """
 
     def _project_spatial(core, M):
@@ -109,12 +109,12 @@ def dot(t1, t2, k=None):
 
 def dist(t1, t2):
     """
-    Computes the Euclidean distance between two tensors. Generally faster than tn.norm(t1-t2).
+    Computes the Euclidean distance between two tensors. Generally faster than `tn.norm(t1-t2)`.
 
     :param t1: a tensor
     :param t2: a tensor
-    :return: a scalar >= 0
 
+    :return: a scalar >= 0
     """
 
     t1, t2 = _process(t1, t2)
@@ -129,8 +129,8 @@ def relative_error(gt, approx):
 
     :param gt: a torch or tntorch tensor
     :param approx: a torch or tntorch tensor
-    :return: a scalar >= 0
 
+    :return: a scalar >= 0
     """
 
     gt, approx = _process(gt, approx)
@@ -146,8 +146,8 @@ def rmse(gt, approx):
 
     :param gt: a torch or tntorch tensor
     :param approx: a torch or tntorch tensor
-    :return: a scalar >= 0
 
+    :return: a scalar >= 0
     """
 
     gt, approx = _process(gt, approx)
@@ -158,12 +158,12 @@ def rmse(gt, approx):
 
 def r_squared(gt, approx):
     """
-    Computes the R^2 score between two tensors (torch or tntorch).
+    Computes the :math:`R^2` score between two tensors (torch or tntorch).
 
     :param gt: a torch or tntorch tensor
     :param approx: a torch or tntorch tensor
-    :return: a scalar <= 1
 
+    :return: a scalar <= 1
     """
 
     gt, approx = _process(gt, approx)
@@ -179,8 +179,8 @@ def mean(t, dim=None, keepdim=False):
     :param t: a tensor
     :param dim: an int or list of ints (default: all)
     :param keepdim: whether to keep the same number of dimensions
-    :return: a scalar
 
+    :return: a scalar
     """
     denom = t.shape[dim] if dim is not None else t.size
     summed = tn.sum(t, dim, keepdim)
@@ -192,8 +192,8 @@ def var(t):
     Computes the variance of a tensor.
 
     :param t: a tensor
-    :return: a scalar >= 0
 
+    :return: a scalar >= 0
     """
 
     return tn.normsq(t-tn.mean(t)) / t.size
@@ -204,8 +204,8 @@ def std(t):
     Computes the standard deviation of a tensor.
 
     :param t: a tensor
-    :return: a scalar >= 0
 
+    :return: a scalar >= 0
     """
 
     return torch.sqrt(tn.var(t))
@@ -216,8 +216,8 @@ def normsq(t):
     Computes the squared norm of a tensor.
 
     :param t: a tensor
-    :return: a scalar >= 0
 
+    :return: a scalar >= 0
     """
 
     return tn.dot(t, t)
@@ -225,11 +225,11 @@ def normsq(t):
 
 def norm(t):
     """
-    Computes the L^2 (Frobenius) norm of a tensor.
+    Computes the :math:`L^2` (Frobenius) norm of a tensor.
 
     :param t: a tensor
-    :return: a scalar >= 0
 
+    :return: a scalar >= 0
     """
 
     return torch.sqrt(torch.clamp(tn.normsq(t), min=0))

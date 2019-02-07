@@ -6,13 +6,13 @@ import tntorch as tn
 
 def anova_decomposition(t, marginals=None):
     """
-    Compute an extended tensor that contains all terms of the ANOVA decomposition for a given tensor T.
+    Compute an extended tensor that contains all terms of the ANOVA decomposition for a given tensor.
 
-    Reference: "Sobol Tensor Trains for Global Sensitivity Analysis", Ballester-Ripoll, Paredes and Pajarola (2017)
+    Reference: R. Ballester-Ripoll, E. G. Paredes, and R. Pajarola: `"Sobol Tensor Trains for Global Sensitivity Analysis" (2017) <https://www.sciencedirect.com/science/article/pii/S0951832018303132?dgcid=rss_sd_all>`_
 
-    :param t:
-    :param marginals:
-    :return:
+    :param t: ND input tensor
+    :param marginals: list of N vectors, each containing the PMF for each variable (use None for uniform distributions)
+    :return: a tensor
     """
 
     marginals = copy.deepcopy(marginals)
@@ -37,11 +37,11 @@ def anova_decomposition(t, marginals=None):
 
 def undo_anova_decomposition(a):
     """
-    Undo the transformation done by `anova_decomposition()`
+    Undo the transformation done by :func:`anova_decomposition()`.
 
-    :param a: a tensor obtained with `anova_decomposition()`
+    :param a: a tensor obtained with :func:`anova_decomposition()`
+
     :return: a tensor t that has `a` as its ANOVA tensor
-
     """
 
     cores = []
@@ -61,18 +61,18 @@ def truncate_anova(t, mask, keepdim=False, marginals=None):
     Given a tensor and a mask, return the function that results after deleting all ANOVA terms that do not satisfy the
     mask.
 
-    Example:
+    :Example:
 
-    > t = ...  # an ND tensor
-    > x = tn.symbols(t.dim())[0]
-    > t2 = tn.truncate_anova(t, mask=tn.only(x), keepdim=False)  # This tensor will depend on one variable only
+    >>> t = ...  # an ND tensor
+    >>> x = tn.symbols(t.dim())[0]
+    >>> t2 = tn.truncate_anova(t, mask=tn.only(x), keepdim=False)  # This tensor will depend on one variable only
 
     :param t:
     :param mask:
     :param keepdim: if True, all dummy dimensions will be preserved, otherwise they will disappear. Default is False
-    :param marginals: see `anova_decomposition()`
-    :return: a tensor
+    :param marginals: see :func:`anova_decomposition()`
 
+    :return: a tensor
     """
 
     t = tn.undo_anova_decomposition(tn.mask(tn.anova_decomposition(t, marginals=marginals), mask=mask))
@@ -88,14 +88,13 @@ def truncate_anova(t, mask, keepdim=False, marginals=None):
 
 def sobol(t, mask, marginals=None):
     """
-    Compute Sobol indices as given by a certain mask
+    Compute Sobol indices as given by a certain mask.
 
     :param t: an N-dimensional tensor
     :param mask: an N-dimensional mask
-    :param marginals: a list of N vector tensors (will be normalized if not summing to 1). If None (default), uniform
-    distributions are assumed for all variables
-    :return: a scalar
+    :param marginals: a list of N vector tensors (will be normalized if not summing to 1). If None (default), uniform distributions are assumed for all variables
 
+    :return: a scalar
     """
 
     if marginals is None:
@@ -130,21 +129,20 @@ def mean_dimension(t, mask=None, marginals=None):
     """
     Computes the mean dimension of a given tensor with given marginal distributions. This quantity measures how well the
     represented function can be expressed as a sum of low-parametric functions. For example, mean dimension 1 (the
-    lowest possible value) means that it is a purely additive function: f(x_1, ..., x_N) = f_1(x_1) + ... + f_N(x_N).
+    lowest possible value) means that it is a purely additive function: :math:`f(x_1, ..., x_N) = f_1(x_1) + ... + f_N(x_N)`.
 
-    Assumption: the input variables x_n are independently distributed.
+    Assumption: the input variables :math:`x_n` are independently distributed.
 
     References:
-    - R. E. Caflisch, W. J. Morokoff and A. B. Owen: "Valuation of Mortgage Backed Securities
-        Using Brownian Bridges to Reduce Effective Dimension (1997)
-    -  R. Ballester-Ripoll, E. G. Paredes and R. Pajarola: "Tensor Approximation of Advanced Metrics
-     for Sensitivity Analysis" (2017)
+
+    - R. E. Caflisch, W. J. Morokoff, and A. B. Owen: `"Valuation of Mortgage Backed Securities Using Brownian Bridges to Reduce Effective Dimension" (1997) <http://citeseerx.ist.psu.edu/viewdoc/summary?doi=10.1.1.36.3160>`_
+
+    -  R. Ballester-Ripoll, E. G. Paredes, and R. Pajarola: `"Tensor Algorithms for Advanced Sensitivity Metrics" (2017) <https://epubs.siam.org/doi/10.1137/17M1160252>`_
 
     :param t: an N-dimensional tensor
-    :param marginals: a list of N vector tensors (will be normalized if not summing to 1). If None (default), uniform
-    distributions are assumed for all variables
-    :return: a scalar >= 1
+    :param marginals: a list of N vector tensors (will be normalized if not summing to 1). If None (default), uniform distributions are assumed for all variables
 
+    :return: a scalar >= 1
     """
 
     if mask is None:
@@ -155,14 +153,14 @@ def mean_dimension(t, mask=None, marginals=None):
 
 def dimension_distribution(t, mask=None, order=None, marginals=None):
     """
-    Computes the dimension distribution of an N-D tensor.
+    Computes the dimension distribution of an ND tensor.
 
-    :param t: input tensor
+    :param t: ND input tensor
     :param mask: an optional mask to restrict to
     :param order: compute only this many order contributions. By default, all N are returned
     :param marginals: PMFs for input variables. By default, uniform distributions
-    :return: a torch vector containing N elements
 
+    :return: a torch vector containing N elements
     """
 
     if order is None:

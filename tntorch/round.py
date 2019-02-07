@@ -5,18 +5,45 @@ import time
 
 
 def round_tt(t, **kwargs):
+    """
+    Copies and rounds a tensor (see :meth:`tensor.Tensor.round_tt()`.
+
+    :param t:
+    :param kwargs:
+
+    :return: a rounded copy
+    """
+
     t2 = t.clone()
     t2.round_tt(**kwargs)
     return t2
 
 
 def round_tucker(t, **kwargs):
+    """
+    Copies and rounds a tensor (see :meth:`tensor.Tensor.round_tucker()`.
+
+    :param t:
+    :param kwargs:
+
+    :return: a rounded copy
+    """
+
     t2 = t.clone()
     t2.round_tucker(**kwargs)
     return t2
 
 
 def round(t, **kwargs):
+    """
+    Copies and rounds a tensor (see :meth:`tensor.Tensor.round()`.
+
+    :param t:
+    :param kwargs:
+
+    :return: a rounded copy
+    """
+
     t2 = t.clone()
     t2.round(**kwargs)
     return t2
@@ -24,7 +51,7 @@ def round(t, **kwargs):
 
 def truncated_svd(M, delta=None, eps=None, rmax=None, left_ortho=True, algorithm='svd', verbose=False):
     """
-    Decompose a matrix M (size (m x n) in two factors U and V (sizes m x r and r x n) with bounded error (or given r)
+    Decomposes a matrix M (size (m x n) in two factors U and V (sizes m x r and r x n) with bounded error (or given r).
 
     :param M: a matrix
     :param delta: if provided, maximum error norm
@@ -33,8 +60,8 @@ def truncated_svd(M, delta=None, eps=None, rmax=None, left_ortho=True, algorithm
     :param left_ortho: if True (default), U will be orthonormal. If False, V will
     :param algorithm: 'svd' (default) or 'eig'. The latter is often faster, but less accurate
     :param verbose:
-    :return: U, V
 
+    :return: U, V
     """
 
     if delta is not None and eps is not None:

@@ -12,9 +12,11 @@ Array-like manipulations
 
 def squeeze(t, dim=None):
     """
-    Removes singleton dimensions
+    Removes singleton dimensions.
 
+    :param t: input tensor
     :param dim: which dim to delete. By default, all that have size 1
+
     :return: Another TT tensor, without dummy (singleton) indices
     """
 
@@ -34,8 +36,8 @@ def cat(*ts, dim):
 
     :param ts: a list of tensors
     :param dim: an int
-    :return: a tensor of the same shape as all tensors in the list, except along `dim` where it has the sum of shapes
 
+    :return: a tensor of the same shape as all tensors in the list, except along `dim` where it has the sum of shapes
     """
 
     if hasattr(ts[0], '__len__'):
@@ -69,9 +71,9 @@ def transpose(t):
     """
     Inverts the dimension order of a tensor, e.g. I1 x I2 x I3 becomes I3 x I2 x I1.
 
-    :param t: a tensor
-    :return: another tensor, indexed by dimensions in inverse order
+    :param t: input tensor
 
+    :return: another tensor, indexed by dimensions in inverse order
     """
 
     cores = []
@@ -98,8 +100,8 @@ def meshgrid(*axes):
     See NumPy's or PyTorch's `meshgrid()`.
 
     :param axes: a list of N ints or torch vectors
-    :return: N tensors
 
+    :return: N tensors, of N dimensions each
     """
 
     if not hasattr(axes, '__len__'):
@@ -124,10 +126,10 @@ def flip(t, dims):
     """
     Reverses the order of a tensor along one or several dimensions; see NumPy's or PyTorch's `flip()`.
 
-    :param t: a tensor
+    :param t: input tensor
     :param dims: an int or list of ints
-    :return: another tensor of the same shape
 
+    :return: another tensor of the same shape
     """
 
     if not hasattr(dims, '__len__'):
@@ -148,10 +150,10 @@ def unbind(t, dim):
     """
     Slices a tensor along a dimension and returns the slices as a sequence, like PyTorch's `unbind()`.
 
-    :param t: a tensor
+    :param t: input tensor
     :param dim: an int
-    :return: a list of tensors, as many as `t.shape[dim]`
 
+    :return: a list of tensors, as many as `t.shape[dim]`
     """
 
     if dim < 0:
@@ -160,14 +162,39 @@ def unbind(t, dim):
 
 
 def unfolding(data, n):
+    """
+    Computes the `n-th mode unfolding <https://epubs.siam.org/doi/pdf/10.1137/07070111X>`_ of a PyTorch tensor.
+
+    :param data: a PyTorch tensor
+    :param n: unfolding mode
+
+    :return: a PyTorch matrix
+    """
+
     return data.permute([n] + list(range(n)) + list(range(n + 1, data.dim()))).reshape([data.shape[n], -1])
 
 
 def right_unfolding(core):
+    """
+    Computes the `right unfolding <https://epubs.siam.org/doi/pdf/10.1137/090752286>`_ of a 3D PyTorch tensor.
+
+    :param core: a PyTorch tensor of shape :math:`I_1 \\times I_2 \\times I_3`
+
+    :return: a PyTorch matrix of shape :math:`I_1 \\times I_2 I_3`
+    """
+
     return core.reshape([core.shape[0], -1])
 
 
 def left_unfolding(core):
+    """
+    Computes the `left unfolding <https://epubs.siam.org/doi/pdf/10.1137/090752286>`_ of a 3D PyTorch tensor.
+
+    :param core: a PyTorch tensor of shape :math:`I_1 \\times I_2 \\times I_3`
+
+    :return: a PyTorch matrix of shape :math:`I_1 I_2 \\times I_3`
+    """
+
     return core.reshape([-1, core.shape[-1]])
 
 
@@ -178,13 +205,13 @@ Multilinear algebra
 
 def sum(t, dim=None, keepdim=False):
     """
-    Compute the sum of a tensor along all (or some) dimensions.
+    Compute the sum of a tensor along all (or some) of its dimensions.
 
-    :param t: a tensor
+    :param t: input tensor
     :param dim: an int or list of ints. By default, all dims will be summed
     :param keepdim: if True, summed dimensions will be kept as singletons. Default is False
-    :return: a scalar (if keepdim is False and all dims were chosen) or tensor otherwise
 
+    :return: a scalar (if keepdim is False and all dims were chosen) or tensor otherwise
     """
 
     if dim is None:
@@ -202,14 +229,14 @@ def sum(t, dim=None, keepdim=False):
 
 def ttm(t, U, dim=None, transpose=False):
     """
-    Tensor-times-matrix (TTM) along one or several dimensions
+    `Tensor-times-matrix (TTM) <https://epubs.siam.org/doi/pdf/10.1137/07070111X>`_ along one or several dimensions.
 
     :param U: one or several factors
     :param dim: one or several dimensions (may be vectors or matrices). If None, the first len(U) dims are assumed
     :param transpose: if False (default) the contraction is performed
      along U's rows, else along its columns
-    :return: transformed TT
 
+    :return: transformed TT
     """
 
     if not isinstance(U, (list, tuple)):
@@ -255,10 +282,10 @@ def cumsum(t, dim):
     """
     Computes the cumulative sum of a tensor along one or several dims, similarly to PyTorch's `cumsum()`.
 
-    :param t: a tensor
+    :param t: input tensor
     :param dim: an int or list of ints
-    :return: a tensor of the same shape
 
+    :return: a tensor of the same shape
     """
 
     if not hasattr(dim, '__len__'):
@@ -280,15 +307,12 @@ Miscellaneous
 
 def mask(t, mask):
     """
-    Masks a tensor.
+    Masks a tensor. Basically an element-wise product, but this function makes sure slices are matched according to their "meaning" (as annotated by the tensor's `idx` field, if available)
 
-    It's basically an element-wise product, but this function makes sure slices are matched according to their "meaning"
-    (as annotated by the tensor's `idx` field, if available)
-
-    :param t: a tensor
+    :param t: input tensor
     :param mask: a mask tensor
-    :return: a tensor
 
+    :return: masked tensor
     """
 
     if not hasattr(t, 'idxs'):
@@ -314,11 +338,11 @@ def sample(t, P=1):
     """
     Generate P points (with replacement) from a joint PDF distribution represented by this tensor.
 
-    The tensor does not have to sum 1.
+    The tensor does not have to sum 1 (will be handled in a normalized form).
 
     :param P: how many samples to draw (default: 1)
-    :return Xs: a matrix of size P x N
 
+    :return Xs: a matrix of size P x N
     """
 
     def from_matrix(M):
@@ -355,12 +379,11 @@ def sample(t, P=1):
 
 def hash(t):
     """
-    Obtains an integer number that depends on the tensor entries (not on its internal compressed representation).
+    Computes an integer number that depends on the tensor entries (not on its internal compressed representation).
 
-    We compute it as <T, W>, where W is a rank-1 tensor of weights selected at random (always the same seed).
+    We obtain it as :math:`<T, W>`, where :math:`W` is a rank-1 tensor of weights selected at random (always the same seed).
 
     :return: an integer
-
     """
 
     gen = torch.Generator()
@@ -378,8 +401,8 @@ def generate_basis(name, shape, orthonormal=False):
     :param name: 'dct', 'legendre', 'chebyshev' or 'hermite'
     :param shape: two integers
     :param orthonormal: whether to orthonormalize the basis
-    :return: a matrix of `shape`
 
+    :return: a PyTorch matrix of `shape`
     """
 
     if name == "dct":
@@ -405,20 +428,20 @@ def reduce(ts, function, eps=0, rmax=np.iinfo(np.int32).max, algorithm='svd', ve
     """
     Compute a tensor as a function to all tensors in a sequence.
 
-    Example 1 (addition):
+    :Example 1 (addition):
 
-    > import operator
-    > tn.reduce([t1, t2], operator.add)
+    >>> import operator
+    >>> tn.reduce([t1, t2], operator.add)
 
-    Example 2 (cat with bounded rank):
+    :Example 2 (cat with bounded rank):
 
-    > tn.reduce([t1, t2], tn.cat, rmax=10)
+    >>> tn.reduce([t1, t2], tn.cat, rmax=10)
 
     :param ts: A generator (or list) of tensors
     :param eps: intermediate tensors will be rounded at this error when climbing up the hierarchy
     :param rmax: no node should exceed this number of ranks
-    :return: the reduced result
 
+    :return: the reduced result
     """
 
     d = dict()
@@ -433,7 +456,7 @@ def reduce(ts, function, eps=0, rmax=np.iinfo(np.int32).max, algorithm='svd', ve
             climb += 1
         d[climb] = elem
     keys = list(d.keys())
-    result = keys[0]
+    result = d[keys[0]]
     for key in keys[1:]:
         result = tn.round(function(result, d[key], **kwargs), eps=eps, rmax=rmax, algorithm=algorithm)
     return result

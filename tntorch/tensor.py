@@ -28,21 +28,42 @@ def _full_rank_tt(data):  # Naive TT formatting, don't even attempt to compress
 class Tensor(object):
 
     """
-    Handler class for all tensor networks. Currently we support TT, CP, Tucker, and hybrid formats.
+    Class for all tensor networks. Currently supported: `tensor train (TT) <https://epubs.siam.org/doi/pdf/10.1137/090752286>`_, `CANDECOMP/PARAFAC (CP) <https://epubs.siam.org/doi/pdf/10.1137/07070111X>`_, `Tucker <https://epubs.siam.org/doi/pdf/10.1137/S0895479898346995>`_, and hybrid formats.
 
-    * Internal representation *
+    Internal representation: an ND tensor has N cores, with each core following one of four options:
 
-    N-dimensional tensors always have N cores, with each core following one of four options:
-
-    - Size R_{n-1} x I_n x R_n (standard TT core)
-    - Size R_{n-1} x S_n x R_n (TT-Tucker core), accompanied by an I_n x S_n factor matrix
-    - Size I_n x R (CP factor matrix)
-    - S_n x R_n (CP-Tucker core), accompanied by an I_n x S_n factor matrix
+    - Size :math:`R_{n-1} \\times I_n \\times R_n` (standard TT core)
+    - Size :math:`R_{n-1} \\times S_n \\times R_n` (TT-Tucker core), accompanied by an :math:`I_n \\times S_n` factor matrix
+    - Size :math:`I_n \\times R` (CP factor matrix)
+    - Size :math:`S_n \\times R_n` (CP-Tucker core), accompanied by an :math:`I_n \\times S_n` factor matrix
     """
 
     def __init__(self, data, Us=None, idxs=None, device=None,
                  ranks_cp=None, ranks_tucker=None, ranks_tt=None, eps=None,
                  max_iter=25, tol=1e-4, verbose=False):
+
+        """
+        Constructor that can either:
+        - Decompose an uncompressed tensor
+        - Use an explicit list of tensor cores (and optionally, factors)
+
+        See `this notebook <https://github.com/rballester/tntorch/blob/master/tutorials/decompositions.ipynb>`_ for examples of use.
+
+        :param data: a NumPy ndarray, PyTorch tensor, or a list of cores (which can represent either CP factors or TT cores)
+        :param Us: optional list of Tucker factors
+        :param idxs: annotate maskable tensors (advanced users)
+        :param device: PyTorch device
+        :param ranks_cp: an integer (or list)
+        :param ranks_tucker: an integer (or list)
+        :param ranks_tt: an integer (or list)
+        :param eps:
+        :param max_iter:
+        :param tol:
+        :param verbose:
+
+        :return: a tensor
+        """
+
         if isinstance(data, (list, tuple)):
             if not all([2 <= d.dim() <= 3 for d in data]):
                 raise ValueError('All tensor cores must have 2 (for CP) or 3 (for TT) dimensions')
@@ -284,6 +305,12 @@ class Tensor(object):
 
     @property
     def shape(self):
+        """
+        Returns the shape of this tensor.
+
+        :return: a PyTorch shape object
+        """
+
         shape = []
         for n in range(self.dim()):
             if self.Us[n] is None:
@@ -313,11 +340,20 @@ class Tensor(object):
         self.round_tucker(rmax=value)
 
     def dim(self):
+        """
+        Returns the number of dimensions of this tensor.
+
+        :return: an int
+        """
+
         return len(self.cores)
 
-    @property
     def size(self):
-        return torch.prod(torch.Tensor(list(self.shape)))
+        """
+        Alias for :meth:`shape` (as PyTorch does)
+        """
+
+        return self.shape
 
     def __repr__(self):
 
@@ -645,12 +681,11 @@ class Tensor(object):
 
     def tucker_core(self):
         """
-        Returns the Tucker core as an explicit PyTorch tensor.
+        If this is a Tucker-like tensor, returns its Tucker core as an explicit PyTorch tensor.
 
         If this tensor does not have Tucker factors, then it returns the full decompressed tensor.
 
         :return: a PyTorch tensor
-
         """
 
         return tn.Tensor(self.cores).torch()
@@ -660,8 +695,8 @@ class Tensor(object):
         Decompresses this tensor along the Tucker factors only.
 
         :param dim: int, list, or 'all' (default)
-        :return: a tensor in TT format
 
+        :return: a tensor in TT format
         """
 
         if dim == 'all':
@@ -687,7 +722,7 @@ class Tensor(object):
         """
         Casts this tensor as a pure TT format.
 
-        :return: a torch tensor in the TT format
+        :return: a tensor in the TT format
 
         """
 
@@ -700,7 +735,6 @@ class Tensor(object):
         Decompresses this tensor into a torch tensor.
 
         :return: a torch tensor
-
         """
 
         t = self.decompress_tucker_factors(_clone=False)
@@ -726,10 +760,9 @@ class Tensor(object):
 
     def numpy(self):
         """
-        Decompresses this tensor into a NumPy multiarray.
+        Decompresses this tensor into a NumPy ndarray.
 
         :return: a NumPy tensor
-
         """
 
         return self.torch().detach().numpy()
@@ -765,6 +798,7 @@ class Tensor(object):
 
         This method works in place.
 
+        :param mu: an int between 0 and N-1
         """
 
         if self.Us[mu] is None:
@@ -783,7 +817,9 @@ class Tensor(object):
 
         This method works in place.
 
-        Note: this method will turn CP (or CP-Tucker) cores into TT (or TT-Tucker) ones.
+        Note: internally, this method will turn CP (or CP-Tucker) cores into TT (or TT-Tucker) ones.
+
+        :param mu: an int between 0 and N-1
 
         :return: the R factor
         """
@@ -803,7 +839,9 @@ class Tensor(object):
 
         This method works in place.
 
-        Note: this method will turn CP (or CP-Tucker) cores into TT (or TT-Tucker) ones.
+        Note: internally, this method will turn CP (or CP-Tucker) cores into TT (or TT-Tucker) ones.
+
+        :param mu: an int between 0 and N-1
 
         :return: the L factor
         """
@@ -824,9 +862,11 @@ class Tensor(object):
 
         This method works in place.
 
-        Note: this method will turn CP (or CP-Tucker) cores into TT (or TT-Tucker) ones.
+        Note: internally, this method will turn CP (or CP-Tucker) cores into TT (or TT-Tucker) ones.
 
-        :returns L, R: left and right factors
+        :param mu: an int between 0 and N-1
+
+        :return: L, R: left and right factors
         """
 
         if mu < 0:
@@ -851,7 +891,6 @@ class Tensor(object):
         :param rmax: all ranks should be rmax at most (default: no limit)
         :param algorithm: 'svd' (default) or 'eig'. The latter can be faster, but less accurate
         :param verbose:
-
         """
 
         N = self.dim()
@@ -897,7 +936,6 @@ class Tensor(object):
         :param rmax: all ranks should be rmax at most (default: no limit)
         :param algorithm: 'svd' (default) or 'eig'. The latter can be faster, but less accurate
         :param verbose:
-
         """
 
         N = self.dim()
@@ -924,7 +962,6 @@ class Tensor(object):
 
         :param eps:
         :param kwargs: passed to `round_tt()` and `round_tucker()`
-
         """
 
         copy = self.clone()
@@ -938,24 +975,52 @@ class Tensor(object):
     """
 
     def dot(self, other, **kwargs):
+        """
+        See :func:`metrics.dot()`.
+        """
+
         return tn.dot(self, other, **kwargs)
 
     def mean(self, **kwargs):
+        """
+        See :func:`metrics.mean()`.
+        """
+
         return tn.mean(self, **kwargs)
 
     def sum(self, **kwargs):
+        """
+        See :func:`metrics.sum()`.
+        """
+
         return tn.sum(self, **kwargs)
 
     def var(self, **kwargs):
+        """
+        See :func:`metrics.var()`.
+        """
+
         return tn.var(self, **kwargs)
 
     def std(self, **kwargs):
+        """
+        See :func:`metrics.std()`.
+        """
+
         return tn.std(self, **kwargs)
 
     def norm(self, **kwargs):
+        """
+        See :func:`metrics.norm()`.
+        """
+
         return tn.norm(self, **kwargs)
 
     def normsq(self, **kwargs):
+        """
+        See :func:`metrics.normsq()`.
+        """
+
         return tn.normsq(self, **kwargs)
 
     """
@@ -969,7 +1034,6 @@ class Tensor(object):
         :param name: See `generate_basis()`
         :param dim: list of factors to set; default is 'all'
         :param requires_grad: whether the new factors should be optimizable. Default is False
-
         """
 
         if dim == 'all':
@@ -986,12 +1050,11 @@ class Tensor(object):
         """
         Makes this tensor a leaf (optimizable) tensor, thus forgetting the operations from which it arose.
 
-        Example:
+        :Example:
 
-        t = tn.rand([10]*3, requires_grad=True)  # Is a leaf
-        t *= 2  # Is not a leaf
-        t.as_leaf()  # Is a leaf again
-
+        >>> t = tn.rand([10]*3, requires_grad=True)  # Is a leaf
+        >>> t *= 2  # Is not a leaf
+        >>> t.as_leaf()  # Is a leaf again
         """
 
         for n in range(self.dim()):
@@ -1010,7 +1073,6 @@ class Tensor(object):
         Creates a copy of this tensor (calls clone() on all internal tensor network nodes)
 
         :return: another compressed tensor
-
         """
 
         cores = [self.cores[n].clone()for n in range(self.dim())]
@@ -1029,7 +1091,6 @@ class Tensor(object):
         Counts the total number of compressed coefficients of this tensor.
 
         :return: an integer
-
         """
 
         result = 0
@@ -1044,8 +1105,8 @@ class Tensor(object):
         Returns another tensor repeated along one or more axes; works like PyTorch's `repeat()`.
 
         :param rep: a list, possibly longer than the tensor's number of dimensions
-        :return: another tensor
 
+        :return: another tensor
         """
 
         assert len(rep) >= self.dim()

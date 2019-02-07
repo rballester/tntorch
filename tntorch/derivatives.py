@@ -1,28 +1,25 @@
 import tntorch as tn
 import torch
-import numpy as np
 
 
 def partialset(t, order=1, mask=None, bounds=None):
     """
-    Given a tensor, compute another one that contains all partial derivatives of certain order(s) and according
-    to some optional mask.
+    Given a tensor, compute another one that contains all partial derivatives of certain order(s) and according to some optional mask.
+
+    :Examples:
+
+    >>> t = tn.rand([10, 10, 10])  # A 3D tensor
+    >>> x, y, z = tn.symbols(3)
+    >>> partialset(t, 1, x)  # x
+    >>> partialset(t, 2, x)  # xx, xy, xz
+    >>> partialset(t, 2, tn.only(y | z))  # yy, yz, zz
 
     :param t: a tensor
     :param order: an int or list of ints. Default is 1
     :param mask: an optional mask to select only a subset of partials
-    :param bounds: a list of pairs [lower bound, upper bound] specifying parameter ranges (used to compute
-    derivative steps). If None (default), all steps will be 1
+    :param bounds: a list of pairs [lower bound, upper bound] specifying parameter ranges (used to compute derivative steps). If None (default), all steps will be 1
+
     :return: a tensor
-
-    Examples:
-
-    t = tn.rand([10, 10, 10])  # A 3D tensor
-    x, y, z = tn.symbols(3)
-    partialset(t, 1, x)  # x
-    partialset(t, 2, x)  # xx, xy, xz
-    partialset(t, 2, tn.only(y | z))  # yy, yz, zz
-
     """
 
     if bounds is None:
@@ -72,8 +69,8 @@ def partial(t, dim, order=1, bounds=None):
     :param dim: int or list of ints
     :param order: how many times to derive. Default is 1
     :param bounds: variable(s) range bounds (to compute the derivative step). If None (default), step 1 will be assumed
-    :return: a tensor
 
+    :return: a tensor
     """
 
     if not hasattr(dim, '__len__'):
@@ -102,14 +99,13 @@ def partial(t, dim, order=1, bounds=None):
 
 def gradient(t, dim='all', bounds=None):
     """
-    Compute the gradient of a tensor
+    Compute the gradient of a tensor.
 
     :param t: a tensor
     :param dim: an integer (or list of integers). Default is all
     :param bounds: a pair (or list of pairs) of reals, or None. The bounds for each variable
 
     :return: a tensor (or a list of tensors)
-
     """
 
     if dim == 'all':
@@ -127,16 +123,14 @@ def gradient(t, dim='all', bounds=None):
 
 def active_subspace(t):
     """
-    Compute the main variational directions of a TT
+    Compute the main variational directions of a tensor.
 
-    Reference: P. Constantine et al., "Discovering an Active Subspace in a
-Single-Diode Solar Cell Model" (2017). Available: https://arxiv.org/pdf/1406.7607.pdf
+    Reference: P. Constantine et al. `"Discovering an Active Subspace in a Single-Diode Solar Cell Model" (2017) <https://arxiv.org/pdf/1406.7607.pdf>`_
 
-    See also: https://github.com/paulcon/as-data-sets/blob/master/README.md
+    See also P. Constantine's `data set repository <https://github.com/paulcon/as-data-sets/blob/master/README.md>`_.
 
-    :param t: a TT
+    :param t: input tensor
     :return: (eigvals, eigvecs): an array and a matrix, encoding the eigenpairs in descending order
-
     """
 
     grad = tn.gradient(t, dim='all')
@@ -158,10 +152,10 @@ def divergence(ts, bounds=None):
     """
     Computes the divergence (scalar field) out of a vector field encoded in a tensor.
 
-    :param ts: an N-D vector field, encoded as a list of N N-D tensors
+    :param ts: an ND vector field, encoded as a list of N ND tensors
     :param bounds:
-    :return: a scalar field
 
+    :return: a scalar field
     """
 
     assert ts[0].dim() == len(ts)
@@ -177,12 +171,12 @@ def divergence(ts, bounds=None):
 
 def curl(ts, bounds=None):
     """
-    Compute the curl of a vector field
+    Compute the curl of a 3D vector field.
 
-    :param ts: three 3D encoding the x, y, and z vector coordinates respectively
+    :param ts: three 3D tensors encoding the :math:`x, y, z` vector coordinates respectively
     :param bounds:
-    :return: three tensors of the same shape
 
+    :return: three tensors of the same shape
     """
 
     assert [t.dim() == 3 for t in ts]
@@ -204,8 +198,8 @@ def laplacian(t, bounds=None):
 
     :param t: a tensor
     :param bounds:
-    :return: a tensor
 
+    :return: a tensor
     """
 
     if bounds is None:
