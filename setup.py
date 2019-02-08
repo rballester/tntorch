@@ -31,7 +31,8 @@ setup(
         'numpy',
         'scipy',
         'torch',
-	'nbsphinx'
+	# 'nbsphinx',
+	# 'sphinx_rtd_theme'
     ],
     license="LGPL",
     zip_safe=False,
