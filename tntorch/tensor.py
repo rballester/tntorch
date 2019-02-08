@@ -1088,6 +1088,15 @@ class Tensor(object):
 
     def numel(self):
         """
+        Counts the total number of uncompressed elements of this tensor.
+
+        :return: an integer
+        """
+
+        return torch.prod(torch.Tensor(list(self.shape)))
+
+    def numcoef(self):
+        """
         Counts the total number of compressed coefficients of this tensor.
 
         :return: an integer

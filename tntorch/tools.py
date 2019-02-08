@@ -69,7 +69,7 @@ def cat(*ts, dim):
 
 def transpose(t):
     """
-    Inverts the dimension order of a tensor, e.g. I1 x I2 x I3 becomes I3 x I2 x I1.
+    Inverts the dimension order of a tensor, e.g. :math:`I_1 \\times I_2 \\times I_3` becomes :math:`I_3 \\times I_2 \\times I_1`.
 
     :param t: input tensor
 
@@ -342,7 +342,7 @@ def sample(t, P=1):
 
     :param P: how many samples to draw (default: 1)
 
-    :return Xs: a matrix of size P x N
+    :return Xs: a matrix of size :math:`P x N`
     """
 
     def from_matrix(M):

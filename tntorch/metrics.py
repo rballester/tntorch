@@ -182,7 +182,8 @@ def mean(t, dim=None, keepdim=False):
 
     :return: a scalar
     """
-    denom = t.shape[dim] if dim is not None else t.size
+
+    denom = t.shape[dim] if dim is not None else t.numel()
     summed = tn.sum(t, dim, keepdim)
     return summed / denom
 
