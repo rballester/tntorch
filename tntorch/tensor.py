@@ -43,8 +43,10 @@ class Tensor(object):
                  max_iter=25, tol=1e-4, verbose=False):
 
         """
-        Constructor that can either:
+        The constructor can either:
+
         - Decompose an uncompressed tensor
+        
         - Use an explicit list of tensor cores (and optionally, factors)
 
         See `this notebook <https://github.com/rballester/tntorch/blob/master/tutorials/decompositions.ipynb>`_ for examples of use.
