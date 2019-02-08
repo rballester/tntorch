@@ -1,5 +1,7 @@
 # tntorch - Tensor Network Learning with PyTorch
 
+**New**: our [Read the Docs site](http://tntorch.readthedocs.io/) is out!
+
 [Welcome to *tntorch*](https://github.com/rballester/tntorch/blob/master/tutorials/introduction.ipynb), a PyTorch-powered modeling and learning library using tensor networks. Such networks are unique in that [they use *multilinear* neural units](https://arxiv.org/abs/1711.00811) (instead of non-linear activation units).
 
 [We support](https://github.com/rballester/tntorch/blob/master/tutorials/main_formats.ipynb):
