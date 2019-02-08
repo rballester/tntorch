@@ -51,15 +51,15 @@ class Tensor(object):
 
         :param data: a NumPy ndarray, PyTorch tensor, or a list of cores (which can represent either CP factors or TT cores)
         :param Us: optional list of Tucker factors
-        :param idxs: annotate maskable tensors (advanced users)
+        :param idxs: annotate maskable tensors (*advanced users*)
         :param device: PyTorch device
         :param ranks_cp: an integer (or list)
         :param ranks_tucker: an integer (or list)
         :param ranks_tt: an integer (or list)
-        :param eps:
-        :param max_iter:
-        :param tol:
-        :param verbose:
+        :param eps: maximal error
+        :param max_iter: maximum number of iterations when computing a CP decomposition using ALS
+        :param tol: stopping criterion (change in relative error) when computing a CP decomposition using ALS
+        :param verbose: Boolean
 
         :return: a tensor
         """
@@ -1070,7 +1070,7 @@ class Tensor(object):
 
     def clone(self):
         """
-        Creates a copy of this tensor (calls clone() on all internal tensor network nodes)
+        Creates a copy of this tensor (calls PyTorch's `clone()` on all internal tensor network nodes)
 
         :return: another compressed tensor
         """

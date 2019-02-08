@@ -30,7 +30,8 @@ setup(
         'future',
         'numpy',
         'scipy',
-        'torch'
+        'torch',
+	'nbsphinx'
     ],
     license="LGPL",
     zip_safe=False,
