@@ -29,7 +29,7 @@ setup(
     install_requires=[
         'numpy',
         'scipy',
-        'torch'
+        'torch',
 	'nbsphinx',
 	# 'sphinx_rtd_theme'
     ],
