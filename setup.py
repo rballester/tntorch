@@ -27,10 +27,9 @@ setup(
     ],
     include_package_data=True,
     install_requires=[
-        'future',
         'numpy',
         'scipy',
-        'torch',
+        'torch'
 	# 'nbsphinx',
 	# 'sphinx_rtd_theme'
     ],

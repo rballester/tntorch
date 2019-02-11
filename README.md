@@ -1,3 +1,5 @@
+[![Documentation Status](https://readthedocs.org/projects/tntorch/badge/?version=latest)](https://tntorch.readthedocs.io/en/latest/?badge=latest)
+
 # tntorch - Tensor Network Learning with PyTorch
 
 **New**: our [Read the Docs site](http://tntorch.readthedocs.io/) is out!
@@ -96,7 +98,7 @@ The main dependencies are *NumPy* and *PyTorch*. To download and install *tntorc
 
 ```
 git clone https://github.com/rballester/tntorch.git
-pip install -e tntorch
+pip install tntorch
 ```
 
 ## Testing

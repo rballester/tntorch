@@ -46,7 +46,7 @@ class Tensor(object):
         The constructor can either:
 
         - Decompose an uncompressed tensor
-        
+
         - Use an explicit list of tensor cores (and optionally, factors)
 
         See `this notebook <https://github.com/rballester/tntorch/blob/master/tutorials/decompositions.ipynb>`_ for examples of use.
@@ -323,6 +323,12 @@ class Tensor(object):
 
     @property
     def ranks_tt(self):
+        """
+        Returns the TT ranks of this tensor.
+
+        :return: a vector of integers
+        """
+
         if self.cores[0].dim() == 2:
             first = self.cores[0].shape[1]
         else:
@@ -335,6 +341,12 @@ class Tensor(object):
 
     @property
     def ranks_tucker(self):
+        """
+        Returns the Tucker ranks of this tensor.
+
+        :return: a vector of integers
+        """
+
         return np.array([c.shape[-2] for c in self.cores])
 
     @ranks_tucker.setter
@@ -962,7 +974,7 @@ class Tensor(object):
         General recompression. Attempts to reduce TT ranks first; then does Tucker rounding with the remaining error
         budget.
 
-        :param eps:
+        :param eps: this relative error will not be exceeded. Default is 0
         :param kwargs: passed to `round_tt()` and `round_tucker()`
         """
 

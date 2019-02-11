@@ -1,7 +1,7 @@
 metrics
 =======
 
-Functions that compute difference or similarity metrics between tensors.
+Functions that compute statistics or similarity metrics between tensors.
 
 .. automodule:: metrics
    :members:

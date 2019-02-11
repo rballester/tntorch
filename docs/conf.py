@@ -29,6 +29,8 @@ version = ''
 # The full version, including alpha/beta/rc tags
 release = '0.1'
 
+html_logo = 'tntorch_borders.svg'
+html_favicon = 'favicon.png'
 
 # -- General configuration ---------------------------------------------------
 
@@ -95,8 +97,9 @@ else:
 # Theme options are theme-specific and customize the look and feel of a theme
 # further.  For a list of options available for each theme, see the
 # documentation.
-#
-# html_theme_options = {}
+html_theme_options = {
+    'logo_only': True,  # if we have a html_logo below, this shows /only/ the logo with no title text
+}
 
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,

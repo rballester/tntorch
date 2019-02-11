@@ -1,9 +1,13 @@
-Welcome to tntorch!
-====================
+tntorch -- Tensor Network Learning with PyTorch
+===============================================
 
-*tntorch* is a `PyTorch <http://pytorch.org/>`_-powered library for tensor network modeling and learning. It features transparent support for the `tensor train (TT) model <https://epubs.siam.org/doi/pdf/10.1137/090752286>`_, `CANDECOMP/PARAFAC (CP) <https://epubs.siam.org/doi/pdf/10.1137/07070111X>`_, the `Tucker model <https://epubs.siam.org/doi/pdf/10.1137/S0895479898346995>`_, and more. Supported operations (CPU and GPU) include:
+.. image:: tntorch.svg
+   :width: 300 px
+   :align: center
 
-- Basic and fancy **indexing** of tensors, broadcasting, **assignment**, etc.
+This is a `PyTorch <http://pytorch.org/>`__-powered library for tensor modeling and learning that features transparent support for the `tensor train (TT) model <https://epubs.siam.org/doi/pdf/10.1137/090752286>`_, `CANDECOMP/PARAFAC (CP) <https://epubs.siam.org/doi/pdf/10.1137/07070111X>`_, the `Tucker model <https://epubs.siam.org/doi/pdf/10.1137/S0895479898346995>`_, and more. Supported operations (CPU and GPU) include:
+
+- Basic and fancy **indexing** of tensors, **broadcasting**, **assignment**, etc.
 - Tensor **decomposition** and **reconstruction**
 - Element-wise and tensor-tensor **arithmetics**
 - **Statistics** and **sensitivity analysis**
@@ -29,19 +33,19 @@ The main dependencies are `NumPy <http://www.numpy.org/>`_ and `PyTorch <https:/
 .. code-block:: bash
 
    cd tntorch
-   pip install -e tntorch
+   pip install tntorch
 
 First Steps
 -----------
 
-Some basic manipulation:
+Some basic tensor manipulation:
 
 .. code-block:: python
 
    import tntorch as tn
    
    t = tn.ones(64, 64)  # 64 x 64 tensor, filled with ones
-   t = t[:, :, None] + 2*t[:, None, :]  # Singleton dimensions, broadcasting and arithmetic operations
+   t = t[:, :, None] + 2*t[:, None, :]  # Singleton dimensions, broadcasting, and arithmetics
    print(tn.mean(t))  # Result: 3
 
 Decomposing a tensor:
@@ -58,8 +62,13 @@ Decomposing a tensor:
 To get fully on board, check out the complete documentation:
 
 .. toctree::
+   :hidden:
+
+   Welcome <self>
+
+.. toctree::
    :maxdepth: 1
-   
+
    goals
    api
    tutorial-notebooks
