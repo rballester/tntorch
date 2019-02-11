@@ -4,15 +4,15 @@
 
 **New**: our [Read the Docs site](http://tntorch.readthedocs.io/) is out!
 
-[Welcome to *tntorch*](https://github.com/rballester/tntorch/blob/master/tutorials/introduction.ipynb), a PyTorch-powered modeling and learning library using tensor networks. Such networks are unique in that [they use *multilinear* neural units](https://arxiv.org/abs/1711.00811) (instead of non-linear activation units).
+[Welcome to *tntorch*](https://github.com/VMML/tntorch/blob/master/docs/tutorials/introduction.ipynb), a PyTorch-powered modeling and learning library using tensor networks. Such networks are unique in that [they use *multilinear* neural units](https://arxiv.org/abs/1711.00811) (instead of non-linear activation units).
 
-[We support](https://github.com/rballester/tntorch/blob/master/tutorials/main_formats.ipynb):
+[We support](https://github.com/rballester/tntorch/blob/master/docs/tutorials/main_formats.ipynb):
 
 - [CANDECOMP/PARAFAC (CP)](https://epubs.siam.org/doi/pdf/10.1137/07070111X)
 - [Tucker](https://epubs.siam.org/doi/pdf/10.1137/S0895479898346995)
 - [Tensor train (TT)](https://epubs.siam.org/doi/abs/10.1137/090752286?journalCode=sjoce3)
 - Hybrids: CP-Tucker, TT-Tucker, etc. 
-- [Partial support](https://github.com/rballester/tntorch/blob/master/tutorials/other_formats.ipynb) for other decompositions such as [INDSCAL, CANDELINC, DEDICOM, PARATUCK2](https://epubs.siam.org/doi/pdf/10.1137/07070111X), and custom formats
+- [Partial support](https://github.com/rballester/tntorch/blob/master/docs/tutorials/other_formats.ipynb) for other decompositions such as [INDSCAL, CANDELINC, DEDICOM, PARATUCK2](https://epubs.siam.org/doi/pdf/10.1137/07070111X), and custom formats
 
 For example, the following networks both represent a 4D tensor (i.e. a real function that can take I1 x I2 x I3 x I4 possible values) in the TT and TT-Tucker formats:
 
@@ -63,25 +63,25 @@ def loss(t):
     return tn.norm(t[:3, :3, :3, :3] - t[-3:, -3:, -3:, -3:])
 ```
 
-Check out the [introductory notebook](https://github.com/rballester/tntorch/blob/master/tutorials/introduction.ipynb) for all the details on the basics.
+Check out the [introductory notebook](https://github.com/rballester/tntorch/blob/master/docs/tutorials/introduction.ipynb) for all the details on the basics.
 
 ## Tutorial Notebooks
 
-- [Introduction](https://github.com/rballester/tntorch/blob/master/tutorials/introduction.ipynb)
-- [Active subspaces](https://github.com/rballester/tntorch/blob/master/tutorials/active_subspaces.ipynb)
-- [ANOVA decomposition](https://github.com/rballester/tntorch/blob/master/tutorials/anova.ipynb)
-- [Boolean logic](https://github.com/rballester/tntorch/blob/master/tutorials/logic.ipynb)
-- [Classification](https://github.com/rballester/tntorch/blob/master/tutorials/classification.ipynb)
-- [Differentiation](https://github.com/rballester/tntorch/blob/master/tutorials/derivatives.ipynb)
-- [Discrete/weighted finite automata](https://github.com/rballester/tntorch/blob/master/tutorials/automata.ipynb)
-- [Exponential machines](https://github.com/rballester/tntorch/blob/master/tutorials/exponential_machines.ipynb)
-- [Main tensor formats available](https://github.com/rballester/tntorch/blob/master/tutorials/main_formats.ipynb)
-- [Other custom formats](https://github.com/rballester/tntorch/blob/master/tutorials/other_formats.ipynb)
-- [Polynomial chaos expansions](https://github.com/rballester/tntorch/blob/master/tutorials/pce.ipynb)
-- [Tensor completion and regression](https://github.com/rballester/tntorch/blob/master/tutorials/completion.ipynb)
-- [Tensor decomposition](https://github.com/rballester/tntorch/blob/master/tutorials/decompositions.ipynb)
-- [Sensitivity analysis](https://github.com/rballester/tntorch/blob/master/tutorials/sobol.ipynb)
-- [Vector field data](https://github.com/rballester/tntorch/blob/master/tutorials/vector_fields.ipynb)
+- [Introduction](https://github.com/rballester/tntorch/blob/master/docs/tutorials/introduction.ipynb)
+- [Active subspaces](https://github.com/rballester/tntorch/blob/master/docs/tutorials/active_subspaces.ipynb)
+- [ANOVA decomposition](https://github.com/rballester/tntorch/blob/master/docs/tutorials/anova.ipynb)
+- [Boolean logic](https://github.com/rballester/tntorch/blob/master/docs/tutorials/logic.ipynb)
+- [Classification](https://github.com/rballester/tntorch/blob/master/docs/tutorials/classification.ipynb)
+- [Differentiation](https://github.com/rballester/tntorch/blob/master/docs/tutorials/derivatives.ipynb)
+- [Discrete/weighted finite automata](https://github.com/rballester/tntorch/blob/master/docs/tutorials/automata.ipynb)
+- [Exponential machines](https://github.com/rballester/tntorch/blob/master/docs/tutorials/exponential_machines.ipynb)
+- [Main tensor formats available](https://github.com/rballester/tntorch/blob/master/docs/tutorials/main_formats.ipynb)
+- [Other custom formats](https://github.com/rballester/tntorch/blob/master/docs/tutorials/other_formats.ipynb)
+- [Polynomial chaos expansions](https://github.com/rballester/tntorch/blob/master/docs/tutorials/pce.ipynb)
+- [Tensor completion and regression](https://github.com/rballester/tntorch/blob/master/docs/tutorials/completion.ipynb)
+- [Tensor decomposition](https://github.com/rballester/tntorch/blob/master/docs/tutorials/decompositions.ipynb)
+- [Sensitivity analysis](https://github.com/rballester/tntorch/blob/master/docs/tutorials/sobol.ipynb)
+- [Vector field data](https://github.com/rballester/tntorch/blob/master/docs/tutorials/vector_fields.ipynb)
 
 
 ## Planned
