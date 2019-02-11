@@ -6,6 +6,7 @@ import time
 
 
 def _full_rank_tt(data):  # Naive TT formatting, don't even attempt to compress
+    data = data.to(torch.get_default_dtype())
     shape = data.shape
     result = []
     N = data.dim()

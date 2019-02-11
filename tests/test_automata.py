@@ -8,7 +8,7 @@ def test_weight_mask():
     for N in range(1, 5):
         for k in range(1, N):
             gt = tn.automata.weight_mask(N, k)
-            idx = torch.Tensor(np.array(np.unravel_index(np.arange(gt.size, dtype=np.int), list(gt.shape))).T)
+            idx = torch.Tensor(np.array(np.unravel_index(np.arange(gt.numel(), dtype=np.int), list(gt.shape))).T)
             assert torch.norm((torch.sum(idx, dim=1).round() == k).float() - gt[idx].torch().round().float()) <= 1e-7
 
 def test_accepted_inputs():

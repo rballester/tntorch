@@ -153,7 +153,7 @@ def rmse(gt, approx):
     gt, approx = _process(gt, approx)
     if isinstance(gt, torch.Tensor) and isinstance(approx, torch.Tensor):
         return torch.dist(gt, approx) / np.sqrt(gt.numel())
-    return tn.dist(gt, approx) / torch.sqrt(gt.size)
+    return tn.dist(gt, approx) / torch.sqrt(gt.numel())
 
 
 def r_squared(gt, approx):
@@ -197,7 +197,7 @@ def var(t):
     :return: a scalar >= 0
     """
 
-    return tn.normsq(t-tn.mean(t)) / t.size
+    return tn.normsq(t-tn.mean(t)) / t.numel()
 
 
 def std(t):
