@@ -61,7 +61,7 @@ def dot(t1, t2, k=None):
     t1, t2 = _process(t1, t2)
     if isinstance(t1, torch.Tensor) and isinstance(t2, torch.Tensor):
         return t1.flatten().dot(t2.flatten())
-    Lprod = torch.ones([t2.ranks_tt[0], t1.ranks_tt[0]])
+    Lprod = torch.ones([t2.ranks_tt[0], t1.ranks_tt[0]], device=t1.cores[0].device)
     if k is None:
         k = min(t1.dim(), t2.dim())
     assert k <= t1.dim() and k <= t2.dim()

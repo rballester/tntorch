@@ -111,7 +111,7 @@ class Tensor(object):
                         eigvals, eigvecs = torch.symeig(gram, eigenvectors=True)
                         # Sort eigenvectors in decreasing importance
                         reverse = np.arange(len(eigvals)-1, -1, -1)  # Negative steps not yet supported in PyTorch
-                        idx = np.argsort(eigvals)[reverse[:ranks_cp]]
+                        idx = np.argsort(eigvals.to('cpu'))[reverse[:ranks_cp]]
                         self.cores.append(eigvecs[:, idx])
                 if verbose:
                     print(' -- initialization time =', time.time() - start)
@@ -203,8 +203,8 @@ class Tensor(object):
                 core1 = torch.einsum('ijk,aj->iak', (core1, self.Us[n]))
             if other.Us[n] is not None:
                 core2 = torch.einsum('ijk,aj->iak', (core2, other.Us[n]))
-            column1 = torch.cat([core1, torch.zeros([core2.shape[0], this.shape[n], core1.shape[2]])], dim=0)
-            column2 = torch.cat([torch.zeros([core1.shape[0], this.shape[n], core2.shape[2]]), core2], dim=0)
+            column1 = torch.cat([core1, torch.zeros([core2.shape[0], this.shape[n], core1.shape[2]], device=core1.device)], dim=0)
+            column2 = torch.cat([torch.zeros([core1.shape[0], this.shape[n], core2.shape[2]], device=core2.device), core2], dim=0)
             c = torch.cat([column1, column2], dim=2)
             cores.append(c)
             Us.append(None)
@@ -931,7 +931,8 @@ class Tensor(object):
             self.Us[mu] = torch.matmul(self.Us[mu], R.t())
 
             # Split factor according to error budget
-            left, right = tn.truncated_svd(self.Us[mu], eps=eps/torch.sqrt(torch.Tensor([len(dim)])), rmax=rmax[mu], left_ortho=True, algorithm=algorithm)
+            left, right = tn.truncated_svd(self.Us[mu], eps=eps/np.sqrt(len(dim)), rmax=rmax[mu],
+                                           left_ortho=True, algorithm=algorithm)
             self.Us[mu] = left
 
             # Push the (non-orthogonal) remainder to the core
@@ -963,7 +964,8 @@ class Tensor(object):
         self.orthogonalize(N-1)  # Make everything left-orthogonal
         if verbose:
             print('Orthogonalization time:', time.time() - start)
-        delta = eps / max(1, torch.sqrt(torch.Tensor([N - 1]))) * torch.norm(self.cores[-1])
+        delta = eps/max(1, np.sqrt(N-1))*torch.norm(self.cores[-1])
+        delta = delta.item()
         for mu in range(N - 1, 0, -1):
             M = tn.right_unfolding(self.cores[mu])
             left, right = tn.truncated_svd(M, delta=delta, rmax=rmax[mu-1], left_ortho=False, algorithm=algorithm, verbose=verbose)

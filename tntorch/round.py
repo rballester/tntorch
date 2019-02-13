@@ -67,7 +67,7 @@ def truncated_svd(M, delta=None, eps=None, rmax=None, left_ortho=True, algorithm
     if delta is not None and eps is not None:
         raise ValueError('Provide either `delta` or `eps`')
     if delta is None and eps is not None:
-        delta = eps*torch.norm(M)
+        delta = eps*torch.norm(M).item()
     if delta is None and eps is None:
         delta = 0
     if rmax is None:
@@ -109,7 +109,7 @@ def truncated_svd(M, delta=None, eps=None, rmax=None, left_ortho=True, algorithm
 
     S = svd[1]**2
     reverse = np.arange(len(S)-1, -1, -1)
-    where = np.where(torch.cumsum(S[reverse], dim=0) <= delta**2)[0]
+    where = np.where((torch.cumsum(S[reverse], dim=0) <= delta**2).to('cpu'))[0]
     if len(where) == 0:
         rank = max(1, int(min(rmax, len(S))))
     else:
