@@ -98,7 +98,7 @@ The main dependencies are *NumPy* and *PyTorch*. To download and install *tntorc
 
 ```
 git clone https://github.com/rballester/tntorch.git
-pip install tntorch
+pip install .
 ```
 
 ## Testing
