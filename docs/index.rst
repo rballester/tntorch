@@ -33,7 +33,7 @@ The main dependencies are `NumPy <http://www.numpy.org/>`_ and `PyTorch <https:/
 .. code-block:: bash
 
    cd tntorch
-   pip install tntorch
+   pip install .
 
 First Steps
 -----------
