@@ -34,10 +34,10 @@ def cat(*ts, dim):
     """
     Concatenate two or more tensors along a given dim, similarly to PyTorch's `cat()`.
 
-    :param ts: a list of tensors
+    :param ts: a list of :class:`Tensor`
     :param dim: an int
 
-    :return: a tensor of the same shape as all tensors in the list, except along `dim` where it has the sum of shapes
+    :return: a :class:`Tensor` of the same shape as all tensors in the list, except along `dim` where it has the sum of shapes
     """
 
     if hasattr(ts[0], '__len__'):
@@ -285,7 +285,7 @@ def cumsum(t, dim):
     :param t: input tensor
     :param dim: an int or list of ints
 
-    :return: a tensor of the same shape
+    :return: a :class:`Tensor` of the same shape
     """
 
     if not hasattr(dim, '__len__'):

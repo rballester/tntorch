@@ -747,9 +747,9 @@ class Tensor(object):
 
     def torch(self):
         """
-        Decompresses this tensor into a torch tensor.
+        Decompresses this tensor into a PyTorch tensor.
 
-        :return: a torch tensor
+        :return: a PyTorch tensor
         """
 
         t = self.decompress_tucker_factors(_clone=False)
@@ -1048,7 +1048,7 @@ class Tensor(object):
         """
         Sets factors Us of this tensor to be of a certain family.
 
-        :param name: See `generate_basis()`
+        :param name: See :func:`tools.generate_basis()`
         :param dim: list of factors to set; default is 'all'
         :param requires_grad: whether the new factors should be optimizable. Default is False
         """

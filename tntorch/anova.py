@@ -12,7 +12,7 @@ def anova_decomposition(t, marginals=None):
 
     :param t: ND input tensor
     :param marginals: list of N vectors, each containing the PMF for each variable (use None for uniform distributions)
-    :return: a tensor
+    :return: a :class:`Tensor`
     """
 
     marginals = copy.deepcopy(marginals)
@@ -39,9 +39,9 @@ def undo_anova_decomposition(a):
     """
     Undo the transformation done by :func:`anova_decomposition()`.
 
-    :param a: a tensor obtained with :func:`anova_decomposition()`
+    :param a: a :class:`Tensor` obtained with :func:`anova_decomposition()`
 
-    :return: a tensor t that has `a` as its ANOVA tensor
+    :return: a :class:`Tensor` t that has `a` as its ANOVA tensor
     """
 
     cores = []
@@ -72,7 +72,7 @@ def truncate_anova(t, mask, keepdim=False, marginals=None):
     :param keepdim: if True, all dummy dimensions will be preserved, otherwise they will disappear. Default is False
     :param marginals: see :func:`anova_decomposition()`
 
-    :return: a tensor
+    :return: a :class:`Tensor`
     """
 
     t = tn.undo_anova_decomposition(tn.mask(tn.anova_decomposition(t, marginals=marginals), mask=mask))

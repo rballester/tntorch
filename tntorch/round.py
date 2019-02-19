@@ -11,7 +11,7 @@ def round_tt(t, **kwargs):
     :param t:
     :param kwargs:
 
-    :return: a rounded copy
+    :return: a rounded copy of `t`
     """
 
     t2 = t.clone()
@@ -26,7 +26,7 @@ def round_tucker(t, **kwargs):
     :param t:
     :param kwargs:
 
-    :return: a rounded copy
+    :return: a rounded copy of `t`
     """
 
     t2 = t.clone()
@@ -41,7 +41,7 @@ def round(t, **kwargs):
     :param t:
     :param kwargs:
 
-    :return: a rounded copy
+    :return: a rounded copy of `t`
     """
 
     t2 = t.clone()

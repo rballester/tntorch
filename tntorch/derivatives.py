@@ -14,12 +14,12 @@ def partialset(t, order=1, mask=None, bounds=None):
     >>> partialset(t, 2, x)  # xx, xy, xz
     >>> partialset(t, 2, tn.only(y | z))  # yy, yz, zz
 
-    :param t: a tensor
+    :param t: a :class:`Tensor`
     :param order: an int or list of ints. Default is 1
     :param mask: an optional mask to select only a subset of partials
     :param bounds: a list of pairs [lower bound, upper bound] specifying parameter ranges (used to compute derivative steps). If None (default), all steps will be 1
 
-    :return: a tensor
+    :return: a :class:`Tensor`
     """
 
     if bounds is None:
@@ -65,12 +65,12 @@ def partial(t, dim, order=1, bounds=None):
     """
     Compute a single partial derivative.
 
-    :param t: a tensor
+    :param t: a :class:`Tensor`
     :param dim: int or list of ints
     :param order: how many times to derive. Default is 1
     :param bounds: variable(s) range bounds (to compute the derivative step). If None (default), step 1 will be assumed
 
-    :return: a tensor
+    :return: a :class:`Tensor`
     """
 
     if not hasattr(dim, '__len__'):
@@ -101,11 +101,11 @@ def gradient(t, dim='all', bounds=None):
     """
     Compute the gradient of a tensor.
 
-    :param t: a tensor
+    :param t: a :class:`Tensor`
     :param dim: an integer (or list of integers). Default is all
     :param bounds: a pair (or list of pairs) of reals, or None. The bounds for each variable
 
-    :return: a tensor (or a list of tensors)
+    :return: a :class:`Tensor` (or a list thereof)
     """
 
     if dim == 'all':
@@ -196,10 +196,10 @@ def laplacian(t, bounds=None):
     """
     Computes the Laplacian of a scalar field.
 
-    :param t: a tensor
+    :param t: a :class:`Tensor`
     :param bounds:
 
-    :return: a tensor
+    :return: a :class:`Tensor`
     """
 
     if bounds is None:

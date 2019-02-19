@@ -39,8 +39,8 @@ def dot(t1, t2, k=None):
         Example: suppose t1 has shape 3 x 4 x 5 x 6 and t2 has shape 3 x 4 x 10 x 11. Then, tn.dot(t1, t2, k=2) will
         have shape 6 x 5 x 10 x 11.
 
-    :param t1: a tensor
-    :param t2: a tensor
+    :param t1: a :class:`Tensor` (or a PyTorch tensor)
+    :param t2: a :class:`Tensor` (or a PyTorch tensor)
     :param k: an int (default: None)
 
     :return: a scalar (if k is None and t1.dim() == t2.dim()), a tensor otherwise
@@ -111,8 +111,8 @@ def dist(t1, t2):
     """
     Computes the Euclidean distance between two tensors. Generally faster than `tn.norm(t1-t2)`.
 
-    :param t1: a tensor
-    :param t2: a tensor
+    :param t1: a :class:`Tensor` (or a PyTorch tensor)
+    :param t2: a :class:`Tensor` (or a PyTorch tensor)
 
     :return: a scalar >= 0
     """
@@ -176,7 +176,7 @@ def mean(t, dim=None, keepdim=False):
     """
     Computes the mean of a tensor along all or some of its dimensions.
 
-    :param t: a tensor
+    :param t: a :class:`Tensor`
     :param dim: an int or list of ints (default: all)
     :param keepdim: whether to keep the same number of dimensions
 
@@ -192,7 +192,7 @@ def var(t):
     """
     Computes the variance of a tensor.
 
-    :param t: a tensor
+    :param t: a :class:`Tensor`
 
     :return: a scalar >= 0
     """
@@ -204,7 +204,7 @@ def std(t):
     """
     Computes the standard deviation of a tensor.
 
-    :param t: a tensor
+    :param t: a :class:`Tensor`
 
     :return: a scalar >= 0
     """
@@ -216,7 +216,7 @@ def normsq(t):
     """
     Computes the squared norm of a tensor.
 
-    :param t: a tensor
+    :param t: a :class:`Tensor`
 
     :return: a scalar >= 0
     """
@@ -228,7 +228,7 @@ def norm(t):
     """
     Computes the :math:`L^2` (Frobenius) norm of a tensor.
 
-    :param t: a tensor
+    :param t: a :class:`Tensor`
 
     :return: a scalar >= 0
     """

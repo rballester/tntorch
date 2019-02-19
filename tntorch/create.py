@@ -31,7 +31,7 @@ def rand_like(t, **kwargs):
     :param t: a tensor
     :param kwargs:
 
-    :return: a tensor
+    :return: a :class:`Tensor`
     """
 
     return _create(torch.rand, t.shape, **kwargs)
@@ -45,17 +45,17 @@ def randn(*shape, **kwargs):
     return _create(torch.randn, *shape, **kwargs)
 
 
-def randn_like(tensor, **kwargs):
+def randn_like(t, **kwargs):
     """
     Calls :meth:`randn()` with the shape of a given tensor.
 
     :param t: a tensor
     :param kwargs:
 
-    :return: a tensor
+    :return: a :class:`Tensor`
     """
 
-    return _create(torch.randn, tensor.shape, **kwargs)
+    return _create(torch.randn, t.shape, **kwargs)
 
 
 def ones(*shape, **kwargs):
@@ -76,17 +76,17 @@ def ones(*shape, **kwargs):
     return _create(torch.ones, *shape, ranks_tt=1, **kwargs)
 
 
-def ones_like(tensor, **kwargs):
+def ones_like(t, **kwargs):
     """
     Calls :meth:`ones()` with the shape of a given tensor.
 
     :param t: a tensor
     :param kwargs:
 
-    :return: a tensor
+    :return: a :class:`Tensor`
     """
 
-    return ones(tensor.shape, **kwargs)
+    return ones(t.shape, **kwargs)
 
 
 def full(*shape, fill_value, **kwargs):
@@ -97,23 +97,23 @@ def full(*shape, fill_value, **kwargs):
     :param requires_grad:
     :param device:
 
-    :return: a TT tensor of rank 1
+    :return: a TT :class:`Tensor` of rank 1
     """
 
     return fill_value*tn.ones(*shape, **kwargs)
 
 
-def full_like(tensor, fill_value, **kwargs):
+def full_like(t, fill_value, **kwargs):
     """
     Calls :meth:`full()` with the shape of a given tensor.
 
     :param t: a tensor
     :param kwargs:
 
-    :return: a tensor
+    :return: a :class:`Tensor`
     """
 
-    return tn.full(tensor.shape, fill_value=fill_value, **kwargs)
+    return tn.full(t.shape, fill_value=fill_value, **kwargs)
 
 
 def zeros(*shape, **kwargs):
@@ -130,17 +130,17 @@ def zeros(*shape, **kwargs):
     return _create(torch.zeros, *shape, ranks_tt=1, **kwargs)
 
 
-def zeros_like(tensor, **kwargs):
+def zeros_like(t, **kwargs):
     """
     Calls :meth:`zeros()` with the shape of a given tensor.
 
     :param t: a tensor
     :param kwargs:
 
-    :return: a tensor
+    :return: a :class:`Tensor`
     """
 
-    return zeros(tensor.shape, **kwargs)
+    return zeros(t.shape, **kwargs)
 
 
 def gaussian(*shape, sigma_factor=0.2):
@@ -150,7 +150,7 @@ def gaussian(*shape, sigma_factor=0.2):
     :param shape:
     :param sigma_factor: a real (or list of reals) encoding the ratio sigma / shape. Default is 0.2, i.e. one fifth along each dimension
 
-    :return: a tensor that sums to 1
+    :return: a :class:`Tensor` that sums to 1
     """
 
     if hasattr(shape[0], '__len__'):
@@ -180,7 +180,7 @@ def gaussian_like(tensor, **kwargs):
     :param t: a tensor
     :param kwargs:
 
-    :return: a tensor
+    :return: a :class:`Tensor`
     """
 
     return gaussian(tensor.shape, **kwargs)

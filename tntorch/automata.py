@@ -86,7 +86,7 @@ def accepted_inputs(t):
 
     Note: each string s will appear as many times as the value t[s]
 
-    :param t: a tensor
+    :param t: a :class:`Tensor`
 
     :return Xs: a Torch matrix, each row is one string
     """
