@@ -8,7 +8,7 @@ def round_tt(t, **kwargs):
     """
     Copies and rounds a tensor (see :meth:`tensor.Tensor.round_tt()`.
 
-    :param t:
+    :param t: input :class:`Tensor`
     :param kwargs:
 
     :return: a rounded copy of `t`
@@ -23,7 +23,7 @@ def round_tucker(t, **kwargs):
     """
     Copies and rounds a tensor (see :meth:`tensor.Tensor.round_tucker()`.
 
-    :param t:
+    :param t: input :class:`Tensor`
     :param kwargs:
 
     :return: a rounded copy of `t`
@@ -38,7 +38,7 @@ def round(t, **kwargs):
     """
     Copies and rounds a tensor (see :meth:`tensor.Tensor.round()`.
 
-    :param t:
+    :param t: input :class:`Tensor`
     :param kwargs:
 
     :return: a rounded copy of `t`
@@ -59,7 +59,7 @@ def truncated_svd(M, delta=None, eps=None, rmax=None, left_ortho=True, algorithm
     :param rmax: optionally, maximum r
     :param left_ortho: if True (default), U will be orthonormal. If False, V will
     :param algorithm: 'svd' (default) or 'eig'. The latter is often faster, but less accurate
-    :param verbose:
+    :param verbose: Boolean
 
     :return: U, V
     """

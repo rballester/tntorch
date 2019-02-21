@@ -150,10 +150,10 @@ def unbind(t, dim):
     """
     Slices a tensor along a dimension and returns the slices as a sequence, like PyTorch's `unbind()`.
 
-    :param t: input tensor
+    :param t: input :class:`Tensor`
     :param dim: an int
 
-    :return: a list of tensors, as many as `t.shape[dim]`
+    :return: a list of :class:`Tensor`, as many as `t.shape[dim]`
     """
 
     if dim < 0:
@@ -207,11 +207,11 @@ def sum(t, dim=None, keepdim=False):
     """
     Compute the sum of a tensor along all (or some) of its dimensions.
 
-    :param t: input tensor
+    :param t: input :class:`Tensor`
     :param dim: an int or list of ints. By default, all dims will be summed
     :param keepdim: if True, summed dimensions will be kept as singletons. Default is False
 
-    :return: a scalar (if keepdim is False and all dims were chosen) or tensor otherwise
+    :return: a scalar (if keepdim is False and all dims were chosen) or :class:`Tensor` otherwise
     """
 
     if dim is None:
@@ -231,12 +231,13 @@ def ttm(t, U, dim=None, transpose=False):
     """
     `Tensor-times-matrix (TTM) <https://epubs.siam.org/doi/pdf/10.1137/07070111X>`_ along one or several dimensions.
 
+    :param t: input :class:`Tensor`
     :param U: one or several factors
     :param dim: one or several dimensions (may be vectors or matrices). If None, the first len(U) dims are assumed
     :param transpose: if False (default) the contraction is performed
      along U's rows, else along its columns
 
-    :return: transformed TT
+    :return: transformed :class:`Tensor`
     """
 
     if not isinstance(U, (list, tuple)):
@@ -282,7 +283,7 @@ def cumsum(t, dim):
     """
     Computes the cumulative sum of a tensor along one or several dims, similarly to PyTorch's `cumsum()`.
 
-    :param t: input tensor
+    :param t: input :class:`Tensor`
     :param dim: an int or list of ints
 
     :return: a :class:`Tensor` of the same shape
@@ -309,10 +310,10 @@ def mask(t, mask):
     """
     Masks a tensor. Basically an element-wise product, but this function makes sure slices are matched according to their "meaning" (as annotated by the tensor's `idx` field, if available)
 
-    :param t: input tensor
-    :param mask: a mask tensor
+    :param t: input :class:`Tensor`
+    :param mask: a mask :class:`Tensor`
 
-    :return: masked tensor
+    :return: masked :class:`Tensor`
     """
 
     if not hasattr(t, 'idxs'):
@@ -336,13 +337,14 @@ def mask(t, mask):
 
 def sample(t, P=1):
     """
-    Generate P points (with replacement) from a joint PDF distribution represented by this tensor.
+    Generate P points (with replacement) from a joint PDF distribution represented by a tensor.
 
     The tensor does not have to sum 1 (will be handled in a normalized form).
 
+    :param t: a :class:`Tensor`
     :param P: how many samples to draw (default: 1)
 
-    :return Xs: a matrix of size :math:`P x N`
+    :return Xs: an integer matrix of size :math:`P \\times N`
     """
 
     def from_matrix(M):
@@ -381,7 +383,7 @@ def hash(t):
     """
     Computes an integer number that depends on the tensor entries (not on its internal compressed representation).
 
-    We obtain it as :math:`<T, W>`, where :math:`W` is a rank-1 tensor of weights selected at random (always the same seed).
+    We obtain it as :math:`\\langle T, W \\rangle`, where :math:`W` is a rank-1 tensor of weights selected at random (always the same seed).
 
     :return: an integer
     """
@@ -437,7 +439,7 @@ def reduce(ts, function, eps=0, rmax=np.iinfo(np.int32).max, algorithm='svd', ve
 
     >>> tn.reduce([t1, t2], tn.cat, rmax=10)
 
-    :param ts: A generator (or list) of tensors
+    :param ts: A generator (or list) of :class:`Tensor`
     :param eps: intermediate tensors will be rounded at this error when climbing up the hierarchy
     :param rmax: no node should exceed this number of ranks
 

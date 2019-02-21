@@ -9,7 +9,7 @@ def true(N):
 
     :param N: an integer
 
-    :return: a :math:`2^N` tensor
+    :return: a :math:`2^N` :class:`Tensor`
     """
 
     return tn.Tensor([torch.ones([1, 2, 1]) for n in range(N)])
@@ -21,7 +21,7 @@ def false(N):
 
     :param N: an integer
 
-    :return: a :math:`2^N` tensor
+    :return: a :math:`2^N` :class:`Tensor`
     """
 
     return tn.Tensor([torch.zeros([1, 2, 1]) for n in range(N)])
@@ -34,7 +34,7 @@ def all(N, which=None):
     :param N: an integer
     :param which: list of integers to consider (default: all)
 
-    :return: a :math:`2^N` tensor
+    :return: a :math:`2^N` :class:`Tensor`
     """
 
     if which is None:
@@ -56,7 +56,7 @@ def none(N, which=None):
     :param N: an integer
     :param which: list of integers to consider (default: all)
 
-    :return: a :math:`2^N` tensor
+    :return: a :math:`2^N` :class:`Tensor`
     """
 
     if which is None:
@@ -78,7 +78,7 @@ def any(N, which=None):
     :param N: an integer
     :param which: list of integers to consider (default: all)
 
-    :return: a :math:`2^N` tensor
+    :return: a :math:`2^N` :class:`Tensor`
     """
 
     return ~none(N, which)
@@ -93,7 +93,7 @@ def one(N, which=None):
     :param N: an integer
     :param which: list of integers to consider (default: all)
 
-    :return: a :math:`2^N` tensor
+    :return: a :math:`2^N` :class:`Tensor`
     """
 
     if which is None:
@@ -108,7 +108,7 @@ def symbols(N):
 
     :param N: an integer
 
-    :return: a list of N :math:`2^N` tensors
+    :return: a list of N :math:`2^N` :class:`Tensor`
     """
 
     return [presence(N, n) for n in range(N)]
@@ -118,7 +118,7 @@ def relevant_symbols(t):
     """
     Finds all variables whose values affect the formula's output in at least one case.
 
-    :param t: a :math:`2^N` tensor
+    :param t: a :math:`2^N` :class:`Tensor`
 
     :return: a list of integers
     """
@@ -132,7 +132,7 @@ def irrelevant_symbols(t):
     """
     Finds all variables whose values never affect the formula's output.
 
-    :param t: a :math:`2^N` tensor
+    :param t: a :math:`2^N` :class:`Tensor`
 
     :return: a list of integers
     """
@@ -151,9 +151,9 @@ def only(t):
     >>> tn.sum(x)  # Result: 2 (x = True, y = False, and x = True, y = True)
     >>> tn.sum(tn.only(x))  # Result: 1 (x = True, y = False)
 
-    :param: a :math:`2^N` tensor
+    :param: a :math:`2^N` :class:`Tensor`
 
-    :return: a masked tensor
+    :return: a masked :class:`Tensor`
     """
 
     return tn.mask(t, absence(t.dim(), irrelevant_symbols(t)))
@@ -163,10 +163,10 @@ def presence(N, which):
     """
     True iff all symbols in `which` are present.
 
-    :param N:
+    :param N: int
     :param which: a list of ints
 
-    :return: a masked tensor
+    :return: a masked :class:`Tensor`
     """
 
     which = np.atleast_1d(which)
@@ -180,10 +180,10 @@ def absence(N, which):
     """
     True iff all symbols in `which` are absent.
 
-    :param N:
+    :param N: int
     :param which: a list of ints
 
-    :return: a masked tensor
+    :return: a masked :class:`Tensor`
     """
 
     which = np.atleast_1d(which)
@@ -197,7 +197,7 @@ def is_tautology(t):
     """
     Checks if a formula is always satisfied.
 
-    :param t: a :math:`2^N` tensor
+    :param t: a :math:`2^N` :class:`Tensor`
 
     :return: True if `t` is a tautology; False otherwise
     """
@@ -221,7 +221,7 @@ def is_satisfiable(t):
     """
     Checks if a formula can be satisfied.
 
-    :param t: a :math:`2^N` tensor
+    :param t: a :math:`2^N` :class:`Tensor`
 
     :return: True if `t` is satisfiable; False otherwise
     """
@@ -233,7 +233,7 @@ def implies(t1, t2):
     """
     Checks if a formula implies another one (i.e. is a sufficient condition).
 
-    :param t1, t2: two :math:`2^N` tensors
+    :param t1, t2: two :math:`2^N` :class:`Tensor`
 
     :return: True if `t1` implies `t2`; False otherwise
     """
@@ -245,7 +245,7 @@ def equiv(t1, t2):
     """
     Checks if two formulas are logically equivalent.
 
-    :param t1, t2: two :math:`2^N` tensors
+    :param t1, t2: two :math:`2^N` :class:`Tensor`
 
     :return: True if `t1` implies `t2` and vice versa; False otherwise
     """
