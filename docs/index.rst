@@ -73,7 +73,3 @@ To get fully on board, check out the complete documentation:
    api
    tutorial-notebooks
    contact
-
-* :ref:`genindex`
-* :ref:`modindex`
-* :ref:`search`

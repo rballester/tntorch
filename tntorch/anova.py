@@ -86,15 +86,18 @@ def truncate_anova(t, mask, keepdim=False, marginals=None):
     return t
 
 
-def sobol(t, mask, marginals=None):
+def sobol(t, mask, marginals=None, normalize=True):
     """
-    Compute Sobol indices as given by a certain mask.
+    Compute Sobol indices (as given by a certain mask) for a tensor and independently distributed input variables.
 
-    :param t: an N-dimensional tensor
+    Reference: R. Ballester-Ripoll, E. G. Paredes, and R. Pajarola: `"Sobol Tensor Trains for Global Sensitivity Analysis" (2017) <https://www.sciencedirect.com/science/article/pii/S0951832018303132?dgcid=rss_sd_all>`_
+
+    :param t: an N-dimensional :class:`Tensor`
     :param mask: an N-dimensional mask
-    :param marginals: a list of N vector tensors (will be normalized if not summing to 1). If None (default), uniform distributions are assumed for all variables
+    :param marginals: a list of N vectors (will be normalized if not summing to 1). If None (default), uniform distributions are assumed for all variables
+    :param normalize: whether to normalize indices by the total variance of the model (True by default)
 
-    :return: a scalar
+    :return: a scalar >= 0
     """
 
     if marginals is None:
@@ -122,7 +125,11 @@ def sobol(t, mask, marginals=None):
     if am_masked.cores[-1].shape[-1] > 1:
         am_masked.cores.append(torch.eye(am_masked.cores[-1].shape[-1])[:, :, None])
         am_masked.Us.append(None)
-    return tn.dot(a, am_masked) / tn.dot(a, am)
+
+    if normalize:
+        return tn.dot(a, am_masked) / tn.dot(a, am)
+    else:
+        return tn.dot(a, am_masked)
 
 
 def mean_dimension(t, mask=None, marginals=None):
@@ -139,8 +146,8 @@ def mean_dimension(t, mask=None, marginals=None):
 
     -  R. Ballester-Ripoll, E. G. Paredes, and R. Pajarola: `"Tensor Algorithms for Advanced Sensitivity Metrics" (2017) <https://epubs.siam.org/doi/10.1137/17M1160252>`_
 
-    :param t: an N-dimensional tensor
-    :param marginals: a list of N vector tensors (will be normalized if not summing to 1). If None (default), uniform distributions are assumed for all variables
+    :param t: an N-dimensional :class:`Tensor`
+    :param marginals: a list of N vectors (will be normalized if not summing to 1). If None (default), uniform distributions are assumed for all variables
 
     :return: a scalar >= 1
     """
@@ -155,12 +162,12 @@ def dimension_distribution(t, mask=None, order=None, marginals=None):
     """
     Computes the dimension distribution of an ND tensor.
 
-    :param t: ND input tensor
-    :param mask: an optional mask to restrict to
-    :param order: compute only this many order contributions. By default, all N are returned
+    :param t: ND input :class:`Tensor`
+    :param mask: an optional mask :class:`Tensor` to restrict to
+    :param order: int, compute only this many order contributions. By default, all N are returned
     :param marginals: PMFs for input variables. By default, uniform distributions
 
-    :return: a torch vector containing N elements
+    :return: a PyTorch vector containing N elements
     """
 
     if order is None:

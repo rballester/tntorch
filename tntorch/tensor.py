@@ -711,7 +711,7 @@ class Tensor(object):
 
         :param dim: int, list, or 'all' (default)
 
-        :return: a tensor in TT format
+        :return: a :class:`Tensor` in CP/TT format, without Tucker factors
         """
 
         if dim == 'all':
@@ -737,8 +737,7 @@ class Tensor(object):
         """
         Casts this tensor as a pure TT format.
 
-        :return: a tensor in the TT format
-
+        :return: a :class:`Tensor` in the TT format
         """
 
         t = self.decompress_tucker_factors()
