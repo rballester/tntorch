@@ -15,7 +15,7 @@ def rand(*shape, **kwargs):
     :param ranks_tt: an integer or list of N-1 ints
     :param ranks_cp: an int or list. If a list, will be interleaved with ranks_tt
     :param ranks_tucker: an int or list
-    :param requires_grad:
+    :param requires_grad: default is False
     :param device:
 
     :return: a random tensor
@@ -242,25 +242,31 @@ def _create(function, *shape, ranks_tt=None, ranks_cp=None, ranks_tucker=None, r
     return tn.Tensor(cores, Us=Us)
 
 
-def linspace(**kwargs):
+def linspace(start, end, steps=100, requires_grad=False):
     """
     Creates a 1D tensor with evenly spaced values.
 
-    :param kwargs: passed to PyTorch's `linspace()`
+    :param start:
+    :param end:
+    :param steps:
+    :param requires_grad:
 
-    :return: a 1D tensor
+    :return: a 1D :class:`Tensor`
     """
 
-    return tn.Tensor([torch.linspace(**kwargs)[None, :, None]])
+    return tn.Tensor([torch.linspace(start, end, steps, requires_grad)[None, :, None]])
 
 
-def logspace(**kwargs):
+def logspace(start, end, steps=100, requires_grad=False):
     """
     Creates a 1D tensor with logarithmically spaced values.
 
-    :param kwargs: passed to PyTorch's `logspace()`
+    :param start:
+    :param end:
+    :param steps:
+    :param requires_grad:
 
-    :return: a 1D tensor
+    :return: a 1D :class:`Tensor`
     """
 
-    return tn.Tensor([torch.logspace(**kwargs)[None, :, None]])
+    return tn.Tensor([torch.logspace(start, end, steps, requires_grad)[None, :, None]])
