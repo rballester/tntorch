@@ -203,30 +203,6 @@ Multilinear algebra
 """
 
 
-def sum(t, dim=None, keepdim=False):
-    """
-    Compute the sum of a tensor along all (or some) of its dimensions.
-
-    :param t: input :class:`Tensor`
-    :param dim: an int or list of ints. By default, all dims will be summed
-    :param keepdim: if True, summed dimensions will be kept as singletons. Default is False
-
-    :return: a scalar (if keepdim is False and all dims were chosen) or :class:`Tensor` otherwise
-    """
-
-    if dim is None:
-        dim = np.arange(t.dim())
-    if not hasattr(dim, '__len__'):
-        dim = [dim]
-    device = t.cores[0].device
-    us = [torch.ones(t.shape[d]).to(device) for d in dim]
-    result = tn.ttm(t, us, dim)
-    if keepdim:
-        return result
-    else:
-        return tn.squeeze(result, dim)
-
-
 def ttm(t, U, dim=None, transpose=False):
     """
     `Tensor-times-matrix (TTM) <https://epubs.siam.org/doi/pdf/10.1137/07070111X>`_ along one or several dimensions.

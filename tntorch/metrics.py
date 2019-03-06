@@ -172,6 +172,33 @@ def r_squared(gt, approx):
     return 1 - tn.dist(gt, approx)**2 / tn.normsq(gt-tn.mean(gt))
 
 
+def sum(t, dim=None, keepdim=False, _normalize=False):
+    """
+    Compute the sum of a tensor along all (or some) of its dimensions.
+
+    :param t: input :class:`Tensor`
+    :param dim: an int or list of ints. By default, all dims will be summed
+    :param keepdim: if True, summed dimensions will be kept as singletons. Default is False
+
+    :return: a scalar (if keepdim is False and all dims were chosen) or :class:`Tensor` otherwise
+    """
+
+    if dim is None:
+        dim = np.arange(t.dim())
+    if not hasattr(dim, '__len__'):
+        dim = [dim]
+    device = t.cores[0].device
+    if _normalize:
+        us = [(1./t.shape[d])*torch.ones(t.shape[d]).to(device) for d in dim]
+    else:
+        us = [torch.ones(t.shape[d]).to(device) for d in dim]
+    result = tn.ttm(t, us, dim)
+    if keepdim:
+        return result
+    else:
+        return tn.squeeze(result, dim)
+
+
 def mean(t, dim=None, keepdim=False):
     """
     Computes the mean of a tensor along all or some of its dimensions.
@@ -183,9 +210,7 @@ def mean(t, dim=None, keepdim=False):
     :return: a scalar
     """
 
-    denom = t.shape[dim] if dim is not None else t.numel()
-    summed = tn.sum(t, dim, keepdim)
-    return summed / denom
+    return tn.sum(t, dim, keepdim, _normalize=True)
 
 
 def var(t):
