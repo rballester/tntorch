@@ -61,7 +61,7 @@ def partialset(t, order=1, mask=None, bounds=None):
     return result
 
 
-def partial(t, dim, order=1, bounds=None):
+def partial(t, dim, order=1, bounds=None, periodic=False):
     """
     Compute a single partial derivative.
 
@@ -69,6 +69,7 @@ def partial(t, dim, order=1, bounds=None):
     :param dim: int or list of ints
     :param order: how many times to derive. Default is 1
     :param bounds: variable(s) range bounds (to compute the derivative step). If None (default), step 1 will be assumed
+    :param periodic: int or list of ints (same as `dim`), mark dimensions with periodicity
 
     :return: a :class:`Tensor`
     """
@@ -79,21 +80,30 @@ def partial(t, dim, order=1, bounds=None):
         bounds = [[0, t.shape[n]-1] for n in range(t.dim())]
     if not hasattr(bounds[0], '__len__'):
         bounds = [bounds]
+    if not hasattr(periodic, '__len__'):
+        periodic = [periodic]*t.dim()
 
     t2 = t.clone()
     for i, d in enumerate(dim):
         for o in range(1, order+1):
-            step = (bounds[i][1] - bounds[i][0]) / (t.shape[d]-1)
-            if t2.Us[d] is None:
-                t2.cores[d] = (t2.cores[d][..., 1:, :] - t2.cores[d][..., :-1, :]) / step
-                if t2.cores[d].dim() == 3:
-                    pad = torch.zeros(t2.cores[d].shape[0], 1, t2.cores[d].shape[2])
+            if periodic[i]:
+                step = (bounds[i][1] - bounds[i][0]) / t.shape[d]
+                if t2.Us[d] is None:
+                    t2.cores[d] = (t2.cores[d][:, list(range(1, t2.cores[d].shape[1]))+[0], :] - t2.cores[d])
                 else:
-                    pad = torch.zeros(1, t2.cores[d].shape[1])
-                t2.cores[d] = torch.cat((t2.cores[d], pad), dim=-2)
+                    t2.Us[d] = (t2.Us[d][list(range(1, t2.Us[d].shape[0]))+[0], :] - t2.Us[d]) / step
             else:
-                t2.Us[d] = (t2.Us[d][1:, :] - t2.Us[d][:-1, :]) / step
-                t2.Us[d] = torch.cat((t2.Us[d], torch.zeros(1, t2.cores[d].shape[-2])), dim=0)
+                step = (bounds[i][1] - bounds[i][0]) / (t.shape[d]-1)
+                if t2.Us[d] is None:
+                    t2.cores[d] = (t2.cores[d][..., 1:, :] - t2.cores[d][..., :-1, :]) / step
+                    if t2.cores[d].dim() == 3:
+                        pad = torch.zeros(t2.cores[d].shape[0], 1, t2.cores[d].shape[2])
+                    else:
+                        pad = torch.zeros(1, t2.cores[d].shape[1])
+                    t2.cores[d] = torch.cat((t2.cores[d], pad), dim=-2)
+                else:
+                    t2.Us[d] = (t2.Us[d][1:, :] - t2.Us[d][:-1, :]) / step
+                    t2.Us[d] = torch.cat((t2.Us[d], torch.zeros(1, t2.cores[d].shape[-2])), dim=0)
     return t2
 
 
