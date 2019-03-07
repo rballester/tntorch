@@ -257,31 +257,40 @@ def _create(function, *shape, ranks_tt=None, ranks_cp=None, ranks_tucker=None, r
     return tn.Tensor(cores, Us=Us)
 
 
-def linspace(start, end, steps=100, requires_grad=False):
+def arange(*args, **kwargs):
     """
-    Creates a 1D tensor with evenly spaced values.
+    Creates a 1D :class:`Tensor` (see PyTorch's `arange`).
 
-    :param start:
-    :param end:
-    :param steps:
-    :param requires_grad:
+    :param args:
+    :param kwargs:
 
     :return: a 1D :class:`Tensor`
     """
 
-    return tn.Tensor([torch.linspace(start, end, steps, requires_grad)[None, :, None]])
+    return tn.Tensor([torch.arange(*args, dtype=torch.get_default_dtype(), **kwargs)[None, :, None]])
 
 
-def logspace(start, end, steps=100, requires_grad=False):
+def linspace(*args, **kwargs):
     """
-    Creates a 1D tensor with logarithmically spaced values.
+    Creates a 1D :class:`Tensor` with evenly spaced values (see PyTorch's `linspace`).
 
-    :param start:
-    :param end:
-    :param steps:
-    :param requires_grad:
+    :param args:
+    :param kwargs:
 
     :return: a 1D :class:`Tensor`
     """
 
-    return tn.Tensor([torch.logspace(start, end, steps, requires_grad)[None, :, None]])
+    return tn.Tensor([torch.linspace(*args, **kwargs)[None, :, None]])
+
+
+def logspace(*args, **kwargs):
+    """
+    Creates a 1D :class:`Tensor` with logarithmically spaced values (see PyTorch's `logspace`).
+
+    :param args:
+    :param kwargs:
+
+    :return: a 1D :class:`Tensor`
+    """
+
+    return tn.Tensor([torch.logspace(*args, **kwargs)[None, :, None]])
