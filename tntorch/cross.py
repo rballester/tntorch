@@ -14,13 +14,6 @@ def cross(function, ranks_tt, domain=None, tensors=None, eps=1e-14, max_iter=25,
     - A domain (tensor product of :math:`N` given arrays) and a function :math:`\\mathbb{R}^N \\to \\mathbb{R}`
     - A list of :math:`K` tensors of dimension :math:`N` and equal shape and a function :math:`\\mathbb{R}^K \\to \\mathbb{R}`
 
-    References:
-
-    - I. Oseledets, E. Tyrtyshnikov: `"TT-cross Approximation for Multidimensional Arrays" (2009) <http://www.mat.uniroma2.it/~tvmsscho/papers/Tyrtyshnikov5.pdf>`_
-    - D. Savostyanov, I. Oseledets: `"Fast Adaptive Interpolation of Multi-dimensional Arrays in Tensor Train Format" (2011) <https://ieeexplore.ieee.org/document/6076873>`_
-    - S. Dolgov, R. Scheichl: `"A Hybrid Alternating Least Squares - TT Cross Algorithm for Parametric PDEs" (2018) <https://arxiv.org/pdf/1707.04562.pdf>`_
-    - Aleksandr Mikhalev's `maxvolpy package <https://bitbucket.org/muxas/maxvolpy>`_
-
     :Examples:
 
     >>> tn.cross(function=lambda x: x**2, ranks_tt=5, tensors=[t])  # Compute the element-wise square of `t` using 5 TT-ranks
@@ -28,7 +21,14 @@ def cross(function, ranks_tt, domain=None, tensors=None, eps=1e-14, max_iter=25,
     >>> domain = [torch.linspace(-1, 1, 32)]*5
     >>> tn.cross(function=lambda x: torch.sum(x**2, dim=1), ranks_tt=2, domain=domain)  # Approximate a function over the rectangle :math:`[-1, 1]^5`
 
-    TODO: use kickrank + DMRG to grow and control ranks
+    TODO: use kickrank + DMRG to select ranks adaptively
+
+    References:
+
+    - I. Oseledets, E. Tyrtyshnikov: `"TT-cross Approximation for Multidimensional Arrays" (2009) <http://www.mat.uniroma2.it/~tvmsscho/papers/Tyrtyshnikov5.pdf>`_
+    - D. Savostyanov, I. Oseledets: `"Fast Adaptive Interpolation of Multi-dimensional Arrays in Tensor Train Format" (2011) <https://ieeexplore.ieee.org/document/6076873>`_
+    - S. Dolgov, R. Scheichl: `"A Hybrid Alternating Least Squares - TT Cross Algorithm for Parametric PDEs" (2018) <https://arxiv.org/pdf/1707.04562.pdf>`_
+    - Aleksandr Mikhalev's `maxvolpy package <https://bitbucket.org/muxas/maxvolpy>`_
 
     :param function: should accept a matrix of shape :math:`P \\times N` and return a vector of :math:`P` elements
     :param ranks_tt: int or list of N-1 ints
