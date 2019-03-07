@@ -135,12 +135,12 @@ def meshgrid(*axes):
     N = len(axes)
     for n in range(N):
         if not hasattr(axes[n], '__len__'):
-            axes[n] = torch.arange(axes[n]).double()
+            axes[n] = torch.arange(axes[n], dtype=torch.get_default_dtype())
 
     tensors = []
     for n in range(N):
         cores = [torch.ones(1, len(ax), 1) for ax in axes]
-        cores[n] = torch.Tensor(axes[n])[None, :, None]
+        cores[n] = torch.Tensor(axes[n].to(torch.get_default_dtype()))[None, :, None]
         tensors.append(tn.Tensor(cores))
     return tensors
 

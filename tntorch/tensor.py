@@ -307,7 +307,7 @@ class Tensor(object):
         return self+other - 2*self*other
 
     def __eq__(self, other):
-        return (self-other).norm() <= 1e-14
+        return tn.dist(self, other) <= 1e-14
 
     def __ne__(self, other):
         return not self == other

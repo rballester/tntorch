@@ -2,6 +2,7 @@ from .anova import *
 from .autodiff import *
 from .automata import *
 from .create import *
+from .cross import *
 from .derivatives import *
 from .logic import *
 from .metrics import *

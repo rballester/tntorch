@@ -11,6 +11,7 @@ Tutorial Notebooks
    tutorials/automata
    tutorials/classification
    tutorials/completion
+   tutorials/cross
    tutorials/decompositions
    tutorials/derivatives
    tutorials/exponential_machines

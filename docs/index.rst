@@ -10,6 +10,7 @@ This is a `PyTorch <http://pytorch.org/>`__-powered library for tensor modeling 
 - Basic and fancy **indexing** of tensors, **broadcasting**, **assignment**, etc.
 - Tensor **decomposition** and **reconstruction**
 - Element-wise and tensor-tensor **arithmetics**
+- Building tensors from black-box functions using **cross-approximation**
 - **Statistics** and **sensitivity analysis**
 - **Optimization** using autodifferentiation
 - **Misc. operations** on tensors: stacking, unfolding, sampling, derivating, etc.

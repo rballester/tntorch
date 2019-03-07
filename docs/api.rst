@@ -43,6 +43,15 @@ create
    :undoc-members:
    :inherited-members:
    :show-inheritance:
+   
+cross
+-----
+   
+.. automodule:: cross
+   :members:
+   :undoc-members:
+   :inherited-members:
+   :show-inheritance:
 
 derivatives
 -----------

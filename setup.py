@@ -29,7 +29,8 @@ setup(
     install_requires=[
         'numpy',
         'scipy',
-        'torch'
+        'torch',
+	'maxvolpy'
     ],
     license="LGPL",
     zip_safe=False,
