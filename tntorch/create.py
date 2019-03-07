@@ -20,7 +20,7 @@ def eye(n, m=None, device=None, requires_grad=None):
 
 def rand(*shape, **kwargs):
     """
-    Generate a TT with random cores (and optionally factors), whose entries are uniform in :math:`[0, 1]`.
+    Generate a :class:`Tensor` with random cores (and optionally factors), whose entries are uniform in :math:`[0, 1]`.
 
     :Example:
 
@@ -75,7 +75,7 @@ def randn_like(t, **kwargs):
 
 def ones(*shape, **kwargs):
     """
-    Generate a tensor filled with ones.
+    Generate a :class:`Tensor` filled with ones.
 
     :Example:
 
@@ -85,7 +85,7 @@ def ones(*shape, **kwargs):
     :param requires_grad:
     :param device:
 
-    :return: a TT tensor of rank 1
+    :return: a TT :class:`Tensor` of rank 1
     """
 
     return _create(torch.ones, *shape, ranks_tt=1, **kwargs)
@@ -104,11 +104,12 @@ def ones_like(t, **kwargs):
     return ones(t.shape, **kwargs)
 
 
-def full(*shape, fill_value, **kwargs):
+def full(shape, fill_value, **kwargs):
     """
-    Generate a tensor filled with a constant.
+    Generate a :class:`Tensor` filled with a constant.
 
-    :param shape: N ints (or a list of ints)
+    :param shape: list of ints
+    :param fill_value: constant to fill the tensor with
     :param requires_grad:
     :param device:
 
@@ -133,13 +134,13 @@ def full_like(t, fill_value, **kwargs):
 
 def zeros(*shape, **kwargs):
     """
-    Generate a tensor filled with zeros.
+    Generate a :class:`Tensor` filled with zeros.
 
     :param shape: N ints (or a list of ints)
     :param requires_grad:
     :param device:
 
-    :return: a TT tensor of rank 1
+    :return: a TT :class:`Tensor` of rank 1
     """
 
     return _create(torch.zeros, *shape, ranks_tt=1, **kwargs)
@@ -158,11 +159,11 @@ def zeros_like(t, **kwargs):
     return zeros(t.shape, **kwargs)
 
 
-def gaussian(*shape, sigma_factor=0.2):
+def gaussian(shape, sigma_factor=0.2):
     """
     Create a multivariate Gaussian that is axis-aligned (i.e. with diagonal covariance matrix).
 
-    :param shape:
+    :param shape: list of ints
     :param sigma_factor: a real (or list of reals) encoding the ratio sigma / shape. Default is 0.2, i.e. one fifth along each dimension
 
     :return: a :class:`Tensor` that sums to 1
