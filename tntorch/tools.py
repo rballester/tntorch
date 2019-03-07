@@ -14,20 +14,43 @@ def squeeze(t, dim=None):
     """
     Removes singleton dimensions.
 
-    :param t: input tensor
+    :param t: input :class:`Tensor`
     :param dim: which dim to delete. By default, all that have size 1
 
-    :return: Another TT tensor, without dummy (singleton) indices
+    :return: another :class:`Tensor`, without dummy (singleton) indices
     """
 
     if dim is None:
         dim = np.where([s == 1 for s in t.shape])[0]
+    if not hasattr(dim, '__len__'):
+        dim = [dim]
     assert np.all(np.array(t.shape)[dim] == 1)
 
     idx = [slice(None) for n in range(t.dim())]
     for m in dim:
         idx[m] = 0
-    return t[tuple(idx)]
+    return t[idx]
+
+
+def unsqueeze(t, dim):
+    """
+    Inserts singleton dimensions.
+
+    :param t: input :class:`Tensor`
+    :param dim: int or list of int
+
+    :return: another :class:`Tensor` with dummy (singleton) dimensions inserted at the positions given by `dim`
+    """
+
+    if not hasattr(dim, '__len__'):
+        dim = [dim]
+    dim = np.sort(dim)
+
+    idx = [slice(None) for n in range(t.dim())]
+    for d in dim[::-1]:
+        idx.insert(d, None)
+    return t[idx]
+
 
 
 def cat(*ts, dim):
@@ -73,7 +96,7 @@ def transpose(t):
 
     :param t: input tensor
 
-    :return: another tensor, indexed by dimensions in inverse order
+    :return: another :class:`Tensor`, indexed by dimensions in inverse order
     """
 
     cores = []
@@ -101,7 +124,7 @@ def meshgrid(*axes):
 
     :param axes: a list of N ints or torch vectors
 
-    :return: N tensors, of N dimensions each
+    :return: a list of N :class:`Tensor`, of N dimensions each
     """
 
     if not hasattr(axes, '__len__'):
@@ -126,10 +149,10 @@ def flip(t, dims):
     """
     Reverses the order of a tensor along one or several dimensions; see NumPy's or PyTorch's `flip()`.
 
-    :param t: input tensor
+    :param t: input :class:`Tensor`
     :param dims: an int or list of ints
 
-    :return: another tensor of the same shape
+    :return: another :class:`Tensor` of the same shape
     """
 
     if not hasattr(dims, '__len__'):
