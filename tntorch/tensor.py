@@ -39,7 +39,7 @@ class Tensor(object):
     - Size :math:`S_n \\times R_n` (CP-Tucker core), accompanied by an :math:`I_n \\times S_n` factor matrix
     """
 
-    def __init__(self, data, Us=None, idxs=None, device=None,
+    def __init__(self, data, Us=None, idxs=None, device=None, requires_grad=None,
                  ranks_cp=None, ranks_tucker=None, ranks_tt=None, eps=None,
                  max_iter=25, tol=1e-4, verbose=False):
 
@@ -56,6 +56,7 @@ class Tensor(object):
         :param Us: optional list of Tucker factors
         :param idxs: annotate maskable tensors (*advanced users*)
         :param device: PyTorch device
+        :param requires_grad: Boolean
         :param ranks_cp: an integer (or list)
         :param ranks_tucker: an integer (or list)
         :param ranks_tt: an integer (or list)
@@ -64,7 +65,7 @@ class Tensor(object):
         :param tol: stopping criterion (change in relative error) when computing a CP decomposition using ALS
         :param verbose: Boolean
 
-        :return: a tensor
+        :return: a :class:`Tensor`
         """
 
         if isinstance(data, (list, tuple)):
@@ -151,12 +152,21 @@ class Tensor(object):
                     self.round_tucker(rmax=ranks_tucker)
                 if ranks_tt is not None:
                     self.round_tt(rmax=ranks_tt)
+
         # Check factor shapes
         for n in range(self.dim()):
-            if Us[n] is None:
+            if self.Us[n] is None:
                 continue
-            assert Us[n].dim() == 2
-            assert self.cores[n].shape[-2] == Us[n].shape[1]
+            assert self.Us[n].dim() == 2
+            assert self.cores[n].shape[-2] == self.Us[n].shape[1]
+
+        # Set cores/Us requires_grad, if needed
+        if requires_grad:
+            for n in range(self.dim()):
+                if self.Us[n] is not None:
+                    self.Us[n].requires_grad_()
+                self.cores[n].requires_grad_()
+
         if idxs is None:
             idxs = [torch.arange(sh, device=device) for sh in self.shape]
         self.idxs = idxs

@@ -29,7 +29,7 @@ def squeeze(t, dim=None):
     idx = [slice(None) for n in range(t.dim())]
     for m in dim:
         idx[m] = 0
-    return t[idx]
+    return t[tuple(idx)]
 
 
 def unsqueeze(t, dim):
@@ -49,7 +49,7 @@ def unsqueeze(t, dim):
     idx = [slice(None) for n in range(t.dim())]
     for d in dim[::-1]:
         idx.insert(d, None)
-    return t[idx]
+    return t[tuple(idx)]
 
 
 
