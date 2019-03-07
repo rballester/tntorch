@@ -3,6 +3,21 @@ import torch
 import numpy as np
 
 
+def eye(n, m=None, device=None, requires_grad=None):
+    """
+    Generates identity matrix like PyTorch's `eye()`.
+
+    :param n: number of rows
+    :param m: number of columns (default is n)
+
+    :return: a 2D :class:`Tensor`
+    """
+
+    c1 = torch.eye(n, m)
+    c2 = torch.eye(m, m)
+    return tn.Tensor([c1[None, :, :], c2[:, :, None]], device=device, requires_grad=requires_grad)
+
+
 def rand(*shape, **kwargs):
     """
     Generate a TT with random cores (and optionally factors), whose entries are uniform in :math:`[0, 1]`.
