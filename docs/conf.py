@@ -188,3 +188,12 @@ epub_title = project
 epub_exclude_files = ['search.html']
 
 autoclass_content = 'both'  # Shows documentation for __init__() methods
+
+from unittest.mock import MagicMock
+class Mock(MagicMock):
+    @classmethod
+    def __getattr__(cls, name):
+        return MagicMock()
+
+MOCK_MODULES = ['maxvolpy', 'maxvolpy.maxvol']
+sys.modules.update((mod_name, Mock()) for mod_name in MOCK_MODULES)

@@ -72,6 +72,7 @@ Check out the [introductory notebook](https://github.com/rballester/tntorch/blob
 - [ANOVA decomposition](https://github.com/rballester/tntorch/blob/master/docs/tutorials/anova.ipynb)
 - [Boolean logic](https://github.com/rballester/tntorch/blob/master/docs/tutorials/logic.ipynb)
 - [Classification](https://github.com/rballester/tntorch/blob/master/docs/tutorials/classification.ipynb)
+- [Cross-approximation](https://github.com/rballester/tntorch/blob/master/docs/tutorials/cross.ipynb)
 - [Differentiation](https://github.com/rballester/tntorch/blob/master/docs/tutorials/derivatives.ipynb)
 - [Discrete/weighted finite automata](https://github.com/rballester/tntorch/blob/master/docs/tutorials/automata.ipynb)
 - [Exponential machines](https://github.com/rballester/tntorch/blob/master/docs/tutorials/exponential_machines.ipynb)
@@ -98,6 +99,7 @@ The main dependencies are *NumPy* and *PyTorch*. To download and install *tntorc
 
 ```
 git clone https://github.com/rballester/tntorch.git
+cd tntorch
 pip install .
 ```
 
