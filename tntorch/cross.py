@@ -108,7 +108,7 @@ def cross(function, ranks_tt, domain=None, tensors=None, function_arg='vectors',
     norm_ys_val = torch.norm(ys_val)
 
     if verbose:
-        print('Cross-approximation over a {}D domain:'.format(N))
+        print('Cross-approximation over a {}D domain containing {:g} grid points:'.format(N, tensors[0].numel()))
     start = time.time()
     converged = False
 
@@ -137,7 +137,7 @@ def cross(function, ranks_tt, domain=None, tensors=None, function_arg='vectors',
         invalid = (torch.isnan(evaluation) | torch.isinf(evaluation)).nonzero()
         if len(invalid) > 0:
             invalid = invalid[0].item()
-            raise ValueError('Function invalid value: f({}) = {}'.format(', '.join(str(x[invalid].numpy()) for x in Xs),
+            raise ValueError('Invalid function return value: f({}) = {}'.format(', '.join('{:g}'.format(x[invalid].numpy()) for x in Xs),
                                                                          f(*[x[invalid] for x in Xs]).item()))
 
         V = torch.reshape(evaluation, [Rs[j], Is[j], Rs[j + 1]])
@@ -230,7 +230,7 @@ def cross(function, ranks_tt, domain=None, tensors=None, function_arg='vectors',
             break
 
     if verbose:
-        print('Did {} function evaluations in {:g}s ({:g} evals/s)'.format(info['nsamples'], info['eval_time'], info['nsamples'] / info['eval_time']))
+        print('Did {} function evaluations, which took {:.4g}s ({:.4g} evals/s)'.format(info['nsamples'], info['eval_time'], info['nsamples'] / info['eval_time']))
         print()
 
     if return_info:

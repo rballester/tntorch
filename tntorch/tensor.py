@@ -905,13 +905,13 @@ class Tensor(object):
             L = self.right_orthogonalize(i)
         return R, L
 
-    def round_tucker(self, eps=0, rmax=None, dim='all', algorithm='svd'):
+    def round_tucker(self, eps=1e-14, rmax=None, dim='all', algorithm='svd'):
         """
         Tries to recompress this tensor in place by reducing its Tucker ranks.
 
         Note: this method will turn CP (or CP-Tucker) cores into TT (or TT-Tucker) ones.
 
-        :param eps: this relative error will not be exceeded. Default is 0
+        :param eps: this relative error will not be exceeded
         :param rmax: all ranks should be rmax at most (default: no limit)
         :param algorithm: 'svd' (default) or 'eig'. The latter can be faster, but less accurate
         :param verbose:
@@ -951,13 +951,13 @@ class Tensor(object):
             if mu > 0:
                 self.right_orthogonalize(mu)
 
-    def round_tt(self, eps=0, rmax=None, algorithm='svd', verbose=False):
+    def round_tt(self, eps=1e-14, rmax=None, algorithm='svd', verbose=False):
         """
         Tries to recompress this tensor in place by reducing its TT ranks.
 
         Note: this method will turn CP (or CP-Tucker) cores into TT (or TT-Tucker) ones.
 
-        :param eps: this relative error will not be exceeded. Default is 0
+        :param eps: this relative error will not be exceeded
         :param rmax: all ranks should be rmax at most (default: no limit)
         :param algorithm: 'svd' (default) or 'eig'. The latter can be faster, but less accurate
         :param verbose:
@@ -981,12 +981,12 @@ class Tensor(object):
             self.cores[mu] = torch.reshape(right, [-1, self.cores[mu].shape[1], self.cores[mu].shape[2]])
             self.cores[mu-1] = torch.einsum('ijk,kl', (self.cores[mu-1], left))  # Pass factor to the left
 
-    def round(self, eps=0, **kwargs):
+    def round(self, eps=1e-14, **kwargs):
         """
         General recompression. Attempts to reduce TT ranks first; then does Tucker rounding with the remaining error
         budget.
 
-        :param eps: this relative error will not be exceeded. Default is 0
+        :param eps: this relative error will not be exceeded
         :param kwargs: passed to `round_tt()` and `round_tucker()`
         """
 
