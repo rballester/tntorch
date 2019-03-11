@@ -10,7 +10,7 @@ def test_domain():
         return 1. / torch.sum(Xs, dim=1)
 
     domain = [torch.linspace(1, 10, 10) for n in range(3)]
-    t = tn.cross(function=function, domain=domain, ranks_tt=3)
+    t = tn.cross(function=function, domain=domain, ranks_tt=3, function_arg='matrix')
     gt = torch.meshgrid(domain)
     gt = 1. / sum(gt)
 

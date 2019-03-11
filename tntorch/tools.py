@@ -39,7 +39,7 @@ def unsqueeze(t, dim):
     :param t: input :class:`Tensor`
     :param dim: int or list of int
 
-    :return: another :class:`Tensor` with dummy (singleton) dimensions inserted at the positions given by `dim`
+    :return: a :class:`Tensor` with dummy (singleton) dimensions inserted at the positions given by `dim`
     """
 
     if not hasattr(dim, '__len__'):
@@ -441,6 +441,8 @@ def reduce(ts, function, eps=0, rmax=np.iinfo(np.int32).max, algorithm='svd', ve
     :param ts: A generator (or list) of :class:`Tensor`
     :param eps: intermediate tensors will be rounded at this error when climbing up the hierarchy
     :param rmax: no node should exceed this number of ranks
+    :param algorithm: passed to :func:`round.round()`
+    :param verbose: Boolean
 
     :return: the reduced result
     """

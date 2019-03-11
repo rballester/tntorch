@@ -114,7 +114,7 @@ def dist(t1, t2):
     :param t1: a :class:`Tensor` (or a PyTorch tensor)
     :param t2: a :class:`Tensor` (or a PyTorch tensor)
 
-    :return: a scalar >= 0
+    :return: a scalar :math:`\ge 0`
     """
 
     t1, t2 = _process(t1, t2)
@@ -130,7 +130,7 @@ def relative_error(gt, approx):
     :param gt: a torch or tntorch tensor
     :param approx: a torch or tntorch tensor
 
-    :return: a scalar >= 0
+    :return: a scalar :math:`\ge 0`
     """
 
     gt, approx = _process(gt, approx)
@@ -147,7 +147,7 @@ def rmse(gt, approx):
     :param gt: a torch or tntorch tensor
     :param approx: a torch or tntorch tensor
 
-    :return: a scalar >= 0
+    :return: a scalar :math:`\ge 0`
     """
 
     gt, approx = _process(gt, approx)
@@ -219,7 +219,7 @@ def var(t):
 
     :param t: a :class:`Tensor`
 
-    :return: a scalar >= 0
+    :return: a scalar :math:`\ge 0`
     """
 
     return tn.normsq(t-tn.mean(t)) / t.numel()
@@ -231,7 +231,7 @@ def std(t):
 
     :param t: a :class:`Tensor`
 
-    :return: a scalar >= 0
+    :return: a scalar :math:`\ge 0`
     """
 
     return torch.sqrt(tn.var(t))
@@ -243,7 +243,7 @@ def normsq(t):
 
     :param t: a :class:`Tensor`
 
-    :return: a scalar >= 0
+    :return: a scalar :math:`\ge 0`
     """
 
     return tn.dot(t, t)
@@ -255,7 +255,7 @@ def norm(t):
 
     :param t: a :class:`Tensor`
 
-    :return: a scalar >= 0
+    :return: a scalar :math:`\ge 0`
     """
 
     return torch.sqrt(torch.clamp(tn.normsq(t), min=0))

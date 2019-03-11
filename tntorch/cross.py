@@ -6,7 +6,7 @@ import numpy as np
 import maxvolpy.maxvol
 
 
-def cross(function, ranks_tt, domain=None, tensors=None, eps=1e-14, max_iter=25, val_size=1000, verbose=True, return_info=False):
+def cross(function, ranks_tt, domain=None, tensors=None, function_arg='vectors', eps=1e-14, max_iter=25, val_size=1000, verbose=True, return_info=False):
 
     """
     Cross-approximation routine that samples a black-box function and returns an N-dimensional tensor train approximating it. It accepts either:
@@ -19,9 +19,9 @@ def cross(function, ranks_tt, domain=None, tensors=None, eps=1e-14, max_iter=25,
     >>> tn.cross(function=lambda x: x**2, ranks_tt=5, tensors=[t])  # Compute the element-wise square of `t` using 5 TT-ranks
 
     >>> domain = [torch.linspace(-1, 1, 32)]*5
-    >>> tn.cross(function=lambda x: torch.sum(x**2, dim=1), ranks_tt=2, domain=domain)  # Approximate a function over the rectangle :math:`[-1, 1]^5`
+    >>> tn.cross(function=lambda x, y, z, t, w: x**2 + y*z + torch.cos(t + w), ranks_tt=3, domain=domain)  # Approximate a function over the rectangle :math:`[-1, 1]^5`
 
-    TODO: use kickrank + DMRG to select ranks adaptively
+    >>> tn.cross(function=lambda x: torch.sum(x**2, dim=1), ranks_tt=2, domain=domain, function_arg='matrix')  # An example where the function accepts a matrix
 
     References:
 
@@ -30,20 +30,29 @@ def cross(function, ranks_tt, domain=None, tensors=None, eps=1e-14, max_iter=25,
     - S. Dolgov, R. Scheichl: `"A Hybrid Alternating Least Squares - TT Cross Algorithm for Parametric PDEs" (2018) <https://arxiv.org/pdf/1707.04562.pdf>`_
     - Aleksandr Mikhalev's `maxvolpy package <https://bitbucket.org/muxas/maxvolpy>`_
 
-    :param function: should accept a matrix of shape :math:`P \\times N` and return a vector of :math:`P` elements
-    :param ranks_tt: int or list of N-1 ints
+    :param function: should produce a vector of :math:`P` elements. Accepts either :math:`N` comma-separated vectors, or a matrix (see `function_arg`)
+    :param ranks_tt: int or list of :math:`N-1` ints
     :param domain: a list of :math:`N` vectors (incompatible with `tensors`)
     :param tensors: a :class:`Tensor` or list thereof (incompatible with `domain`)
+    :param function_arg: if 'vectors', `function` accepts :math:`N` vectors of length :math:`P` each. If 'matrix', a matrix of shape :math:`P \\times N`.
     :param eps: the procedure will stop after this validation error is met (as measured after each iteration, i.e. full sweep left-to-right and right-to-left)
     :param max_iter: int
     :param val_size: size of the validation set
     :param verbose: default is True
     :param return_info: if True, will also return a dictionary with informative metrics about the algorithm's outcome
 
-    :return: an N-dimensional TT :class:`Tensor` (if return_info`=True, also a dictionary)
+    :return: an N-dimensional TT :class:`Tensor` (if `return_info`=True, also a dictionary)
     """
 
+    # TODO: use kickrank + DMRG to select ranks adaptively
+
     assert domain is not None or tensors is not None
+    assert function_arg in ('vectors', 'matrix')
+    if function_arg == 'matrix':
+        def f(*args):
+            return function(torch.cat([arg[:, None] for arg in args], dim=1))
+    else:
+        f = function
     if tensors is None:
         tensors = tn.meshgrid(domain)
     if not hasattr(tensors, '__len__'):
@@ -89,8 +98,8 @@ def cross(function, ranks_tt, domain=None, tensors=None, eps=1e-14, max_iter=25,
         t_rinterfaces.append(r)
 
     # Create a validation set
-    Xs_val = [np.random.choice(I, val_size) for I in Is]
-    ys_val = function(torch.cat([t[Xs_val].torch()[:, None] for t in tensors], dim=1))
+    Xs_val = [torch.as_tensor(np.random.choice(I, val_size)) for I in Is]
+    ys_val = f(*[t[Xs_val].torch()[:, None] for t in tensors])
     if ys_val.dim() > 1:
         assert ys_val.dim() == 2
         assert ys_val.shape[1] == 1
@@ -110,16 +119,16 @@ def cross(function, ranks_tt, domain=None, tensors=None, eps=1e-14, max_iter=25,
     }
 
     def evaluate_function():  # Evaluate function over Rs[j] x Rs[j+1] fibers
-        Xs = torch.empty(Rs[j]*Is[j]*Rs[j+1], len(tensors))
+        Xs = []
         for k, t in enumerate(tensors):
             if tensors[k].cores[j].dim() == 3:  # TT core
                 V = torch.einsum('ai,ibj,jc->abc', (t_linterfaces[k][j], tensors[k].cores[j], t_rinterfaces[k][j]))
             else:  # CP factor
                 V = torch.einsum('ai,bi,ic->abc', (t_linterfaces[k][j], tensors[k].cores[j], t_rinterfaces[k][j]))
-            Xs[..., k] = V.flatten()
+            Xs.append(V.flatten())
 
         eval_start = time.time()
-        evaluation = function(Xs)
+        evaluation = f(*Xs)
         info['eval_time'] += time.time() - eval_start
 
         # Check for nan/inf values
@@ -128,8 +137,8 @@ def cross(function, ranks_tt, domain=None, tensors=None, eps=1e-14, max_iter=25,
         invalid = (torch.isnan(evaluation) | torch.isinf(evaluation)).nonzero()
         if len(invalid) > 0:
             invalid = invalid[0].item()
-            raise ValueError('Function invalid value: f({}) = {}'.format(', '.join(str(x) for x in Xs[invalid, :].numpy()),
-                                                                         function(Xs[invalid:invalid+1, :]).item()))
+            raise ValueError('Function invalid value: f({}) = {}'.format(', '.join(str(x[invalid].numpy()) for x in Xs),
+                                                                         f(*[x[invalid] for x in Xs]).item()))
 
         V = torch.reshape(evaluation, [Rs[j], Is[j], Rs[j + 1]])
         info['nsamples'] += V.numel()
