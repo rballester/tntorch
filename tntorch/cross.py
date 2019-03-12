@@ -72,9 +72,8 @@ def cross(function, ranks_tt, domain=None, tensors=None, function_arg='vectors',
     cores = [torch.randn(Rs[n], Is[n], Rs[n+1]) for n in range(N)]
 
     # Prepare left and right sets
-    lsets = [None for n in range(N)]
-    lsets[0] = np.array([[1]])
-    rsets = [torch.LongTensor(Rs[n+1], N-1-n).random_(0, Is[n+1]) for n in range(N-1)] + [np.array([[1]])]
+    lsets = [np.array([[1]])] + [None]*(N-1)
+    rsets = [np.random.randint(0, Is[n+1], [Rs[n+1], N-1-n]) for n in range(N-1)] + [np.array([[1]])]
 
     # Initialize left and right interfaces for `tensors`
     def init_interfaces(t):
@@ -99,7 +98,7 @@ def cross(function, ranks_tt, domain=None, tensors=None, function_arg='vectors',
 
     # Create a validation set
     Xs_val = [torch.as_tensor(np.random.choice(I, val_size)) for I in Is]
-    ys_val = f(*[t[Xs_val].torch()[:, None] for t in tensors])
+    ys_val = f(*[t[Xs_val].torch() for t in tensors])
     if ys_val.dim() > 1:
         assert ys_val.dim() == 2
         assert ys_val.shape[1] == 1
@@ -118,7 +117,7 @@ def cross(function, ranks_tt, domain=None, tensors=None, function_arg='vectors',
         'val_epss': []
     }
 
-    def evaluate_function():  # Evaluate function over Rs[j] x Rs[j+1] fibers
+    def evaluate_function():  # Evaluate function over Rs[j] x Rs[j+1] fibers, each of size I[j]
         Xs = []
         for k, t in enumerate(tensors):
             if tensors[k].cores[j].dim() == 3:  # TT core
@@ -154,33 +153,27 @@ def cross(function, ranks_tt, domain=None, tensors=None, function_arg='vectors',
         left_locals = []
 
         # Left-to-right
-        for j in range(N):
+        for j in range((i > 0), N-1):
 
             # Update tensors for current indices
             V = evaluate_function()
 
             # QR + maxvol towards the right
-            if j < N-1:
-                V = torch.reshape(V, [-1, V.shape[2]])  # Left unfolding
-                Q, R = torch.qr(V)
-                local, _ = maxvolpy.maxvol.maxvol(Q.detach().numpy())
-                V = torch.gels(Q.t(), Q[local, :].t())[0].t()
-                cores[j] = torch.reshape(V, [Rs[j], Is[j], Rs[j+1]])
-                nextfactor = Q[local, :].matmul(R)
-                cores[j+1] = torch.einsum('ij,jak->iak', (nextfactor, cores[j+1]))
-                left_locals.append(local)
-            else:
-                cores[j] = V
+            V = torch.reshape(V, [-1, V.shape[2]])  # Left unfolding
+            Q, R = torch.qr(V)
+            local, _ = maxvolpy.maxvol.maxvol(Q.detach().numpy())
+            V = torch.gels(Q.t(), Q[local, :].t())[0].t()
+            cores[j] = torch.reshape(V, [Rs[j], Is[j], Rs[j+1]])
+            left_locals.append(local)
 
             # Map local indices to global ones
-            if j < N-1:
-                local_r, local_i = np.unravel_index(local, [Rs[j], Is[j]])
-                lsets[j+1] = np.c_[lsets[j][local_r, :], local_i]
-                for k, t in enumerate(tensors):
-                    if t.cores[j].dim() == 3:  # TT core
-                        t_linterfaces[k][j+1] = torch.einsum('ai,iaj->aj', (t_linterfaces[k][j][local_r, :], t.cores[j][:, local_i, :]))
-                    else:  # CP factor
-                        t_linterfaces[k][j+1] = torch.einsum('ai,ai->ai', (t_linterfaces[k][j][local_r, :], t.cores[j][local_i, :]))
+            local_r, local_i = np.unravel_index(local, [Rs[j], Is[j]])
+            lsets[j+1] = np.c_[lsets[j][local_r, :], local_i]
+            for k, t in enumerate(tensors):
+                if t.cores[j].dim() == 3:  # TT core
+                    t_linterfaces[k][j+1] = torch.einsum('ai,iaj->aj', (t_linterfaces[k][j][local_r, :], t.cores[j][:, local_i, :]))
+                else:  # CP factor
+                    t_linterfaces[k][j+1] = torch.einsum('ai,ai->ai', (t_linterfaces[k][j][local_r, :], t.cores[j][local_i, :]))
 
         # Right-to-left sweep
         for j in range(N-1, -1, -1):
@@ -188,20 +181,15 @@ def cross(function, ranks_tt, domain=None, tensors=None, function_arg='vectors',
             # Update tensors for current indices
             V = evaluate_function()
 
-            # QR + maxvol towards the left
             if j > 0:
+                # QR + maxvol towards the left
                 V = torch.reshape(V, [Rs[j], -1])  # Right unfolding
                 Q, R = torch.qr(V.t())
                 local, _ = maxvolpy.maxvol.maxvol(Q.detach().numpy())
                 V = torch.gels(Q.t(), Q[local, :].t())[0]
                 cores[j] = torch.reshape(torch.as_tensor(V), [Rs[j], Is[j], Rs[j+1]])
-                nextfactor = R.t().matmul(Q[local, :].t())
-                cores[j-1] = torch.einsum('iaj,jk->iak', (cores[j-1], nextfactor))
-            else:
-                cores[j] = V
 
-            # Map local indices to global ones
-            if j > 0:
+                # Map local indices to global ones
                 local_i, local_r = np.unravel_index(local, [Is[j], Rs[j+1]])
                 rsets[j-1] = np.c_[local_i, rsets[j][local_r, :]]
                 for k, t in enumerate(tensors):
@@ -209,7 +197,8 @@ def cross(function, ranks_tt, domain=None, tensors=None, function_arg='vectors',
                         t_rinterfaces[k][j-1] = torch.einsum('iaj,ja->ia', (t.cores[j][:, local_i, :], t_rinterfaces[k][j][:, local_r]))
                     else:  # CP factor
                         t_rinterfaces[k][j-1] = torch.einsum('ai,ia->ia', (t.cores[j][local_i, :], t_rinterfaces[k][j][:, local_r]))
-
+            else:
+                cores[j] = V
 
         # Evaluate validation error
         val_eps = torch.norm(ys_val - tn.Tensor(cores)[Xs_val].torch()) / norm_ys_val
