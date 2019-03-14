@@ -4,9 +4,10 @@ import sys
 import time
 import numpy as np
 import maxvolpy.maxvol
+import warnings
 
 
-def cross(function, ranks_tt, domain=None, tensors=None, function_arg='vectors', eps=1e-14, max_iter=25, val_size=1000, verbose=True, return_info=False):
+def cross(function, domain=None, tensors=None, function_arg='vectors', ranks_tt=None, kickrank=3, rmax=100, eps=1e-6, max_iter=25, val_size=1000, verbose=True, return_info=False):
 
     """
     Cross-approximation routine that samples a black-box function and returns an N-dimensional tensor train approximating it. It accepts either:
@@ -28,14 +29,17 @@ def cross(function, ranks_tt, domain=None, tensors=None, function_arg='vectors',
     - I. Oseledets, E. Tyrtyshnikov: `"TT-cross Approximation for Multidimensional Arrays" (2009) <http://www.mat.uniroma2.it/~tvmsscho/papers/Tyrtyshnikov5.pdf>`_
     - D. Savostyanov, I. Oseledets: `"Fast Adaptive Interpolation of Multi-dimensional Arrays in Tensor Train Format" (2011) <https://ieeexplore.ieee.org/document/6076873>`_
     - S. Dolgov, R. Scheichl: `"A Hybrid Alternating Least Squares - TT Cross Algorithm for Parametric PDEs" (2018) <https://arxiv.org/pdf/1707.04562.pdf>`_
-    - Aleksandr Mikhalev's `maxvolpy package <https://bitbucket.org/muxas/maxvolpy>`_
+    - A. Mikhalev's `maxvolpy package <https://bitbucket.org/muxas/maxvolpy>`_
+    - I. Oseledets (and others)'s `ttpy package <https://github.com/oseledets/ttpy>`_
 
     :param function: should produce a vector of :math:`P` elements. Accepts either :math:`N` comma-separated vectors, or a matrix (see `function_arg`)
-    :param ranks_tt: int or list of :math:`N-1` ints
     :param domain: a list of :math:`N` vectors (incompatible with `tensors`)
     :param tensors: a :class:`Tensor` or list thereof (incompatible with `domain`)
     :param function_arg: if 'vectors', `function` accepts :math:`N` vectors of length :math:`P` each. If 'matrix', a matrix of shape :math:`P \\times N`.
-    :param eps: the procedure will stop after this validation error is met (as measured after each iteration, i.e. full sweep left-to-right and right-to-left)
+    :param ranks_tt: int or list of :math:`N-1` ints. If None, will be determined adaptively
+    :param kickrank: when adaptively found, ranks will be increased by this amount after every iteration (full sweep left-to-right and right-to-left)
+    :param rmax: this rank will not be surpassed
+    :param eps: the procedure will stop after this validation error is met (as measured after each iteration)
     :param max_iter: int
     :param val_size: size of the validation set
     :param verbose: default is True
@@ -43,8 +47,6 @@ def cross(function, ranks_tt, domain=None, tensors=None, function_arg='vectors',
 
     :return: an N-dimensional TT :class:`Tensor` (if `return_info`=True, also a dictionary)
     """
-
-    # TODO: use kickrank + DMRG to select ranks adaptively
 
     assert domain is not None or tensors is not None
     assert function_arg in ('vectors', 'matrix')
@@ -62,39 +64,43 @@ def cross(function, ranks_tt, domain=None, tensors=None, function_arg='vectors',
     N = len(Is)
 
     # Process ranks and cap them, if needed
-    if ranks_tt is not None and not hasattr(ranks_tt, '__len__'):
+    if ranks_tt is None:
+        ranks_tt = 1
+    else:
+        kickrank = None
+    if not hasattr(ranks_tt, '__len__'):
         ranks_tt = [ranks_tt]*(N-1)
     ranks_tt = [1] + list(ranks_tt) + [1]
-    Rs = ranks_tt
+    Rs = np.array(ranks_tt)
     for n in range(1, N):
         Rs[n] = min(Rs[n-1]*Is[n-1], Rs[n], Is[n]*Rs[n+1])
 
+    # Initialize cores at random
     cores = [torch.randn(Rs[n], Is[n], Rs[n+1]) for n in range(N)]
 
     # Prepare left and right sets
-    lsets = [np.array([[1]])] + [None]*(N-1)
-    rsets = [np.random.randint(0, Is[n+1], [Rs[n+1], N-1-n]) for n in range(N-1)] + [np.array([[1]])]
+    lsets = [np.array([[0]])] + [None]*(N-1)
+    rsets = [np.hstack([np.random.randint(0, Is[n+1], [Rs[n+1], N-1-n]), np.zeros([Rs[n+1], 1])]) for n in range(N-1)] + [np.array([[0]])]
 
     # Initialize left and right interfaces for `tensors`
-    def init_interfaces(t):
-        linterfaces = [torch.ones(1, t.ranks_tt[0])] + [None]*(N-1)
-        rinterfaces = []
-        for j in range(N-1):
-            M = torch.ones(t.cores[-1].shape[-1], len(rsets[j]))
-            for n in range(N-1, j, -1):
-                if t.cores[n].dim() == 3:  # TT core
-                    M = torch.einsum('iaj,ja->ia', (t.cores[n][:, rsets[j][:, n-1-j], :], M))
-                else:  # CP factor
-                    M = torch.einsum('ai,ia->ia', (t.cores[n][rsets[j][:, n-1-j], :], M))
-            rinterfaces.append(M)
-        rinterfaces.append(torch.ones(t.ranks_tt[t.dim()], 1))
-        return linterfaces, rinterfaces
-    t_linterfaces = []
-    t_rinterfaces = []
-    for t in tensors:
-        l, r = init_interfaces(t)
-        t_linterfaces.append(l)
-        t_rinterfaces.append(r)
+    def init_interfaces():
+        t_linterfaces = []
+        t_rinterfaces = []
+        for t in tensors:
+            linterfaces = [torch.ones(1, t.ranks_tt[0])] + [None]*(N-1)
+            rinterfaces = [None]*(N-1) + [torch.ones(t.ranks_tt[t.dim()], 1)]
+            for j in range(N-1):
+                M = torch.ones(t.cores[-1].shape[-1], len(rsets[j]))
+                for n in range(N-1, j, -1):
+                    if t.cores[n].dim() == 3:  # TT core
+                        M = torch.einsum('iaj,ja->ia', (t.cores[n][:, rsets[j][:, n-1-j], :], M))
+                    else:  # CP factor
+                        M = torch.einsum('ai,ia->ia', (t.cores[n][rsets[j][:, n-1-j], :], M))
+                rinterfaces[j] = M
+            t_linterfaces.append(linterfaces)
+            t_rinterfaces.append(rinterfaces)
+        return t_linterfaces, t_rinterfaces
+    t_linterfaces, t_rinterfaces = init_interfaces()
 
     # Create a validation set
     Xs_val = [torch.as_tensor(np.random.choice(I, val_size)) for I in Is]
@@ -137,7 +143,7 @@ def cross(function, ranks_tt, domain=None, tensors=None, function_arg='vectors',
         if len(invalid) > 0:
             invalid = invalid[0].item()
             raise ValueError('Invalid function return value: f({}) = {}'.format(', '.join('{:g}'.format(x[invalid].numpy()) for x in Xs),
-                                                                         f(*[x[invalid] for x in Xs]).item()))
+                                                                         f(*[x[invalid:invalid+1][:, None] for x in Xs]).item()))
 
         V = torch.reshape(evaluation, [Rs[j], Is[j], Rs[j + 1]])
         info['nsamples'] += V.numel()
@@ -147,13 +153,13 @@ def cross(function, ranks_tt, domain=None, tensors=None, function_arg='vectors',
     for i in range(max_iter):
 
         if verbose:
-            print('iter: {: <{}}'.format(i, len('{}'.format(max_iter))), end='')
+            print('iter: {: <{}}'.format(i, len('{}'.format(max_iter))+1), end='')
             sys.stdout.flush()
 
         left_locals = []
 
         # Left-to-right
-        for j in range((i > 0), N-1):
+        for j in range(0, N-1):
 
             # Update tensors for current indices
             V = evaluate_function(j)
@@ -204,21 +210,36 @@ def cross(function, ranks_tt, domain=None, tensors=None, function_arg='vectors',
         # Evaluate validation error
         val_eps = torch.norm(ys_val - tn.Tensor(cores)[Xs_val].torch()) / norm_ys_val
         info['val_epss'].append(val_eps)
-        if val_eps < eps or (len(info['val_epss']) >= 3 and info['val_epss'][-1] >= info['val_epss'][-3]):
+        if val_eps < eps:
             converged = True
 
-        # Print status
-        if verbose:
+        if verbose:  # Print status
             print('| eps: {:.3e}'.format(val_eps), end='')
-            print(' | total time: {:8.4f}'.format(time.time() - start), end='')
+            print(' | total time: {:8.4f} | largest rank: {:3d}'.format(time.time() - start, max(Rs)), end='')
             if converged:
-                print(' <- converged')
+                print(' <- converged: eps < {}'.format(eps))
             elif i == max_iter-1:
                 print(' <- max_iter was reached: {}'.format(max_iter))
             else:
                 print()
         if converged:
             break
+        elif i < max_iter-1 and kickrank is not None:  # Augment ranks
+            newRs = Rs.copy()
+            newRs[1:-1] = np.minimum(rmax, newRs[1:-1]+kickrank)
+            for n in range(1, N):
+                newRs[n] = min(newRs[n-1]*Is[n-1], newRs[n], Is[n]*newRs[n+1])
+            extra = np.hstack([np.random.randint(0, Is[1], [max(newRs), N-1]), np.zeros([max(newRs), 1])])
+            for n in range(N-1):
+                if newRs[n+1] > Rs[n+1]:
+                    rsets[n] = np.vstack([rsets[n], extra[:newRs[n+1]-Rs[n+1], n:]])
+            Rs = newRs
+            t_linterfaces, t_rinterfaces = init_interfaces()  # Recompute interfaces
+
+
+    if val_eps > eps:
+        import logging
+        logging.warning('eps={:g} (larger than {}) when cross-approximating {}'.format(val_eps, eps, function))
 
     if verbose:
         print('Did {} function evaluations, which took {:.4g}s ({:.4g} evals/s)'.format(info['nsamples'], info['eval_time'], info['nsamples'] / info['eval_time']))
@@ -229,6 +250,7 @@ def cross(function, ranks_tt, domain=None, tensors=None, function_arg='vectors',
         info['rsets'] = rsets
         info['left_locals'] = left_locals
         info['total_time'] = time.time()-start,
+        info['val_eps'] = val_eps
         return tn.Tensor([torch.Tensor(c) for c in cores]), info
     else:
         return tn.Tensor([torch.Tensor(c) for c in cores])
