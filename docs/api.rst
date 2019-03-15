@@ -80,6 +80,15 @@ metrics
    :inherited-members:
    :show-inheritance:
 
+ops
+---
+
+.. automodule:: ops
+   :members:
+   :undoc-members:
+   :inherited-members:
+   :show-inheritance:
+
 round
 -----
    

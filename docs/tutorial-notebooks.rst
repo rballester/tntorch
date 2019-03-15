@@ -8,6 +8,7 @@ Tutorial Notebooks
    tutorials/introduction
    tutorials/active_subspaces
    tutorials/anova
+   tutorials/arithmetics
    tutorials/automata
    tutorials/classification
    tutorials/completion
