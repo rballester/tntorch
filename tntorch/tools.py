@@ -278,28 +278,6 @@ def ttm(t, U, dim=None, transpose=False):
     return tn.Tensor(cores, Us=Us, idxs=t.idxs)
 
 
-def cumsum(t, dim):
-    """
-    Computes the cumulative sum of a tensor along one or several dims, similarly to PyTorch's `cumsum()`.
-
-    :param t: input :class:`Tensor`
-    :param dim: an int or list of ints
-
-    :return: a :class:`Tensor` of the same shape
-    """
-
-    if not hasattr(dim, '__len__'):
-        dim = [dim]
-
-    t = t.clone()
-    for n in dim:
-        if t.Us[n] is None:
-            t.cores[n] = torch.cumsum(t.cores[n], dim=-2)
-        else:
-            t.Us[n] = torch.cumsum(t.Us[n], dim=0)
-    return t
-
-
 """
 Miscellaneous
 """

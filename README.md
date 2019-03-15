@@ -4,9 +4,18 @@
 
 **New**: our [Read the Docs site](http://tntorch.readthedocs.io/) is out!
 
-[Welcome to *tntorch*](https://github.com/VMML/tntorch/blob/master/docs/tutorials/introduction.ipynb), a PyTorch-powered modeling and learning library using tensor networks. Such networks are unique in that [they use *multilinear* neural units](https://arxiv.org/abs/1711.00811) (instead of non-linear activation units).
+[Welcome to *tntorch*](https://github.com/VMML/tntorch/blob/master/docs/tutorials/introduction.ipynb), a PyTorch-powered modeling and learning library using tensor networks. Such networks are unique in that [they use *multilinear* neural units](https://arxiv.org/abs/1711.00811) (instead of non-linear activation units). Features include:
 
-[We support](https://github.com/rballester/tntorch/blob/master/docs/tutorials/main_formats.ipynb):
+- Basic and fancy **indexing** of tensors, **broadcasting**, **assignment**, etc.
+- Tensor **decomposition** and **reconstruction**
+- Element-wise and tensor-tensor **arithmetics**
+- Building tensors from black-box functions using **cross-approximation**
+- **Statistics** and **sensitivity analysis**
+- **Optimization** using autodifferentiation
+- **Misc. operations** on tensors: stacking, unfolding, sampling, derivating, etc.
+
+
+Available [tensor formats](https://github.com/rballester/tntorch/blob/master/docs/tutorials/main_formats.ipynb) include:
 
 - [CANDECOMP/PARAFAC (CP)](https://epubs.siam.org/doi/pdf/10.1137/07070111X)
 - [Tucker](https://epubs.siam.org/doi/pdf/10.1137/S0895479898346995)
@@ -79,19 +88,11 @@ Check out the [introductory notebook](https://github.com/rballester/tntorch/blob
 - [Main tensor formats available](https://github.com/rballester/tntorch/blob/master/docs/tutorials/main_formats.ipynb)
 - [Other custom formats](https://github.com/rballester/tntorch/blob/master/docs/tutorials/other_formats.ipynb)
 - [Polynomial chaos expansions](https://github.com/rballester/tntorch/blob/master/docs/tutorials/pce.ipynb)
+- [Tensor arithmetics](https://github.com/rballester/tntorch/blob/master/docs/tutorials/arithmetics.ipynb)
 - [Tensor completion and regression](https://github.com/rballester/tntorch/blob/master/docs/tutorials/completion.ipynb)
 - [Tensor decomposition](https://github.com/rballester/tntorch/blob/master/docs/tutorials/decompositions.ipynb)
 - [Sensitivity analysis](https://github.com/rballester/tntorch/blob/master/docs/tutorials/sobol.ipynb)
 - [Vector field data](https://github.com/rballester/tntorch/blob/master/docs/tutorials/vector_fields.ipynb)
-
-
-## Planned
-
-- Dynamical systems
-- Gibbs sampling
-- Hidden Markov models
-- Ridge regression
-- Tensor weight regression/classification
 
 ## Installation
 

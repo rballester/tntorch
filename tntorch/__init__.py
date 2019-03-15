@@ -6,6 +6,7 @@ from .cross import *
 from .derivatives import *
 from .logic import *
 from .metrics import *
+from .ops import *
 from .round import *
 from .tensor import *
 from .tools import *

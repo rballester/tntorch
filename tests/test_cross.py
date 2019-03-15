@@ -1,4 +1,3 @@
-import numpy as np
 import tntorch as tn
 import torch
 from util import random_format
@@ -23,3 +22,12 @@ def test_tensors():
         t = random_format([10] * 6)
         t2 = tn.cross(function=lambda x: x, tensors=t, ranks_tt=15, verbose=False)
         assert tn.relative_error(t, t2) < 1e-6
+
+
+def test_ops():
+
+    x, y, z, w = tn.meshgrid([32]*4)
+    t = x + y + z + w + 1
+    assert tn.relative_error(1/t.torch(), 1/t) < 1e-4
+    assert tn.relative_error(torch.cos(t.torch()), tn.cos(t)) < 1e-4
+    assert tn.relative_error(torch.exp(t.torch()), tn.exp(t)) < 1e-4

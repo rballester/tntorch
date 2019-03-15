@@ -284,6 +284,15 @@ class Tensor(object):
                 cores[-1] = cores[-1][0, :, :]
         return tn.Tensor(cores, Us=Us)
 
+    def __truediv__(self, other):
+        return tn.cross(function=lambda x, y: x / y, tensors=[self, other], verbose=False)
+
+    def __rtruediv__(self, other):
+        return tn.cross(function=lambda x, y: x / y, tensors=[tn.full_like(self, fill_value=other), self], verbose=False)
+
+    def __pow__(self, power):
+        return tn.cross(function=lambda x, y: x**y, tensors=[self, tn.full_like(self, fill_value=power)], verbose=False)
+
     """
     Boolean logic
     """
