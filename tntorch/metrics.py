@@ -201,7 +201,7 @@ def sum(t, dim=None, keepdim=False, _normalize=False):
 
 def mean(t, dim=None, keepdim=False):
     """
-    Computes the mean of a tensor along all or some of its dimensions.
+    Computes the mean of a :class:`Tensor` along all or some of its dimensions.
 
     :param t: a :class:`Tensor`
     :param dim: an int or list of ints (default: all)
@@ -215,7 +215,7 @@ def mean(t, dim=None, keepdim=False):
 
 def var(t):
     """
-    Computes the variance of a tensor.
+    Computes the variance of a :class:`Tensor`.
 
     :param t: a :class:`Tensor`
 
@@ -227,7 +227,7 @@ def var(t):
 
 def std(t):
     """
-    Computes the standard deviation of a tensor.
+    Computes the standard deviation of a :class:`Tensor`.
 
     :param t: a :class:`Tensor`
 
@@ -237,9 +237,34 @@ def std(t):
     return torch.sqrt(tn.var(t))
 
 
+def skew(t):
+    """
+    Computes the skewness of a :class:`Tensor`. Note: this function uses cross-approximation (:func:`tntorch.cross()`).
+
+    :param t: a :class:`Tensor`
+
+    :return: a scalar
+    """
+
+    return tn.mean(((t-tn.mean(t))/tn.std(t))**3)
+
+
+def kurtosis(t, fisher=True):
+    """
+    Computes the kurtosis of a :class:`Tensor`. Note: this function uses cross-approximation (:func:`tntorch.cross()`).
+
+    :param t: a :class:`Tensor`
+    :param fisher: if True (default) Fisher's definition is used, otherwise Pearson's (aka excess)
+
+    :return: a scalar
+    """
+
+    return tn.mean(((t-tn.mean(t))/tn.std(t))**4) - fisher*3
+
+
 def normsq(t):
     """
-    Computes the squared norm of a tensor.
+    Computes the squared norm of a :class:`Tensor`.
 
     :param t: a :class:`Tensor`
 
