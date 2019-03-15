@@ -30,6 +30,8 @@ def cumprod(t, dim=None):
     """
     Computes the cumulative sum of a tensor along one or several dims, similarly to PyTorch's `cumprod()`.
 
+    Note: this function is approximate and uses cross-approximation (:func:`tntorch.cross()`)
+
     :param t: input :class:`Tensor`
     :param dim: an int or list of ints (default: all)
 
@@ -48,7 +50,7 @@ def abs(t):
     """
     Element-wise absolute value computed using cross-approximation; see PyTorch's `abs()`.
 
-    :param t: input :class:`Tensor`s
+    :param t: input :class:`Tensor`
 
     :return: a :class:`Tensor`
     """
@@ -72,7 +74,7 @@ def asin(t):
     """
     Element-wise arcsine computed using cross-approximation; see PyTorch's `asin()`.
 
-    :param t: input :class:`Tensor`s
+    :param t: input :class:`Tensor`
 
     :return: a :class:`Tensor`
     """
@@ -84,7 +86,7 @@ def cos(t):
     """
     Element-wise cosine computed using cross-approximation; see PyTorch's `cos()`.
 
-    :param t: input :class:`Tensor`s
+    :param t: input :class:`Tensor`
 
     :return: a :class:`Tensor`
     """
@@ -96,7 +98,7 @@ def cosh(t):
     """
     Element-wise hyperbolic cosine computed using cross-approximation; see PyTorch's `cosh()`.
 
-    :param t: input :class:`Tensor`s
+    :param t: input :class:`Tensor`
 
     :return: a :class:`Tensor`
     """
@@ -108,7 +110,7 @@ def erf(t):
     """
     Element-wise error function computed using cross-approximation; see PyTorch's `erf()`.
 
-    :param t: input :class:`Tensor`s
+    :param t: input :class:`Tensor`
 
     :return: a :class:`Tensor`
     """
@@ -120,7 +122,7 @@ def erfinv(t):
     """
     Element-wise inverse error function computed using cross-approximation; see PyTorch's `erfinv()`.
 
-    :param t: input :class:`Tensor`s
+    :param t: input :class:`Tensor`
 
     :return: a :class:`Tensor`
     """
@@ -132,7 +134,7 @@ def exp(t):
     """
     Element-wise exponentiation computed using cross-approximation; see PyTorch's `exp()`.
 
-    :param t: input :class:`Tensor`s
+    :param t: input :class:`Tensor`
 
     :return: a :class:`Tensor`
     """
@@ -144,7 +146,7 @@ def log(t):
     """
     Element-wise natural logarithm computed using cross-approximation; see PyTorch's `log()`.
 
-    :param t: input :class:`Tensor`s
+    :param t: input :class:`Tensor`
 
     :return: a :class:`Tensor`
     """
@@ -156,7 +158,7 @@ def log10(t):
     """
     Element-wise base-10 logarithm computed using cross-approximation; see PyTorch's `log10()`.
 
-    :param t: input :class:`Tensor`s
+    :param t: input :class:`Tensor`
 
     :return: a :class:`Tensor`
     """
@@ -168,7 +170,7 @@ def log2(t):
     """
     Element-wise base-2 logarithm computed using cross-approximation; see PyTorch's `log2()`.
 
-    :param t: input :class:`Tensor`s
+    :param t: input :class:`Tensor`
 
     :return: a :class:`Tensor`
     """
@@ -180,7 +182,7 @@ def reciprocal(t):
     """
     Element-wise reciprocal computed using cross-approximation; see PyTorch's `reciprocal()`.
 
-    :param t: input :class:`Tensor`s
+    :param t: input :class:`Tensor`
 
     :return: a :class:`Tensor`
     """
@@ -192,7 +194,7 @@ def rsqrt(t):
     """
     Element-wise square-root reciprocal computed using cross-approximation; see PyTorch's `rsqrt()`.
 
-    :param t: input :class:`Tensor`s
+    :param t: input :class:`Tensor`
 
     :return: a :class:`Tensor`
     """
@@ -202,9 +204,9 @@ def rsqrt(t):
 
 def sigmoid(t):
     """
-    Element-wise sigmoid computed using cross-approximation; see PyTorch's `sigmoid()`.
+    Element-wise sigmoid computed using cross-approximation; see PyTorch's `igmoid()`.
 
-    :param t: input :class:`Tensor`s
+    :param t: input :class:`Tensor`
 
     :return: a :class:`Tensor`
     """
@@ -214,9 +216,9 @@ def sigmoid(t):
 
 def sin(t):
     """
-    Element-wise sine computed using cross-approximation; see PyTorch's `sin()`.
+    Element-wise sine computed using cross-approximation; see PyTorch's `in()`.
 
-    :param t: input :class:`Tensor`s
+    :param t: input :class:`Tensor`
 
     :return: a :class:`Tensor`
     """
@@ -226,9 +228,9 @@ def sin(t):
 
 def sinh(t):
     """
-    Element-wise hyperbolic sine computed using cross-approximation; see PyTorch's `sinh()`.
+    Element-wise hyperbolic sine computed using cross-approximation; see PyTorch's `inh()`.
 
-    :param t: input :class:`Tensor`s
+    :param t: input :class:`Tensor`
 
     :return: a :class:`Tensor`
     """
@@ -238,9 +240,9 @@ def sinh(t):
 
 def sqrt(t):
     """
-    Element-wise square root computed using cross-approximation; see PyTorch's `sqrt()`.
+    Element-wise square root computed using cross-approximation; see PyTorch's `qrt()`.
 
-    :param t: input :class:`Tensor`s
+    :param t: input :class:`Tensor`
 
     :return: a :class:`Tensor`
     """
@@ -252,7 +254,7 @@ def tan(t):
     """
     Element-wise tangent computed using cross-approximation; see PyTorch's `tan()`.
 
-    :param t: input :class:`Tensor`s
+    :param t: input :class:`Tensor`
 
     :return: a :class:`Tensor`
     """
@@ -264,7 +266,7 @@ def tanh(t):
     """
     Element-wise hyperbolic tangent computed using cross-approximation; see PyTorch's `tanh()`.
 
-    :param t: input :class:`Tensor`s
+    :param t: input :class:`Tensor`
 
     :return: a :class:`Tensor`
     """
@@ -281,7 +283,8 @@ def add(t1, t2):
     """
     Element-wise addition computed using cross-approximation; see PyTorch's `add()`.
 
-    :param t1, t2: input :class:`Tensor`s
+    :param t1: input :class:`Tensor`
+    :param t2: input :class:`Tensor`
 
     :return: a :class:`Tensor`
     """
@@ -293,7 +296,8 @@ def atan2(t1, t2):
     """
     Element-wise arctangent computed using cross-approximation; see PyTorch's `atan2()`.
 
-    :param t1, t2: input :class:`Tensor`s
+    :param t1: input :class:`Tensor`
+    :param t2: input :class:`Tensor`
 
     :return: a :class:`Tensor`
     """
@@ -305,7 +309,8 @@ def div(t1, t2):
     """
     Element-wise division computed using cross-approximation; see PyTorch's `div()`.
 
-    :param t1, t2: input :class:`Tensor`s
+    :param t1: input :class:`Tensor`
+    :param t2: input :class:`Tensor`
 
     :return: a :class:`Tensor`
     """
@@ -317,7 +322,8 @@ def mul(t1, t2):
     """
     Element-wise product computed using cross-approximation; see PyTorch's `mul()`.
 
-    :param t1, t2: input :class:`Tensor`s
+    :param t1: input :class:`Tensor`
+    :param t2: input :class:`Tensor`
 
     :return: a :class:`Tensor`
     """
@@ -329,7 +335,8 @@ def pow(t1, t2):
     """
     Element-wise power operation computed using cross-approximation; see PyTorch's `pow()`.
 
-    :param t1, t2: input :class:`Tensor`s
+    :param t1: input :class:`Tensor`
+    :param t2: input :class:`Tensor`
 
     :return: a :class:`Tensor`
     """

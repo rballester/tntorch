@@ -7,13 +7,13 @@ tntorch -- Tensor Network Learning with PyTorch
 
 This is a `PyTorch <http://pytorch.org/>`__-powered library for tensor modeling and learning that features transparent support for the `tensor train (TT) model <https://epubs.siam.org/doi/pdf/10.1137/090752286>`_, `CANDECOMP/PARAFAC (CP) <https://epubs.siam.org/doi/pdf/10.1137/07070111X>`_, the `Tucker model <https://epubs.siam.org/doi/pdf/10.1137/S0895479898346995>`_, and more. Supported operations (CPU and GPU) include:
 
-- Basic and fancy **indexing** of tensors, **broadcasting**, **assignment**, etc.
-- Tensor **decomposition** and **reconstruction**
-- Element-wise and tensor-tensor **arithmetics**
-- Building tensors from black-box functions using **cross-approximation**
-- **Statistics** and **sensitivity analysis**
-- **Optimization** using autodifferentiation
-- **Misc. operations** on tensors: stacking, unfolding, sampling, derivating, etc.
+- Basic and fancy `indexing <tutorials/introduction.html>`_ of tensors, broadcasting, assignment, etc.
+- Tensor `decomposition and reconstruction <tutorials/decompositions.html>`_
+- Element-wise and tensor-tensor `arithmetics <tutorials/arithmetics.html>`_
+- Building tensors from black-box functions using `cross-approximation <tutorials/cross.html>`_
+- Statistics and `sensitivity analysis <tutorials/sobol.html>`_
+- Optimization using autodifferentiation, useful for e.g. `regression <tutorials/completion.html>`_ or `classification <tutorials/classification.html>`_
+- Misc. operations on tensors: stacking, unfolding, sampling, `derivating <tutorials/derivatives.html>`_, etc.
 
 Get the Code
 ------------

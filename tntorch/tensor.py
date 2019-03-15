@@ -114,6 +114,8 @@ class Tensor(object):
                         reverse = np.arange(len(eigvals)-1, -1, -1)  # Negative steps not yet supported in PyTorch
                         idx = np.argsort(eigvals.to('cpu'))[reverse[:ranks_cp]]
                         self.cores.append(eigvecs[:, idx])
+                        if self.cores[-1].shape[1] < ranks_cp:  # Complete with random entries
+                            self.cores[-1] = torch.cat((self.cores[-1], torch.randn(self.cores[-1].shape[0], ranks_cp-self.cores[-1].shape[1])), dim=1)
                 if verbose:
                     print(' -- initialization time =', time.time() - start)
                 grams = [None] + [self.cores[n].t().matmul(self.cores[n]) for n in range(1, self.dim())]
@@ -128,7 +130,7 @@ class Tensor(object):
                                 prod *= grams[m]
                                 khatri = torch.reshape(torch.einsum('ir,jr->ijr', (self.cores[m], khatri)), [-1, ranks_cp])
                         unfolding = tn.unfolding(data, n)
-                        self.cores[n] = torch.gesv(unfolding.matmul(khatri).t(), prod)[0].t()
+                        self.cores[n] = torch.gels(unfolding.matmul(khatri).t(), prod)[0].t()
                         grams[n] = self.cores[n].t().matmul(self.cores[n])
                     errors.append(torch.norm(data - tn.Tensor(self.cores).torch()) / data_norm)
                     if len(errors) >= 2 and errors[-2] - errors[-1] < tol:
