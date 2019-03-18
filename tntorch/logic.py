@@ -233,7 +233,8 @@ def implies(t1, t2):
     """
     Checks if a formula implies another one (i.e. is a sufficient condition).
 
-    :param t1, t2: two :math:`2^N` :class:`Tensor`
+    :param t1: a :math:`2^N` :class:`Tensor`
+    :param t2: a :math:`2^N` :class:`Tensor`
 
     :return: True if `t1` implies `t2`; False otherwise
     """
@@ -245,7 +246,8 @@ def equiv(t1, t2):
     """
     Checks if two formulas are logically equivalent.
 
-    :param t1, t2: two :math:`2^N` :class:`Tensor`
+    :param t1: a :math:`2^N` :class:`Tensor`
+    :param t2: a :math:`2^N` :class:`Tensor`
 
     :return: True if `t1` implies `t2` and vice versa; False otherwise
     """

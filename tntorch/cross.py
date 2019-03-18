@@ -72,7 +72,7 @@ def cross(function, domain=None, tensors=None, function_arg='vectors', ranks_tt=
         ranks_tt = [ranks_tt]*(N-1)
     ranks_tt = [1] + list(ranks_tt) + [1]
     Rs = np.array(ranks_tt)
-    for n in range(1, N):
+    for n in list(range(1, N)) + list(range(N-1, -1, -1)):
         Rs[n] = min(Rs[n-1]*Is[n-1], Rs[n], Is[n]*Rs[n+1])
 
     # Initialize cores at random
@@ -80,7 +80,8 @@ def cross(function, domain=None, tensors=None, function_arg='vectors', ranks_tt=
 
     # Prepare left and right sets
     lsets = [np.array([[0]])] + [None]*(N-1)
-    rsets = [np.hstack([np.random.randint(0, Is[n+1], [Rs[n+1], N-1-n]), np.zeros([Rs[n+1], 1])]) for n in range(N-1)] + [np.array([[0]])]
+    randint = np.hstack([np.random.randint(0, Is[n+1], [max(Rs), 1]) for n in range(N-1)] + [np.zeros([max(Rs), 1])])
+    rsets = [randint[:Rs[n+1], n:] for n in range(N-1)] + [np.array([[0]])]
 
     # Initialize left and right interfaces for `tensors`
     def init_interfaces():
@@ -227,15 +228,14 @@ def cross(function, domain=None, tensors=None, function_arg='vectors', ranks_tt=
         elif i < max_iter-1 and kickrank is not None:  # Augment ranks
             newRs = Rs.copy()
             newRs[1:-1] = np.minimum(rmax, newRs[1:-1]+kickrank)
-            for n in range(1, N):
+            for n in list(range(1, N)) + list(range(N-1, 0, -1)):
                 newRs[n] = min(newRs[n-1]*Is[n-1], newRs[n], Is[n]*newRs[n+1])
-            extra = np.hstack([np.random.randint(0, Is[1], [max(newRs), N-1]), np.zeros([max(newRs), 1])])
+            extra = np.hstack([np.random.randint(0, Is[n+1], [max(newRs), 1]) for n in range(N-1)] + [np.zeros([max(newRs), 1])])
             for n in range(N-1):
                 if newRs[n+1] > Rs[n+1]:
                     rsets[n] = np.vstack([rsets[n], extra[:newRs[n+1]-Rs[n+1], n:]])
             Rs = newRs
             t_linterfaces, t_rinterfaces = init_interfaces()  # Recompute interfaces
-
 
     if val_eps > eps:
         import logging

@@ -34,7 +34,7 @@ def squeeze(t, dim=None):
 
 def unsqueeze(t, dim):
     """
-    Inserts singleton dimensions.
+    Inserts singleton dimensions at specified positions.
 
     :param t: input :class:`Tensor`
     :param dim: int or list of int
@@ -44,13 +44,11 @@ def unsqueeze(t, dim):
 
     if not hasattr(dim, '__len__'):
         dim = [dim]
-    dim = np.sort(dim)
 
-    idx = [slice(None) for n in range(t.dim())]
-    for d in dim[::-1]:
-        idx.insert(d, None)
+    idx = [slice(None) for n in range(t.dim()+len(dim))]
+    for d in dim:
+        idx[d] = None
     return t[tuple(idx)]
-
 
 
 def cat(*ts, dim):
