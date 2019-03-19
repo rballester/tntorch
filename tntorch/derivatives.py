@@ -61,7 +61,7 @@ def partialset(t, order=1, mask=None, bounds=None):
     return result
 
 
-def partial(t, dim, order=1, bounds=None, periodic=False):
+def partial(t, dim, order=1, bounds=None, periodic=False, pad='top'):
     """
     Compute a single partial derivative.
 
@@ -70,6 +70,7 @@ def partial(t, dim, order=1, bounds=None, periodic=False):
     :param order: how many times to derive. Default is 1
     :param bounds: variable(s) range bounds (to compute the derivative step). If None (default), step 1 will be assumed
     :param periodic: int or list of ints (same as `dim`), mark dimensions with periodicity
+    :param pad: string or list of strings indicating dimension zero-padding after differentiation. If 'top' (default) or 'bottom', the tensor will retain the same shape after the derivative. If 'none' it will lose one slice
 
     :return: a :class:`Tensor`
     """
@@ -81,7 +82,9 @@ def partial(t, dim, order=1, bounds=None, periodic=False):
     if not hasattr(bounds[0], '__len__'):
         bounds = [bounds]
     if not hasattr(periodic, '__len__'):
-        periodic = [periodic]*t.dim()
+        periodic = [periodic]*len(dim)
+    if not isinstance(pad, list):
+        pad = [pad]*len(dim)
 
     t2 = t.clone()
     for i, d in enumerate(dim):
@@ -97,13 +100,19 @@ def partial(t, dim, order=1, bounds=None, periodic=False):
                 if t2.Us[d] is None:
                     t2.cores[d] = (t2.cores[d][..., 1:, :] - t2.cores[d][..., :-1, :]) / step
                     if t2.cores[d].dim() == 3:
-                        pad = torch.zeros(t2.cores[d].shape[0], 1, t2.cores[d].shape[2])
+                        pad_slice = torch.zeros(t2.cores[d].shape[0], 1, t2.cores[d].shape[2])
                     else:
-                        pad = torch.zeros(1, t2.cores[d].shape[1])
-                    t2.cores[d] = torch.cat((t2.cores[d], pad), dim=-2)
+                        pad_slice = torch.zeros(1, t2.cores[d].shape[1])
+                    if pad[i] == 'top':
+                        t2.cores[d] = torch.cat((t2.cores[d], pad_slice), dim=-2)
+                    if pad[i] == 'bottom':
+                        t2.cores[d] = torch.cat((pad_slice, t2.cores[d]), dim=-2)
                 else:
                     t2.Us[d] = (t2.Us[d][1:, :] - t2.Us[d][:-1, :]) / step
-                    t2.Us[d] = torch.cat((t2.Us[d], torch.zeros(1, t2.cores[d].shape[-2])), dim=0)
+                    if pad[i] == 'top':
+                        t2.Us[d] = torch.cat((t2.Us[d], torch.zeros(1, t2.cores[d].shape[-2])), dim=0)
+                    if pad[i] == 'bottom':
+                        t2.Us[d] = torch.cat((torch.zeros(1, t2.cores[d].shape[-2]), t2.Us[d]), dim=0)
     return t2
 
 

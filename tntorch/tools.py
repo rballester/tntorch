@@ -143,7 +143,7 @@ def meshgrid(*axes):
     return tensors
 
 
-def flip(t, dims):
+def flip(t, dim):
     """
     Reverses the order of a tensor along one or several dimensions; see NumPy's or PyTorch's `flip()`.
 
@@ -153,12 +153,12 @@ def flip(t, dims):
     :return: another :class:`Tensor` of the same shape
     """
 
-    if not hasattr(dims, '__len__'):
-        dims = [dims]
+    if not hasattr(dim, '__len__'):
+        dim = [dim]
 
     shape = t.shape
     result = t.clone()
-    for d in dims:
+    for d in dim:
         idx = np.arange(shape[d]-1, -1, -1)
         if result.Us[d] is not None:
             result.Us[d] = result.Us[d][idx, :]

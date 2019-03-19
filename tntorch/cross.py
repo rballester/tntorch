@@ -4,11 +4,10 @@ import sys
 import time
 import numpy as np
 import maxvolpy.maxvol
-import warnings
+import logging
 
 
 def cross(function, domain=None, tensors=None, function_arg='vectors', ranks_tt=None, kickrank=3, rmax=100, eps=1e-6, max_iter=25, val_size=1000, verbose=True, return_info=False):
-
     """
     Cross-approximation routine that samples a black-box function and returns an N-dimensional tensor train approximating it. It accepts either:
 
@@ -17,12 +16,12 @@ def cross(function, domain=None, tensors=None, function_arg='vectors', ranks_tt=
 
     :Examples:
 
-    >>> tn.cross(function=lambda x: x**2, ranks_tt=5, tensors=[t])  # Compute the element-wise square of `t` using 5 TT-ranks
+    >>> tn.cross(function=lambda x: x**2, tensors=[t])  # Compute the element-wise square of `t` using 5 TT-ranks
 
     >>> domain = [torch.linspace(-1, 1, 32)]*5
-    >>> tn.cross(function=lambda x, y, z, t, w: x**2 + y*z + torch.cos(t + w), ranks_tt=3, domain=domain)  # Approximate a function over the rectangle :math:`[-1, 1]^5`
+    >>> tn.cross(function=lambda x, y, z, t, w: x**2 + y*z + torch.cos(t + w), domain=domain)  # Approximate a function over the rectangle :math:`[-1, 1]^5`
 
-    >>> tn.cross(function=lambda x: torch.sum(x**2, dim=1), ranks_tt=2, domain=domain, function_arg='matrix')  # An example where the function accepts a matrix
+    >>> tn.cross(function=lambda x: torch.sum(x**2, dim=1), domain=domain, function_arg='matrix')  # An example where the function accepts a matrix
 
     References:
 
@@ -238,7 +237,6 @@ def cross(function, domain=None, tensors=None, function_arg='vectors', ranks_tt=
             t_linterfaces, t_rinterfaces = init_interfaces()  # Recompute interfaces
 
     if val_eps > eps:
-        import logging
         logging.warning('eps={:g} (larger than {}) when cross-approximating {}'.format(val_eps, eps, function))
 
     if verbose:
@@ -249,7 +247,7 @@ def cross(function, domain=None, tensors=None, function_arg='vectors', ranks_tt=
         info['lsets'] = lsets
         info['rsets'] = rsets
         info['left_locals'] = left_locals
-        info['total_time'] = time.time()-start,
+        info['total_time'] = time.time()-start
         info['val_eps'] = val_eps
         return tn.Tensor([torch.Tensor(c) for c in cores]), info
     else:

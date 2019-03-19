@@ -741,18 +741,25 @@ class Tensor(object):
             dim = [dim]*self.dim()
 
         cores = []
+        Us = []
         for n in range(self.dim()):
             if n in dim and self.Us[n] is not None:
                 if self.cores[n].dim() == 2:
                     cores.append(torch.einsum('jk,aj->ak', (self.cores[n], self.Us[n])))
                 else:
                     cores.append(torch.einsum('ijk,aj->iak', (self.cores[n], self.Us[n])))
+                Us.append(None)
             else:
                 if _clone:
                     cores.append(self.cores[n].clone())
+                    if self.Us[n] is not None:
+                        Us.append(self.Us[n].clone())
+                    else:
+                        Us.append(None)
                 else:
                     cores.append(self.cores[n])
-        return tn.Tensor(cores, idxs=self.idxs)
+                    Us.append(self.Us[n])
+        return tn.Tensor(cores, Us, idxs=self.idxs)
 
     def tt(self):
         """
@@ -984,7 +991,7 @@ class Tensor(object):
         self.orthogonalize(N-1)  # Make everything left-orthogonal
         if verbose:
             print('Orthogonalization time:', time.time() - start)
-        delta = eps/max(1, np.sqrt(N-1))*torch.norm(self.cores[-1])
+        delta = eps/max(1, torch.sqrt(torch.Tensor([N-1])))*torch.norm(self.cores[-1])
         delta = delta.item()
         for mu in range(N - 1, 0, -1):
             M = tn.right_unfolding(self.cores[mu])
