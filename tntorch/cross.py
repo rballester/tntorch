@@ -3,11 +3,61 @@ import torch
 import sys
 import time
 import numpy as np
-import maxvolpy.maxvol
 import logging
 
 
-def cross(function, domain=None, tensors=None, function_arg='vectors', ranks_tt=None, kickrank=3, rmax=100, eps=1e-6, max_iter=25, val_size=1000, verbose=True, return_info=False):
+def minimum(t, rmax=10, max_iter=10, verbose=False):
+    """
+    Estimate the minimal element of a tensor.
+
+    :param t: input :class:`Tensor`
+    :param rmax: used for :func:`cross.cross()`. Lower is faster; higher is more accurate (default is 10)
+    :param max_iter: used for :func:`cross.cross()`. Lower is faster; higher is more accurate (default is 10)
+    :param verbose: default is False
+
+    :return: a scalar
+    """
+    return t[argmin(t, rmax=rmax, max_iter=10, verbose=verbose)]
+
+
+def argmin(t, rmax=10, max_iter=10, verbose=False):
+    """
+    Estimate the minimizer of a tensor (position where its minimum is located).
+
+    For arguments, see :func:`cross.minimum()`
+
+    :return: a tuple
+    """
+
+    _, info = cross(function=lambda x: x, tensors=t, rmax=rmax, max_iter=max_iter, verbose=verbose, return_info=True, _minimize=True)
+    return info['argmin']
+
+
+def maximum(t, rmax=10, max_iter=10, verbose=False):
+    """
+    Estimate the maximal element of a tensor.
+
+    For arguments, see :func:`cross.minimum()`
+
+    :return: a scalar
+    """
+
+    return -minimum(-t, rmax=rmax, max_iter=10, verbose=verbose)
+
+
+def argmax(t, rmax=10, max_iter=10, verbose=False):
+    """
+    Estimate the maximizer of a tensor (position where its maximum is located).
+
+    For arguments, see :func:`cross.minimum()`
+
+    :return: a tuple
+    """
+
+    return argmin(-t, rmax=rmax, max_iter=max_iter, verbose=verbose)
+
+
+def cross(function, domain=None, tensors=None, function_arg='vectors', ranks_tt=None, kickrank=3, rmax=100, eps=1e-6, max_iter=25, val_size=1000, verbose=True, return_info=False, _minimize=False):
     """
     Cross-approximation routine that samples a black-box function and returns an N-dimensional tensor train approximating it. It accepts either:
 
@@ -46,6 +96,11 @@ def cross(function, domain=None, tensors=None, function_arg='vectors', ranks_tt=
 
     :return: an N-dimensional TT :class:`Tensor` (if `return_info`=True, also a dictionary)
     """
+
+    try:
+        import maxvolpy.maxvol
+    except ModuleNotFoundError:
+        raise ModuleNotFoundError("Functions that require cross-approximation require the optional maxvolpy package, which can be installed by 'pip install maxvolpy'. More info is available at https://bitbucket.org/muxas/maxvolpy")
 
     assert domain is not None or tensors is not None
     assert function_arg in ('vectors', 'matrix')
@@ -120,7 +175,9 @@ def cross(function, domain=None, tensors=None, function_arg='vectors', ranks_tt=
     info = {
         'nsamples': 0,
         'eval_time': 0,
-        'val_epss': []
+        'val_epss': [],
+        'min': 0,
+        'argmin': None
     }
 
     def evaluate_function(j):  # Evaluate function over Rs[j] x Rs[j+1] fibers, each of size I[j]
@@ -135,6 +192,14 @@ def cross(function, domain=None, tensors=None, function_arg='vectors', ranks_tt=
         eval_start = time.time()
         evaluation = f(*Xs)
         info['eval_time'] += time.time() - eval_start
+        if _minimize:
+            evaluation = np.pi/2 - torch.atan(evaluation - info['min'])  # Function used by I. Oseledets for TT minimization in ttpy
+            evaluation_argmax = torch.argmax(evaluation)
+            eval_min = torch.tan(np.pi/2 - evaluation[evaluation_argmax]) + info['min']
+            if info['min'] == 0 or eval_min < info['min']:
+                coords = np.unravel_index(evaluation_argmax, [Rs[j], Is[j], Rs[j + 1]])
+                info['min'] = eval_min
+                info['argmin'] = tuple(lsets[j][coords[0]][1:]) + tuple([coords[1]]) + tuple(rsets[j][coords[2]][:-1])
 
         # Check for nan/inf values
         if evaluation.dim() == 2:
@@ -167,7 +232,10 @@ def cross(function, domain=None, tensors=None, function_arg='vectors', ranks_tt=
             # QR + maxvol towards the right
             V = torch.reshape(V, [-1, V.shape[2]])  # Left unfolding
             Q, R = torch.qr(V)
-            local, _ = maxvolpy.maxvol.maxvol(Q.detach().numpy())
+            if _minimize:
+                local, _ = maxvolpy.maxvol.rect_maxvol(Q.detach().numpy(), maxK=Q.shape[1])
+            else:
+                local, _ = maxvolpy.maxvol.maxvol(Q.detach().numpy())
             V = torch.gels(Q.t(), Q[local, :].t())[0].t()
             cores[j] = torch.reshape(V, [Rs[j], Is[j], Rs[j+1]])
             left_locals.append(local)
@@ -190,7 +258,10 @@ def cross(function, domain=None, tensors=None, function_arg='vectors', ranks_tt=
             # QR + maxvol towards the left
             V = torch.reshape(V, [Rs[j], -1])  # Right unfolding
             Q, R = torch.qr(V.t())
-            local, _ = maxvolpy.maxvol.maxvol(Q.detach().numpy())
+            if _minimize:
+                local, _ = maxvolpy.maxvol.rect_maxvol(Q.detach().numpy(), maxK=Q.shape[1])
+            else:
+                local, _ = maxvolpy.maxvol.maxvol(Q.detach().numpy())
             V = torch.gels(Q.t(), Q[local, :].t())[0]
             cores[j] = torch.reshape(torch.as_tensor(V), [Rs[j], Is[j], Rs[j+1]])
 
@@ -236,7 +307,7 @@ def cross(function, domain=None, tensors=None, function_arg='vectors', ranks_tt=
             Rs = newRs
             t_linterfaces, t_rinterfaces = init_interfaces()  # Recompute interfaces
 
-    if val_eps > eps:
+    if val_eps > eps and not _minimize:
         logging.warning('eps={:g} (larger than {}) when cross-approximating {}'.format(val_eps, eps, function))
 
     if verbose:

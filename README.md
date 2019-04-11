@@ -10,6 +10,7 @@
 - Tensor **decomposition** and **reconstruction**
 - Element-wise and tensor-tensor **arithmetics**
 - Building tensors from black-box functions using **cross-approximation**
+- Finding global **maxima** and **minima** from tensors
 - **Statistics** and **sensitivity analysis**
 - **Optimization** using autodifferentiation
 - **Misc. operations** on tensors: stacking, unfolding, sampling, derivating, etc.
@@ -103,6 +104,8 @@ git clone https://github.com/rballester/tntorch.git
 cd tntorch
 pip install .
 ```
+
+For functions that use cross-approximation, the optional package [*maxvolpy*](https://bitbucket.org/muxas/maxvolpy) is required (it can be installed via `pip install maxvolpy`).
 
 ## Testing
 
