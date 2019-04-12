@@ -262,6 +262,101 @@ def kurtosis(t, fisher=True):
     return tn.mean(((t-tn.mean(t))/tn.std(t))**4) - fisher*3
 
 
+def raw_moment(t, k, eps=1e-6):
+    """
+    Compute a raw moment :math:`\\mathbb{E}[t^k]'.
+
+    :param t: input :class:`Tensor`
+    :param k: the desired moment order (integer :math:`\ge 1`)
+    :param eps: relative error for rounding (default is 1e-6)
+
+    :return: the :math:`k`-th order raw moment of `t`
+    """
+
+    return hadamard_sum([t]*k, eps=eps) / t.numel()
+
+
+def normalized_moment(t, k, eps=1e-12):
+    """
+    Compute a normalized central moment :math:`\\mathbb{E}[(t - \\mathbb{E}[t])^k] / \\sigma^k'.
+
+    :param t: input :class:`Tensor`
+    :param k: the desired moment order (integer :math:`\ge 1`)
+    :param eps: relative error for rounding (default is 1e-12)
+
+    :return: the :math:`k`-th order normalized moment of `t`
+    """
+
+    return raw_moment(t-tn.mean(t), k=k, eps=eps) / tn.var(t)**(k/2.) / t.numel()
+
+
+def hadamard_sum(ts, eps=1e-6):
+    """
+    Given tensors :math:`t_1, \\dots, t_M`, computes :math:'\\Sum (t_1 \\circ \\dots \\circ t_M)'.
+
+    Reference: this is a variant of A. Novikov et al., "Putting MRFs on a Tensor Train" (2016), Alg. 1
+
+    :param ts: a list of :class:`Tensor` (the algorithm will use temporary TT-format copies of those)
+    :param eps: relative error used at each rounding step (default is 1e-6)
+
+    :return: a scalar
+    """
+
+    def diag_core(c, m):
+        """
+        Takes a TT core of shape Rl x I x Rr and organizes it as a tensor of shape I x Rl x Rr x I
+        """
+
+        factor = c.permute(0, 2, 1)
+        factor = torch.reshape(factor, [-1, factor.shape[-1]])
+        core = torch.zeros(factor.shape[1], factor.shape[1] + 1, factor.shape[0])
+        core[:, 0, :] = factor.t()
+        core = core.reshape(factor.shape[1] + 1, factor.shape[1], factor.shape[0]).permute(0, 2, 1)[:-1, :, :]
+        core = core.reshape([c.shape[1], c.shape[0], c.shape[2], c.shape[1]])
+        if m == 0:
+            core = torch.sum(core, dim=0, keepdim=True)
+        if m == M-1:
+            core = torch.sum(core, dim=-1, keepdim=True)
+        return core
+
+    def get_tensor(cores):
+        M = len(cores)
+        cs = []
+        for m in range(M):
+            c = diag_core(cores[m], m)
+            cs.append(c.reshape(c.shape[0], c.shape[1]*c.shape[2], c.shape[3]))
+        t = tn.Tensor(cs)
+        t.round_tt(eps)
+        cs = t.cores
+        cs = [cs[m].reshape([cs[m].shape[0], cores[m].shape[0], cores[m].shape[2], cs[m].shape[-1]]) for m in range(M)]
+        return cs
+
+    M = len(ts)
+    tstt = []
+    for m in range(M):  # Convert everything to the TT format
+        t = ts[m].decompress_tucker_factors()
+        t._cp_to_tt()
+        tstt.append(t)
+    ts = tstt
+    N = ts[0].dim()
+    thiscores = get_tensor([t.cores[0] for t in ts])
+
+    for n in range(1, N):
+        nextcores = get_tensor([t.cores[n] for t in ts])
+        newcores = []
+        for m in range(M):
+            c = torch.einsum('ijkl,akbc->iajblc', (thiscores[m], nextcores[m]))  # vecmat product
+            c = torch.reshape(c, [c.shape[0]*c.shape[1]*c.shape[2], c.shape[3], c.shape[4]*c.shape[5]])
+            newcores.append(c)
+        thiscores = tn.round_tt(tn.Tensor(newcores), eps=eps).cores
+
+        if n < N-1:
+            for m in range(M):  # Cast the vector as a TT-matrix for the next iteration
+                thiscores[m] = thiscores[m].reshape(thiscores[m].shape[0], 1, thiscores[m].shape[1], -1)
+        else:
+            return tn.Tensor(thiscores).torch().item()
+
+
 def normsq(t):
     """
     Computes the squared norm of a :class:`Tensor`.
