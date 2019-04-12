@@ -207,7 +207,7 @@ def mean(t, dim=None, keepdim=False):
     :param dim: an int or list of ints (default: all)
     :param keepdim: whether to keep the same number of dimensions
 
-    :return: a scalar
+    :return: a scalar (if keepdim is False and all dims were chosen) or :class:`Tensor` otherwise
     """
 
     return tn.sum(t, dim, keepdim, _normalize=True)

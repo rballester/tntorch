@@ -17,6 +17,7 @@ def minimum(t, rmax=10, max_iter=10, verbose=False):
 
     :return: a scalar
     """
+
     return t[argmin(t, rmax=rmax, max_iter=10, verbose=verbose)]
 
 
@@ -134,7 +135,7 @@ def cross(function, domain=None, tensors=None, function_arg='vectors', ranks_tt=
 
     # Prepare left and right sets
     lsets = [np.array([[0]])] + [None]*(N-1)
-    randint = np.hstack([np.random.randint(0, Is[n+1], [max(Rs), 1]) for n in range(N-1)] + [np.zeros([max(Rs), 1])])
+    randint = np.hstack([np.random.randint(0, Is[n+1], [max(Rs), 1]) for n in range(N-1)] + [np.zeros([max(Rs), 1], dtype=np.int)])
     rsets = [randint[:Rs[n+1], n:] for n in range(N-1)] + [np.array([[0]])]
 
     # Initialize left and right interfaces for `tensors`
@@ -300,7 +301,7 @@ def cross(function, domain=None, tensors=None, function_arg='vectors', ranks_tt=
             newRs[1:-1] = np.minimum(rmax, newRs[1:-1]+kickrank)
             for n in list(range(1, N)) + list(range(N-1, 0, -1)):
                 newRs[n] = min(newRs[n-1]*Is[n-1], newRs[n], Is[n]*newRs[n+1])
-            extra = np.hstack([np.random.randint(0, Is[n+1], [max(newRs), 1]) for n in range(N-1)] + [np.zeros([max(newRs), 1])])
+            extra = np.hstack([np.random.randint(0, Is[n+1], [max(newRs), 1]) for n in range(N-1)] + [np.zeros([max(newRs), 1], dtype=np.int)])
             for n in range(N-1):
                 if newRs[n+1] > Rs[n+1]:
                     rsets[n] = np.vstack([rsets[n], extra[:newRs[n+1]-Rs[n+1], n:]])

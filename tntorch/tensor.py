@@ -295,15 +295,15 @@ class Tensor(object):
     def __pow__(self, power):
         return tn.cross(function=lambda x, y: x**y, tensors=[self, tn.full_like(self, fill_value=power)], verbose=False)
 
-    """
-    Boolean logic
-    """
-
     def __rmul__(self, other):
         return self * other
 
     def __truediv__(self, other):
         return self * (1./other)
+
+    """
+    Boolean logic
+    """
 
     def __invert__(self):
         return 1 - self
