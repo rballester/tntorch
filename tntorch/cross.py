@@ -6,22 +6,25 @@ import numpy as np
 import logging
 
 
-def minimum(t, rmax=10, max_iter=10, verbose=False):
+def minimum(tensors=None, function=lambda x: x, rmax=10, max_iter=10, verbose=False, **kwargs):
     """
-    Estimate the minimal element of a tensor.
+    Estimate the minimal element of a tensor (or a function of one or several tensors)
 
     :param t: input :class:`Tensor`
     :param rmax: used for :func:`cross.cross()`. Lower is faster; higher is more accurate (default is 10)
     :param max_iter: used for :func:`cross.cross()`. Lower is faster; higher is more accurate (default is 10)
     :param verbose: default is False
+    :param **kwargs: passed to :func:`cross.cross()`
 
     :return: a scalar
     """
 
-    return t[argmin(t, rmax=rmax, max_iter=10, verbose=verbose)]
+    _, info = cross(**kwargs, tensors=tensors, function=function, rmax=rmax, max_iter=max_iter, verbose=verbose, return_info=True, _minimize=True)
+    return info['min']
+    # return t[argmin(rmax=rmax, max_iter=max_iter, verbose=verbose, **kwargs)]
 
 
-def argmin(t, rmax=10, max_iter=10, verbose=False):
+def argmin(tensors=None, function=lambda x: x, rmax=10, max_iter=10, verbose=False, **kwargs):
     """
     Estimate the minimizer of a tensor (position where its minimum is located).
 
@@ -30,11 +33,11 @@ def argmin(t, rmax=10, max_iter=10, verbose=False):
     :return: a tuple
     """
 
-    _, info = cross(function=lambda x: x, tensors=t, rmax=rmax, max_iter=max_iter, verbose=verbose, return_info=True, _minimize=True)
+    _, info = cross(**kwargs, tensors=tensors, function=function, rmax=rmax, max_iter=max_iter, verbose=verbose, return_info=True, _minimize=True)
     return info['argmin']
 
 
-def maximum(t, rmax=10, max_iter=10, verbose=False):
+def maximum(tensors=None, function=lambda x: x, rmax=10, max_iter=10, verbose=False, **kwargs):
     """
     Estimate the maximal element of a tensor.
 
@@ -43,10 +46,11 @@ def maximum(t, rmax=10, max_iter=10, verbose=False):
     :return: a scalar
     """
 
-    return -minimum(-t, rmax=rmax, max_iter=10, verbose=verbose)
+    _, info = cross(**kwargs, function=lambda *x: -function(*x), tensors=tensors, rmax=rmax, max_iter=max_iter, verbose=verbose, return_info=True, _minimize=True)
+    return -info['min']
 
 
-def argmax(t, rmax=10, max_iter=10, verbose=False):
+def argmax(tensors=None, function=lambda x: x, rmax=10, max_iter=10, verbose=False, **kwargs):
     """
     Estimate the maximizer of a tensor (position where its maximum is located).
 
@@ -55,10 +59,11 @@ def argmax(t, rmax=10, max_iter=10, verbose=False):
     :return: a tuple
     """
 
-    return argmin(-t, rmax=rmax, max_iter=max_iter, verbose=verbose)
+    _, info = cross(**kwargs, tensors=tensors, function=lambda *x: -function(*x), rmax=rmax, max_iter=max_iter, verbose=verbose, return_info=True, _minimize=True)
+    return info['argmin']
 
 
-def cross(function, domain=None, tensors=None, function_arg='vectors', ranks_tt=None, kickrank=3, rmax=100, eps=1e-6, max_iter=25, val_size=1000, verbose=True, return_info=False, _minimize=False):
+def cross(function=lambda x: x, domain=None, tensors=None, function_arg='vectors', ranks_tt=None, kickrank=3, rmax=100, eps=1e-6, max_iter=25, val_size=1000, verbose=True, return_info=False, record_samples=False, _minimize=False):
     """
     Cross-approximation routine that samples a black-box function and returns an N-dimensional tensor train approximating it. It accepts either:
 
@@ -159,7 +164,7 @@ def cross(function, domain=None, tensors=None, function_arg='vectors', ranks_tt=
     t_linterfaces, t_rinterfaces = init_interfaces()
 
     # Create a validation set
-    Xs_val = [torch.as_tensor(np.random.choice(I, val_size)) for I in Is]
+    Xs_val = [torch.as_tensor(np.random.choice(I, int(val_size))) for I in Is]
     ys_val = f(*[t[Xs_val].torch() for t in tensors])
     if ys_val.dim() > 1:
         assert ys_val.dim() == 2
@@ -180,6 +185,9 @@ def cross(function, domain=None, tensors=None, function_arg='vectors', ranks_tt=
         'min': 0,
         'argmin': None
     }
+    if record_samples:
+        info['sample_positions'] = torch.zeros(0, N)
+        info['sample_values'] = torch.zeros(0)
 
     def evaluate_function(j):  # Evaluate function over Rs[j] x Rs[j+1] fibers, each of size I[j]
         Xs = []
@@ -192,6 +200,9 @@ def cross(function, domain=None, tensors=None, function_arg='vectors', ranks_tt=
 
         eval_start = time.time()
         evaluation = f(*Xs)
+        if record_samples:
+            info['sample_positions'] = torch.cat((info['sample_positions'], torch.cat([x[:, None] for x in Xs], dim=1)), dim=0)
+            info['sample_values'] = torch.cat((info['sample_values'], evaluation))
         info['eval_time'] += time.time() - eval_start
         if _minimize:
             evaluation = np.pi/2 - torch.atan(evaluation - info['min'])  # Function used by I. Oseledets for TT minimization in ttpy

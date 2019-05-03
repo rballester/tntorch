@@ -1,7 +1,6 @@
 import numpy as np
 import torch
 import tntorch as tn
-torch.set_default_dtype(torch.float64)
 import time
 
 

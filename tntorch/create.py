@@ -159,7 +159,7 @@ def zeros_like(t, **kwargs):
     return zeros(t.shape, **kwargs)
 
 
-def gaussian(shape, sigma_factor=0.2):
+def gaussian(*shape, sigma_factor=0.2):
     """
     Create a multivariate Gaussian that is axis-aligned (i.e. with diagonal covariance matrix).
 

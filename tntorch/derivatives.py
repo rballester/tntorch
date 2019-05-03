@@ -6,6 +6,8 @@ def partialset(t, order=1, mask=None, bounds=None):
     """
     Given a tensor, compute another one that contains all partial derivatives of certain order(s) and according to some optional mask.
 
+    This function does not use padding.
+
     :Examples:
 
     >>> t = tn.rand([10, 10, 10])  # A 3D tensor
@@ -29,14 +31,12 @@ def partialset(t, order=1, mask=None, bounds=None):
 
     max_order = max(order)
     def diff(core, n):
-        if core.dim() == 3:
-            pad = torch.zeros(core.shape[0], 1, core.shape[2])
-        else:
-            pad = torch.zeros(1, core.shape[1])
+        # print('input:', core.shape)
         if core.shape[1] == 1:
-            return pad
+            raise ValueError('Derivative of order {} requested, ')
         step = (bounds[n][1] - bounds[n][0]) / (core.shape[-2] - 1)
-        return torch.cat(((core[..., 1:, :] - core[..., :-1, :]) / step, pad), dim=-2)
+        # print('output:', ((core[..., 1:, :] - core[..., :-1, :]) / step).shape)
+        return (core[..., 1:, :] - core[..., :-1, :]) / step
     cores = []
     idxs = []
     for n in range(t.dim()):
@@ -46,6 +46,7 @@ def partialset(t, order=1, mask=None, bounds=None):
             stack = [torch.einsum('ijk,aj->iak', (t.cores[n], t.Us[n]))]
         idx = torch.zeros([t.shape[n]])
         for o in range(1, max_order+1):
+            # print('******', o, max_order+1)
             stack.append(diff(stack[-1], n))
             idx = torch.cat((idx, torch.ones(stack[-1].shape[-2])*o))
             if o == max_order:
@@ -53,6 +54,8 @@ def partialset(t, order=1, mask=None, bounds=None):
         cores.append(torch.cat(stack, dim=-2))
         idxs.append(idx)
     d = tn.Tensor(cores, idxs=idxs)
+    # print(d)
+    # assert 0
     wm = tn.automata.weight_mask(t.dim(), order, nsymbols=max_order+1)
     if mask is not None:
         wm = tn.mask(wm, mask)

@@ -327,6 +327,7 @@ def sample(t, P=1):
         Treat each row of a matrix M as a PMF and select a column per row according to it
         """
 
+        M = np.abs(M)
         M /= torch.sum(M, dim=1)[:, None]  # Normalize row-wise
         M = np.hstack([np.zeros([M.shape[0], 1]), M])
         M = np.cumsum(M, axis=1)

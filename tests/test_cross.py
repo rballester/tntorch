@@ -1,5 +1,6 @@
 import tntorch as tn
 import torch
+torch.set_default_dtype(torch.float64)
 from util import random_format
 
 

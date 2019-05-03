@@ -60,7 +60,7 @@ def optimize(tensors, loss_function, optimizer=torch.optim.Adam, tol=1e-4, max_i
             if len(loss) > 1:
                 print(' = {:10.4}'.format(losses[-1].item()), end='')
             print(' | total time: {:9.4f}'.format(time.time() - start))
-        losses[-1].backward()
+        losses[-1].backward(retain_graph=True)
         optimizer.step()
         iter += 1
     if verbose:

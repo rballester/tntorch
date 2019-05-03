@@ -1,5 +1,6 @@
 import tntorch as tn
 import torch
+torch.set_default_dtype(torch.float64)
 
 # in case the computer testing has no gpu, tests will just pass
 device = 'cuda' if torch.cuda.is_available() else 'cpu' 

@@ -1,5 +1,7 @@
 import numpy as np
 import tntorch as tn
+import torch
+torch.set_default_dtype(torch.float64)
 
 
 def test_orthogonalization():
