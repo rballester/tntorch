@@ -31,11 +31,9 @@ def partialset(t, order=1, mask=None, bounds=None):
 
     max_order = max(order)
     def diff(core, n):
-        # print('input:', core.shape)
         if core.shape[1] == 1:
-            raise ValueError('Derivative of order {} requested, ')
+            raise ValueError('Tensor size {} along dimension {} not enough to compute high-order derivative'.format(t.shape[n], n))
         step = (bounds[n][1] - bounds[n][0]) / (core.shape[-2] - 1)
-        # print('output:', ((core[..., 1:, :] - core[..., :-1, :]) / step).shape)
         return (core[..., 1:, :] - core[..., :-1, :]) / step
     cores = []
     idxs = []
@@ -46,7 +44,6 @@ def partialset(t, order=1, mask=None, bounds=None):
             stack = [torch.einsum('ijk,aj->iak', (t.cores[n], t.Us[n]))]
         idx = torch.zeros([t.shape[n]])
         for o in range(1, max_order+1):
-            # print('******', o, max_order+1)
             stack.append(diff(stack[-1], n))
             idx = torch.cat((idx, torch.ones(stack[-1].shape[-2])*o))
             if o == max_order:
@@ -54,8 +51,6 @@ def partialset(t, order=1, mask=None, bounds=None):
         cores.append(torch.cat(stack, dim=-2))
         idxs.append(idx)
     d = tn.Tensor(cores, idxs=idxs)
-    # print(d)
-    # assert 0
     wm = tn.automata.weight_mask(t.dim(), order, nsymbols=max_order+1)
     if mask is not None:
         wm = tn.mask(wm, mask)
