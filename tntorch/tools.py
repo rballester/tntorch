@@ -440,3 +440,44 @@ def reduce(ts, function, eps=0, rmax=np.iinfo(np.int32).max, algorithm='svd', ve
     for key in keys[1:]:
         result = tn.round(function(result, d[key], **kwargs), eps=eps, rmax=rmax, algorithm=algorithm)
     return result
+
+
+def pad(t, shape, dim=None, fill_value=0):
+    """
+    Pad a tensor with a constant value.
+
+    :param t: N-dim input :class:`Tensor`
+    :param shape: int or list of ints
+    :param dim: int or list of ints (default: all modes)
+    :param fill_value: default is 0
+
+    :return: a :class:`Tensor` of size `shape` along the indicated modes
+    """
+
+    if dim is None:
+        dim = range(t.dim())
+    if not hasattr(dim, '__len__'):
+        dim = [dim]
+    if not hasattr(shape, '__len__'):
+        shape = [shape]*len(dim)
+
+    t = t.clone()
+    for i in range(len(dim)):
+        mult = 0
+        if i == 0:
+            mult = fill_value
+        if t.Us[dim[i]] is None:
+            if t.cores[dim[i]].dim() == 2:
+                t.cores[dim[i]] = torch.cat([t.cores[dim[i]],
+                                             mult*torch.ones(shape[i] - t.cores[dim[i]].shape[0],
+                                                         t.cores[dim[i]].shape[1])], dim=0)
+            else:
+                t.cores[dim[i]] = torch.cat([t.cores[dim[i]],
+                                             mult*torch.ones(t.cores[dim[i]].shape[0],
+                                                         shape[i] - t.cores[dim[i]].shape[1],
+                                                         t.cores[dim[i]].shape[2])], dim=1)
+        else:
+            t.Us[dim[i]] = torch.cat([t.Us[dim[i]],
+                                         mult*torch.ones(shape[i] - t.Us[dim[i]].shape[0],
+                                                     t.Us[dim[i]].shape[1])], dim=0)
+    return t

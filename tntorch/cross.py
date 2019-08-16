@@ -154,9 +154,9 @@ def cross(function=lambda x: x, domain=None, tensors=None, function_arg='vectors
                 M = torch.ones(t.cores[-1].shape[-1], len(rsets[j]))
                 for n in range(N-1, j, -1):
                     if t.cores[n].dim() == 3:  # TT core
-                        M = torch.einsum('iaj,ja->ia', (t.cores[n][:, rsets[j][:, n-1-j], :], M))
+                        M = torch.einsum('iaj,ja->ia', [t.cores[n][:, rsets[j][:, n-1-j], :], M])
                     else:  # CP factor
-                        M = torch.einsum('ai,ia->ia', (t.cores[n][rsets[j][:, n-1-j], :], M))
+                        M = torch.einsum('ai,ia->ia', [t.cores[n][rsets[j][:, n-1-j], :], M])
                 rinterfaces[j] = M
             t_linterfaces.append(linterfaces)
             t_rinterfaces.append(rinterfaces)
@@ -193,9 +193,9 @@ def cross(function=lambda x: x, domain=None, tensors=None, function_arg='vectors
         Xs = []
         for k, t in enumerate(tensors):
             if tensors[k].cores[j].dim() == 3:  # TT core
-                V = torch.einsum('ai,ibj,jc->abc', (t_linterfaces[k][j], tensors[k].cores[j], t_rinterfaces[k][j]))
+                V = torch.einsum('ai,ibj,jc->abc', [t_linterfaces[k][j], tensors[k].cores[j], t_rinterfaces[k][j]])
             else:  # CP factor
-                V = torch.einsum('ai,bi,ic->abc', (t_linterfaces[k][j], tensors[k].cores[j], t_rinterfaces[k][j]))
+                V = torch.einsum('ai,bi,ic->abc', [t_linterfaces[k][j], tensors[k].cores[j], t_rinterfaces[k][j]])
             Xs.append(V.flatten())
 
         eval_start = time.time()
@@ -205,7 +205,7 @@ def cross(function=lambda x: x, domain=None, tensors=None, function_arg='vectors
             info['sample_values'] = torch.cat((info['sample_values'], evaluation))
         info['eval_time'] += time.time() - eval_start
         if _minimize:
-            evaluation = np.pi/2 - torch.atan(evaluation - info['min'])  # Function used by I. Oseledets for TT minimization in ttpy
+            evaluation = np.pi/2 - torch.atan((evaluation - info['min']))  # Function used by I. Oseledets for TT minimization in ttpy
             evaluation_argmax = torch.argmax(evaluation)
             eval_min = torch.tan(np.pi/2 - evaluation[evaluation_argmax]) + info['min']
             if info['min'] == 0 or eval_min < info['min']:
@@ -248,7 +248,7 @@ def cross(function=lambda x: x, domain=None, tensors=None, function_arg='vectors
                 local, _ = maxvolpy.maxvol.rect_maxvol(Q.detach().numpy(), maxK=Q.shape[1])
             else:
                 local, _ = maxvolpy.maxvol.maxvol(Q.detach().numpy())
-            V = torch.gels(Q.t(), Q[local, :].t())[0].t()
+            V = torch.lstsq(Q.t(), Q[local, :].t())[0].t()
             cores[j] = torch.reshape(V, [Rs[j], Is[j], Rs[j+1]])
             left_locals.append(local)
 
@@ -257,9 +257,9 @@ def cross(function=lambda x: x, domain=None, tensors=None, function_arg='vectors
             lsets[j+1] = np.c_[lsets[j][local_r, :], local_i]
             for k, t in enumerate(tensors):
                 if t.cores[j].dim() == 3:  # TT core
-                    t_linterfaces[k][j+1] = torch.einsum('ai,iaj->aj', (t_linterfaces[k][j][local_r, :], t.cores[j][:, local_i, :]))
+                    t_linterfaces[k][j+1] = torch.einsum('ai,iaj->aj', [t_linterfaces[k][j][local_r, :], t.cores[j][:, local_i, :]])
                 else:  # CP factor
-                    t_linterfaces[k][j+1] = torch.einsum('ai,ai->ai', (t_linterfaces[k][j][local_r, :], t.cores[j][local_i, :]))
+                    t_linterfaces[k][j+1] = torch.einsum('ai,ai->ai', [t_linterfaces[k][j][local_r, :], t.cores[j][local_i, :]])
 
         # Right-to-left sweep
         for j in range(N-1, 0, -1):
@@ -274,7 +274,7 @@ def cross(function=lambda x: x, domain=None, tensors=None, function_arg='vectors
                 local, _ = maxvolpy.maxvol.rect_maxvol(Q.detach().numpy(), maxK=Q.shape[1])
             else:
                 local, _ = maxvolpy.maxvol.maxvol(Q.detach().numpy())
-            V = torch.gels(Q.t(), Q[local, :].t())[0]
+            V = torch.lstsq(Q.t(), Q[local, :].t())[0]
             cores[j] = torch.reshape(torch.as_tensor(V), [Rs[j], Is[j], Rs[j+1]])
 
             # Map local indices to global ones
@@ -282,9 +282,9 @@ def cross(function=lambda x: x, domain=None, tensors=None, function_arg='vectors
             rsets[j-1] = np.c_[local_i, rsets[j][local_r, :]]
             for k, t in enumerate(tensors):
                 if t.cores[j].dim() == 3:  # TT core
-                    t_rinterfaces[k][j-1] = torch.einsum('iaj,ja->ia', (t.cores[j][:, local_i, :], t_rinterfaces[k][j][:, local_r]))
+                    t_rinterfaces[k][j-1] = torch.einsum('iaj,ja->ia', [t.cores[j][:, local_i, :], t_rinterfaces[k][j][:, local_r]])
                 else:  # CP factor
-                    t_rinterfaces[k][j-1] = torch.einsum('ai,ia->ia', (t.cores[j][local_i, :], t_rinterfaces[k][j][:, local_r]))
+                    t_rinterfaces[k][j-1] = torch.einsum('ai,ia->ia', [t.cores[j][local_i, :], t_rinterfaces[k][j][:, local_r]])
 
         # Leave the first core ready
         V = evaluate_function(0)
@@ -297,7 +297,10 @@ def cross(function=lambda x: x, domain=None, tensors=None, function_arg='vectors
             converged = True
 
         if verbose:  # Print status
-            print('| eps: {:.3e}'.format(val_eps), end='')
+            if _minimize:
+                print('| best: {:.8g}'.format(info['min']), end='')
+            else:
+                print('| eps: {:.3e}'.format(val_eps), end='')
             print(' | total time: {:8.4f} | largest rank: {:3d}'.format(time.time() - start, max(Rs)), end='')
             if converged:
                 print(' <- converged: eps < {}'.format(eps))
@@ -329,6 +332,7 @@ def cross(function=lambda x: x, domain=None, tensors=None, function_arg='vectors
     if return_info:
         info['lsets'] = lsets
         info['rsets'] = rsets
+        info['Rs'] = Rs
         info['left_locals'] = left_locals
         info['total_time'] = time.time()-start
         info['val_eps'] = val_eps
