@@ -63,7 +63,6 @@ def truncated_svd(M, delta=None, eps=None, rmax=None, left_ortho=True, algorithm
 
     :return: U, V
     """
-
     if delta is not None and eps is not None:
         raise ValueError('Provide either `delta` or `eps`')
     if delta is None and eps is not None:
@@ -78,6 +77,7 @@ def truncated_svd(M, delta=None, eps=None, rmax=None, left_ortho=True, algorithm
     if algorithm == 'svd':
         start = time.time()
         svd = torch.svd(M)[:2]
+
         singular_vectors = 'left'
         if verbose:
             print('Time (SVD):', time.time() - start)

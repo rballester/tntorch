@@ -182,7 +182,7 @@ def unbind(t, dim):
     return [t[[slice(None)]*dim + [sl] + [slice(None)]*(t.dim()-1-dim)] for sl in range(t.shape[dim])]
 
 
-def unfolding(data, n):
+def unfolding(data, n, batch=False):
     """
     Computes the `n-th mode unfolding <https://epubs.siam.org/doi/pdf/10.1137/07070111X>`_ of a PyTorch tensor.
 
@@ -191,8 +191,14 @@ def unfolding(data, n):
 
     :return: a PyTorch matrix
     """
-
-    return data.permute([n] + list(range(n)) + list(range(n + 1, data.dim()))).reshape([data.shape[n], -1])
+    if batch:
+        return data.permute(
+            [0, n] + \
+            list(range(1, n)) + \
+            list(range(n + 1, data.dim() - 1))
+        ).reshape([data.shape[0], data.shape[n], -1])
+    else:
+        return data.permute([n] + list(range(n)) + list(range(n + 1, data.dim()))).reshape([data.shape[n], -1])
 
 
 def right_unfolding(core):
