@@ -121,7 +121,7 @@ class Tensor(object):
             N = len(data)
         else:
             if isinstance(data, np.ndarray):
-                data = torch.Tensor(data, device=device)
+                data = torch.tensor(data, device=device)
             elif isinstance(data, torch.Tensor):
                 data = data.to(device)
             else:
@@ -221,12 +221,7 @@ class Tensor(object):
 
                         if batch:
                             self.cores[n] = torch.cat(
-                                [
-                                    torch.lstsq(unf_khatri_t[i],prod[i])[0]\
-                                         .transpose(-1, -2)\
-                                         .reshape(1, max(unf_khatri_t[i].shape), prod[i].shape[-1])
-                                    for i in range(batch_size)
-                                ]
+                                [torch.lstsq(unf_khatri_t[i],prod[i])[0].transpose(-1, -2)[None, ...] for i in range(batch_size)]
                             )
                         else:
                             self.cores[n] = torch.lstsq(unf_khatri_t,prod)[0].transpose(-1, -2)
@@ -660,6 +655,8 @@ class Tensor(object):
             key = np.array(key, dtype=np.int)
         if isinstance(key, np.ndarray) and key.ndim == 2:
             key = [key[:, col] for col in range(key.shape[1])]
+
+        device = self.cores[0].device
         key = self._process_key(key)
         last_mode = None
         factors = {'int': None, 'index': None, 'index_done': False}
@@ -747,7 +744,7 @@ class Tensor(object):
                     if factors['index'].shape[-2] != len(key[i]):
                         raise ValueError("Index arrays must have the same length")
                     a1 = factors['index']
-                    a2 = get_key(counter, key[i])
+                    a2 = get_key(counter, key[i]).to(device)
                     if a1.dim() == 2 and a2.dim() == 2:
                         factors['index'] = torch.einsum('ai,ai->ai', (a1, a2))
                     elif a1.dim() == 2 and a2.dim() == 3:

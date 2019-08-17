@@ -125,10 +125,13 @@ def meshgrid(*axes):
     :return: a list of N :class:`Tensor`, of N dimensions each
     """
 
+    device = None
     if not hasattr(axes, '__len__'):
         axes = [axes]
     if hasattr(axes[0], '__len__'):
         axes = axes[0]
+    if hasattr(axes[0], 'device'):
+        device = axes[0].device
     axes = list(axes)
     N = len(axes)
     for n in range(N):
@@ -137,9 +140,9 @@ def meshgrid(*axes):
 
     tensors = []
     for n in range(N):
-        cores = [torch.ones(1, len(ax), 1) for ax in axes]
-        cores[n] = torch.Tensor(axes[n].to(torch.get_default_dtype()))[None, :, None]
-        tensors.append(tn.Tensor(cores))
+        cores = [torch.ones(1, len(ax), 1).to(device) for ax in axes]
+        cores[n] = torch.tensor(axes[n].type(torch.get_default_dtype()))[None, :, None].to(device)
+        tensors.append(tn.Tensor(cores, device=device))
     return tensors
 
 
