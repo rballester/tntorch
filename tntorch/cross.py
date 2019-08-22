@@ -338,6 +338,6 @@ def cross(function=lambda x: x, domain=None, tensors=None, function_arg='vectors
         info['left_locals'] = left_locals
         info['total_time'] = time.time()-start
         info['val_eps'] = val_eps
-        return tn.Tensor([torch.tensor(c) for c in cores]), info
+        return tn.Tensor([c if isinstance(c, torch.Tensor) else torch.tensor(c) for c in cores]), info
     else:
-        return tn.Tensor([torch.tensor(c) for c in cores])
+        return tn.Tensor([c if isinstance(c, torch.Tensor) else torch.tensor(c) for c in cores])

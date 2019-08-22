@@ -15,7 +15,7 @@ def weight_mask(N, weight, nsymbols=2):
 
     if not hasattr(weight, '__len__'):
         weight = [weight]
-    weight = torch.Tensor(weight).long()
+    weight = torch.tensor(weight).long()
     assert weight[0] >= 0
     t = tn.weight_one_hot(N, int(max(weight) + 1), nsymbols)
     t.cores[-1] = torch.sum(t.cores[-1][:, :, weight], dim=2, keepdim=True)
@@ -96,7 +96,7 @@ def accepted_inputs(t):
             return
         fiber = torch.einsum('ijk,k->ij', (t.cores[mu], rights[mu + 1]))
         per_point = torch.matmul(left, fiber).round()
-        c = torch.cat((torch.Tensor([0]), per_point.cumsum(dim=0))).long()
+        c = torch.cat((torch.tensor([0], dtype=torch.float64), per_point.cumsum(dim=0))).long()
         for i, p in enumerate(per_point):
             if c[i] == c[i+1]:  # Improductive prefix, don't go further
                 continue

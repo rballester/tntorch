@@ -141,7 +141,11 @@ def meshgrid(*axes):
     tensors = []
     for n in range(N):
         cores = [torch.ones(1, len(ax), 1).to(device) for ax in axes]
-        cores[n] = torch.tensor(axes[n].type(torch.get_default_dtype()))[None, :, None].to(device)
+        if isinstance(axes[n], torch.Tensor):
+            cores[n] = axes[n].type(torch.get_default_dtype())
+        else:
+            cores[n] = torch.tensor(axes[n].type(torch.get_default_dtype()))
+        cores[n] = cores[n][None, :, None].to(device)
         tensors.append(tn.Tensor(cores, device=device))
     return tensors
 
@@ -358,7 +362,7 @@ def sample(t, P=1):
         fiber = torch.einsum('ijk,k->ij', (t.cores[mu], rights[mu + 1]))
         per_point = torch.einsum('ij,jk->ik', (lefts, fiber))
         rows = from_matrix(per_point)
-        Xs[:, mu] = torch.Tensor(rows)
+        Xs[:, mu] = torch.tensor(rows)
         lefts = torch.einsum('ij,jik->ik', (lefts, t.cores[mu][:, rows, :]))
 
     return Xs

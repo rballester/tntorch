@@ -20,7 +20,7 @@ def _full_rank_tt(data, batch=False):  # Naive TT formatting, don't even attempt
     else:
         N = data.dim()
 
-    data = torch.Tensor(data) if type(data) is not torch.Tensor else data
+    data = data if isinstance(data, torch.Tensor) else torch.tensor(data)
     device = data.device
 
     if batch:
@@ -306,49 +306,83 @@ class Tensor(object):
             other.cores[0].data *= factor
         if self.dim() == 1:  # Special case
             return Tensor([self.decompress_tucker_factors().cores[0] + other.decompress_tucker_factors().cores[0]])
+
+        if self.batch:
+            idxs = 'bijk,baj->biak'
+        else:
+            idxs = 'ijk,aj->iak'
+
         this, other = _broadcast(self, other)
         cores = []
         Us = []
         for n in range(this.dim()):
             core1 = this.cores[n]
             core2 = other.cores[n]
+
             # CP + CP -> CP, other combinations -> TT
-            if core1.dim() == 2 and core2.dim() == 2:
-                core1 = core1[None, :, :]
-                core2 = core2[None, :, :]
+            if (core1.dim() == 3 and core2.dim() == 4 and self.batch) or (core1.dim() == 2 and core2.dim() == 2 and not self.batch):
+                core1 = core1[None, ...]
+                core2 = core2[None, ...]
             else:
                 core1 = self._cp_to_tt(core1)
                 core2 = self._cp_to_tt(core2)
+
             if this.Us[n] is not None and other.Us[n] is not None:
-                slice1 = torch.cat([core1, torch.zeros([core2.shape[0], core1.shape[1], core1.shape[2]])], dim=0)
-                slice1 = torch.cat([slice1, torch.zeros(core1.shape[0]+core2.shape[0], core1.shape[1], core2.shape[2])], dim=2)
-                slice2 = torch.cat([torch.zeros([core1.shape[0], core2.shape[1], core2.shape[2]]), core2], dim=0)
-                slice2 = torch.cat([torch.zeros(core1.shape[0]+core2.shape[0], core2.shape[1], core1.shape[2]), slice2], dim=2)
-                c = torch.cat([slice1, slice2], dim=1)
+                if self.batch:
+                    slice1 = torch.cat([core1, torch.zeros(core2.shape[0], core1.shape[1], core1.shape[2], core1.shape[3])], dim=1)
+                    slice1 = torch.cat([slice1, torch.zeros(core1.shape[0], core1.shape[1]+core2.shape[1], core1.shape[2], core2.shape[3])], dim=3)
+                    slice2 = torch.cat([torch.zeros(core1.shape[0], core1.shape[1], core2.shape[2], core2.shape[3]), core2], dim=1)
+                    slice2 = torch.cat([torch.zeros(core1.shape[0], core1.shape[1]+core2.shape[1], core2.shape[2], core1.shape[3]), slice2], dim=3)
+                    c = torch.cat([slice1, slice2], dim=2)
+                    Us.append(torch.cat((self.Us[n], other.Us[n]), dim=2))
+                else:
+                    slice1 = torch.cat([core1, torch.zeros([core2.shape[0], core1.shape[1], core1.shape[2]])], dim=0)
+                    slice1 = torch.cat([slice1, torch.zeros(core1.shape[0]+core2.shape[0], core1.shape[1], core2.shape[2])], dim=2)
+                    slice2 = torch.cat([torch.zeros([core1.shape[0], core2.shape[1], core2.shape[2]]), core2], dim=0)
+                    slice2 = torch.cat([torch.zeros(core1.shape[0]+core2.shape[0], core2.shape[1], core1.shape[2]), slice2], dim=2)
+                    c = torch.cat([slice1, slice2], dim=1)
+                    Us.append(torch.cat((self.Us[n], other.Us[n]), dim=1))
+
                 cores.append(c)
-                Us.append(torch.cat((self.Us[n], other.Us[n]), dim=1))
                 continue
             if this.Us[n] is not None:
-                core1 = torch.einsum('ijk,aj->iak', (core1, self.Us[n]))
+                core1 = torch.einsum(idxs, (core1, self.Us[n]))
             if other.Us[n] is not None:
-                core2 = torch.einsum('ijk,aj->iak', (core2, other.Us[n]))
-            column1 = torch.cat([core1, torch.zeros([core2.shape[0], this.shape[n], core1.shape[2]], device=core1.device)], dim=0)
-            column2 = torch.cat([torch.zeros([core1.shape[0], this.shape[n], core2.shape[2]], device=core2.device), core2], dim=0)
-            c = torch.cat([column1, column2], dim=2)
+                core2 = torch.einsum(idxs, (core2, other.Us[n]))
+
+            if self.batch:
+                column1 = torch.cat([core1, torch.zeros([core2.shape[0], core2.shape[1], this.shape[n], core1.shape[3]], device=core1.device)], dim=1)
+                column2 = torch.cat([torch.zeros([core1.shape[0], core1.shape[1], this.shape[n], core2.shape[3]], device=core2.device), core2], dim=1)
+                c = torch.cat([column1, column2], dim=3)
+            else:
+                column1 = torch.cat([core1, torch.zeros([core2.shape[0], this.shape[n], core1.shape[2]], device=core1.device)], dim=0)
+                column2 = torch.cat([torch.zeros([core1.shape[0], this.shape[n], core2.shape[2]], device=core2.device), core2], dim=0)
+                c = torch.cat([column1, column2], dim=2)
             cores.append(c)
             Us.append(None)
 
         # First core should have first size 1 (if it's TT)
-        if not (this.cores[0].dim() == 2 and other.cores[0].dim() == 2):
-            cores[0] = torch.sum(cores[0], dim=0, keepdim=True)
-        # Similarly for the last core and last size
-        if not (this.cores[-1].dim() == 2 and other.cores[-1].dim() == 2):
-            cores[-1] = torch.sum(cores[-1], dim=2, keepdim=True)
+        if self.batch:
+            if not (this.cores[0].dim() == 3 and other.cores[0].dim() == 3):
+                cores[0] = torch.sum(cores[0], dim=1, keepdim=True)
+            # Similarly for the last core and last size
+            if not (this.cores[-1].dim() == 3 and other.cores[-1].dim() == 3):
+                cores[-1] = torch.sum(cores[-1], dim=3, keepdim=True)
+        else:
+            if not (this.cores[0].dim() == 2 and other.cores[0].dim() == 2):
+                cores[0] = torch.sum(cores[0], dim=0, keepdim=True)
+            # Similarly for the last core and last size
+            if not (this.cores[-1].dim() == 2 and other.cores[-1].dim() == 2):
+                cores[-1] = torch.sum(cores[-1], dim=2, keepdim=True)
 
         # Set up cores that should be CP cores
         for n in range(0, this.dim()):
-            if this.cores[n].dim() == 2 and other.cores[n].dim() == 2:
-                cores[n] = torch.sum(cores[n], dim=0, keepdim=False)
+            if self.batch:
+                if this.cores[n].dim() == 3 and other.cores[n].dim() == 3:
+                    cores[n] = torch.sum(cores[n], dim=1, keepdim=False)
+            else:
+                if this.cores[n].dim() == 2 and other.cores[n].dim() == 2:
+                    cores[n] = torch.sum(cores[n], dim=0, keepdim=False)
 
         return Tensor(cores, Us=Us)
 
@@ -378,29 +412,49 @@ class Tensor(object):
             core1 = this.cores[n]
             core2 = other.cores[n]
             # CP + CP -> CP, other combinations -> TT
-            if core1.dim() == 2 and core2.dim() == 2:
-                core1 = core1[None, :, :]
-                core2 = core2[None, :, :]
+            if (core1.dim() == 2 and core2.dim() == 2 and not self.batch) or (core1.dim() == 3 and core2.dim() == 3 and self.batch):
+                core1 = core1[None, ...]
+                core2 = core2[None, ...]
             else:
                 core1 = this._cp_to_tt(core1)
                 core2 = this._cp_to_tt(core2)
+
             # We do the product core along 3 axes, unless it would blow up
-            if this.Us[n] is not None and other.Us[n] is not None and this.cores[n].shape[1]*other.cores[n].shape[1] < this.shape[n]:
-                cores.append(torch.reshape(torch.einsum('ijk,abc->iajbkc', (core1, core2)),
-                                           (core1.shape[0]*core2.shape[0],
-                                            core1.shape[1]*core2.shape[1],
-                                            core1.shape[2]*core2.shape[2])))
-                Us.append(torch.reshape(torch.einsum('ij,ik->ijk', (this.Us[n], other.Us[n])),
-                         (this.Us[n].shape[0], -1)))
-            else:  # Decompress spatially, then do normal TT-TT slice-wise kronecker product
-                if this.Us[n] is not None:
-                    core1 = torch.einsum('ijk,aj->iak', (core1, this.Us[n]))
-                if other.Us[n] is not None:
-                    core2 = torch.einsum('ijk,aj->iak', (core2, other.Us[n]))
-                cores.append(_core_kron(core1, core2))
-                Us.append(None)
-            if this.cores[n].dim() == 2 and other.cores[n].dim() == 2:
-                cores[-1] = cores[-1][0, :, :]
+            if self.batch:
+                if this.Us[n] is not None and other.Us[n] is not None and this.cores[n].shape[2]*other.cores[n].shape[2] < this.shape[n]:
+                    cores.append(torch.reshape(torch.einsum('bijk,babc->biajbkc', (core1, core2)),
+                                               (core1.shape[0]*core2.shape[0],
+                                                core1.shape[1]*core2.shape[1],
+                                                core1.shape[2]*core2.shape[2],
+                                                core1.shape[3]*core2.shape[3])))
+                    Us.append(torch.reshape(torch.einsum('bij,bik->bijk', (this.Us[n], other.Us[n])),
+                             (this.Us[n].shape[0], this.Us[n].shape[1], -1)))
+                else:  # Decompress spatially, then do normal TT-TT slice-wise kronecker product
+                    if this.Us[n] is not None:
+                        core1 = torch.einsum('bijk,baj->biak', (core1, this.Us[n]))
+                    if other.Us[n] is not None:
+                        core2 = torch.einsum('bijk,baj->biak', (core2, other.Us[n]))
+                    cores.append(_core_kron(core1, core2))
+                    Us.append(None)
+                if this.cores[n].dim() == 3 and other.cores[n].dim() == 3:
+                    cores[-1] = cores[-1][:, 0, :, :]
+            else:
+                if this.Us[n] is not None and other.Us[n] is not None and this.cores[n].shape[1]*other.cores[n].shape[1] < this.shape[n]:
+                    cores.append(torch.reshape(torch.einsum('ijk,abc->iajbkc', (core1, core2)),
+                                               (core1.shape[0]*core2.shape[0],
+                                                core1.shape[1]*core2.shape[1],
+                                                core1.shape[2]*core2.shape[2])))
+                    Us.append(torch.reshape(torch.einsum('ij,ik->ijk', (this.Us[n], other.Us[n])),
+                             (this.Us[n].shape[0], -1)))
+                else:  # Decompress spatially, then do normal TT-TT slice-wise kronecker product
+                    if this.Us[n] is not None:
+                        core1 = torch.einsum('ijk,aj->iak', (core1, this.Us[n]))
+                    if other.Us[n] is not None:
+                        core2 = torch.einsum('ijk,aj->iak', (core2, other.Us[n]))
+                    cores.append(_core_kron(core1, core2))
+                    Us.append(None)
+                if this.cores[n].dim() == 2 and other.cores[n].dim() == 2:
+                    cores[-1] = cores[-1][0, :, :]
         return tn.Tensor(cores, Us=Us)
 
     def __truediv__(self, other):
@@ -475,10 +529,16 @@ class Tensor(object):
         :return: a vector of integers
         """
 
-        if self.cores[0].dim() == 2:
-            first = self.cores[0].shape[1]
+        if self.batch:
+            if self.cores[0].dim() == 3:
+                first = self.cores[0].shape[2]
+            else:
+                first = self.cores[0].shape[1]
         else:
-            first = self.cores[0].shape[0]
+            if self.cores[0].dim() == 2:
+                first = self.cores[0].shape[1]
+            else:
+                first = self.cores[0].shape[0]
         return np.array([first] + [c.shape[-1] for c in self.cores])
 
     @ranks_tt.setter
@@ -516,11 +576,10 @@ class Tensor(object):
         return self.shape
 
     def __repr__(self):
-
         format = []
-        if any([c.dim() == 3 for c in self.cores]):
+        if any([(c.dim() == 3 and not self.batch) or (c.dim() == 4 and self.batch) for c in self.cores]):
             format.append('TT')
-        if any([c.dim() == 2 for c in self.cores]):
+        if any([(c.dim() == 2 and not self.batch) or (c.dim() == 3 and self.batch) for c in self.cores]):
             format.append('CP')
         if any([U is not None for U in self.Us]):
             format.append('Tucker')
@@ -530,8 +589,10 @@ class Tensor(object):
         ttr = self.ranks_tt
         tuckerr = self.ranks_tucker
 
-        if any([U is not None for U in self.Us]):
+        if self.batch:
+            s+= 'with batch = {}\n'.format(self.cores[0].shape[0])
 
+        if any([U is not None for U in self.Us]):
             # Shape
             row = [' ']*(4*self.dim()-1)
             shape = self.shape
@@ -615,9 +676,9 @@ class Tensor(object):
                 key = key[:i] + [slice(None)] * (self.dim() - (len(key) - nonecount) + 1) + key[i + 1:]
                 break
         if any([k is Ellipsis for k in key]):
-            raise IndexError("Only one ellipsis is allowed, at most")
+            raise IndexError('Only one ellipsis is allowed, at most')
         if self.dim() - (len(key) - nonecount) < 0:
-            raise IndexError("Too many index entries")
+            raise IndexError('Too many index entries')
 
         # Fill remaining unspecified dimensions with slice(None)
         key = key + [slice(None)] * (self.dim() - (len(key) - nonecount))
@@ -665,16 +726,28 @@ class Tensor(object):
         counter = 0
 
         def join_cores(c1, c2):
-            if c1.dim() == 1 and c2.dim() == 2:
-                return torch.einsum('i,ai->ai', (c1, c2))
-            elif c1.dim() == 2 and c2.dim() == 2:
-                return torch.einsum('ij,aj->iaj', (c1, c2))
-            elif c1.dim() == 1 and c2.dim() == 3:
-                return torch.einsum('i,iaj->iaj', (c1, c2))
-            elif c1.dim() == 2 and c2.dim() == 3:
-                return torch.einsum('ij,jak->iak', (c1, c2))
+            if self.batch:
+                if c1.dim() == 2 and c2.dim() == 3:
+                    return torch.einsum('bi,bai->bai', (c1, c2))
+                elif c1.dim() == 3 and c2.dim() == 3:
+                    return torch.einsum('bij,baj->biaj', (c1, c2))
+                elif c1.dim() == 2 and c2.dim() == 4:
+                    return torch.einsum('bi,biaj->biaj', (c1, c2))
+                elif c1.dim() == 3 and c2.dim() == 4:
+                    return torch.einsum('bij,bjak->biak', (c1, c2))
+                else:
+                    raise ValueError
             else:
-                raise ValueError
+                if c1.dim() == 1 and c2.dim() == 2:
+                    return torch.einsum('i,ai->ai', (c1, c2))
+                elif c1.dim() == 2 and c2.dim() == 2:
+                    return torch.einsum('ij,aj->iaj', (c1, c2))
+                elif c1.dim() == 1 and c2.dim() == 3:
+                    return torch.einsum('i,iaj->iaj', (c1, c2))
+                elif c1.dim() == 2 and c2.dim() == 3:
+                    return torch.einsum('ij,jak->iak', (c1, c2))
+                else:
+                    raise ValueError
 
         def insert_core(factors, core=None, key=None, U=None):
             if factors['index'] is not None:
@@ -692,7 +765,7 @@ class Tensor(object):
                         Us.append(None)
                     else:
                         cores.append(join_cores(factors['int'], core))
-                        Us.append(U[key, :])
+                        Us.append(U[..., key, :])
                     factors['int'] = None
                 else:  # Easiest case
                     if U is None:
@@ -700,23 +773,38 @@ class Tensor(object):
                         Us.append(None)
                     else:
                         cores.append(core)
-                        Us.append(U[key, :])
+                        Us.append(U[..., key, :])
 
         def get_key(counter, key):
             if self.Us[counter] is None:
                 return self.cores[counter][..., key, :]
             else:
-                sl = self.Us[counter][key, :]
-                if sl.dim() == 1:  # key is an int
-                    if self.cores[counter].dim() == 3:
-                        return torch.einsum('ijk,j->ik', (self.cores[counter], sl))
+                sl = self.Us[counter][..., key, :]
+                if self.batch:
+                    if sl.dim() == 2:  # key is an int
+                        if self.cores[counter].dim() == 4:
+                            return torch.einsum('bijk,bj->bik', (self.cores[counter], sl))
+                        else:
+                            return torch.einsum('bji,bj->bi', (self.cores[counter], sl))
                     else:
-                        return torch.einsum('ji,j->i', (self.cores[counter], sl))
+                        if self.cores[counter].dim() == 4:
+                            return torch.einsum('bijk,baj->biak', (self.cores[counter], sl))
+                        else:
+                            return torch.einsum('bji,baj->bai', (self.cores[counter], sl))
                 else:
-                    if self.cores[counter].dim() == 3:
-                        return torch.einsum('ijk,aj->iak', (self.cores[counter], sl))
+                    if sl.dim() == 1:  # key is an int
+                        if self.cores[counter].dim() == 3:
+                            return torch.einsum('ijk,j->ik', (self.cores[counter], sl))
+                        else:
+                            return torch.einsum('ji,j->i', (self.cores[counter], sl))
                     else:
-                        return torch.einsum('ji,aj->ai', (self.cores[counter], sl))
+                        if self.cores[counter].dim() == 3:
+                            return torch.einsum('ijk,aj->iak', (self.cores[counter], sl))
+                        else:
+                            return torch.einsum('ji,aj->ai', (self.cores[counter], sl))
+
+        if self.batch:
+            batch_size = self.cores[0].shape[0]
 
         for i in range(len(key)):
             if hasattr(key[i], '__len__'):
@@ -731,7 +819,14 @@ class Tensor(object):
                 raise IndexError
 
             if this_mode == 'none':
-                insert_core(factors, torch.eye(self.ranks_tt[counter].item())[:, None, :], key=slice(None), U=None)
+                if self.batch:
+                    insert_core(factors, torch.cat(
+                        [
+                            torch.eye(self.ranks_tt[counter].item())[None, ...] for _ in range(batch_size)
+                        ]
+                    )[:, :, None, :], key=slice(None), U=None)
+                else:
+                    insert_core(factors, torch.eye(self.ranks_tt[counter].item())[:, None, :], key=slice(None), U=None)
             elif this_mode == 'slice':
                 insert_core(factors, self.cores[counter], key=key[i], U=self.Us[counter])
                 counter += 1
@@ -745,16 +840,29 @@ class Tensor(object):
                         raise ValueError("Index arrays must have the same length")
                     a1 = factors['index']
                     a2 = get_key(counter, key[i]).to(device)
-                    if a1.dim() == 2 and a2.dim() == 2:
-                        factors['index'] = torch.einsum('ai,ai->ai', (a1, a2))
-                    elif a1.dim() == 2 and a2.dim() == 3:
-                        factors['index'] = torch.einsum('ai,iaj->iaj', (a1, a2))
-                    elif a1.dim() == 3 and a2.dim() == 2:
-                        factors['index'] = torch.einsum('iaj,aj->iaj', (a1, a2))
-                    elif a1.dim() == 3 and a2.dim() == 3:
-                        # Until https://github.com/pytorch/pytorch/issues/10661 is fully resolved  # TODO check efficiency for other cases
-                        factors['index'] = torch.sum(a1[:, :, :, None]*a2.permute(1, 0, 2)[None, :, :, :], dim=2)
-                        # factors['index'] = torch.einsum('iaj,jak->iak', (a1, a2))
+
+                    if self.batch:
+                        if a1.dim() == 3 and a2.dim() == 3:
+                            factors['index'] = torch.einsum('bai,bai->bai', (a1, a2))
+                        elif a1.dim() == 3 and a2.dim() == 4:
+                            factors['index'] = torch.einsum('bai,biaj->biaj', (a1, a2))
+                        elif a1.dim() == 4 and a2.dim() == 3:
+                            factors['index'] = torch.einsum('biaj,baj->biaj', (a1, a2))
+                        elif a1.dim() == 4 and a2.dim() == 4:
+                            # Until https://github.com/pytorch/pytorch/issues/10661 is fully resolved  # TODO check efficiency for other cases
+                            factors['index'] = torch.sum(a1[:, :, :, :, None]*a2.permute(0, 2, 1, 3)[:, None, :, :, :], dim=3)
+                            # factors['index'] = torch.einsum('iaj,jak->iak', (a1, a2))
+                    else:
+                        if a1.dim() == 2 and a2.dim() == 2:
+                            factors['index'] = torch.einsum('ai,ai->ai', (a1, a2))
+                        elif a1.dim() == 2 and a2.dim() == 3:
+                            factors['index'] = torch.einsum('ai,iaj->iaj', (a1, a2))
+                        elif a1.dim() == 3 and a2.dim() == 2:
+                            factors['index'] = torch.einsum('iaj,aj->iaj', (a1, a2))
+                        elif a1.dim() == 3 and a2.dim() == 3:
+                            # Until https://github.com/pytorch/pytorch/issues/10661 is fully resolved  # TODO check efficiency for other cases
+                            factors['index'] = torch.sum(a1[:, :, :, None]*a2.permute(1, 0, 2)[None, :, :, :], dim=2)
+                            # factors['index'] = torch.einsum('iaj,jak->iak', (a1, a2))
                 counter += 1
             elif this_mode == 'int':
                 if last_mode == 'index':
@@ -764,14 +872,25 @@ class Tensor(object):
                 else:
                     c1 = factors['int']
                     c2 = get_key(counter, key[i])
-                    if c1.dim() == 1 and c2.dim() == 1:
-                        factors['int'] = torch.einsum('i,i->i', (c1, c2))
-                    elif c1.dim() == 1 and c2.dim() == 2:
-                        factors['int'] = torch.einsum('i,ij->ij', (c1, c2))
-                    elif c1.dim() == 2 and c2.dim() == 1:
-                        factors['int'] = torch.einsum('ij,j->ij', (c1, c2))
-                    elif c1.dim() == 2 and c2.dim() == 2:
-                        factors['int'] = torch.einsum('ij,jk->ik', (c1, c2))
+
+                    if self.batch:
+                        if c1.dim() == 2 and c2.dim() == 2:
+                            factors['int'] = torch.einsum('bi,bi->bi', (c1, c2))
+                        elif c1.dim() == 2 and c2.dim() == 3:
+                            factors['int'] = torch.einsum('bi,bij->bij', (c1, c2))
+                        elif c1.dim() == 3 and c2.dim() == 2:
+                            factors['int'] = torch.einsum('bij,bj->bij', (c1, c2))
+                        elif c1.dim() == 3 and c2.dim() == 3:
+                            factors['int'] = torch.einsum('bij,bjk->bik', (c1, c2))
+                    else:
+                        if c1.dim() == 1 and c2.dim() == 1:
+                            factors['int'] = torch.einsum('i,i->i', (c1, c2))
+                        elif c1.dim() == 1 and c2.dim() == 2:
+                            factors['int'] = torch.einsum('i,ij->ij', (c1, c2))
+                        elif c1.dim() == 2 and c2.dim() == 1:
+                            factors['int'] = torch.einsum('ij,j->ij', (c1, c2))
+                        elif c1.dim() == 2 and c2.dim() == 2:
+                            factors['int'] = torch.einsum('ij,jk->ik', (c1, c2))
                 counter += 1
             last_mode = this_mode
 
@@ -780,25 +899,35 @@ class Tensor(object):
             insert_core(factors, core=None, key=None, U=None)
         elif last_mode == 'int':
             if len(cores) > 0:  # We return a tensor: absorb existing cores with int factor
-                if cores[-1].dim() == 2 and factors['int'].dim() == 1:
-                    cores[-1] = torch.einsum('ai,i->ai', (cores[-1], factors['int']))
-                elif cores[-1].dim() == 2 and factors['int'].dim() == 2:
-                    cores[-1] = torch.einsum('ai,ij->iaj', (cores[-1], factors['int']))
-                elif cores[-1].dim() == 3 and factors['int'].dim() == 1:
-                    cores[-1] = torch.einsum('iaj,j->ai', (cores[-1], factors['int']))
-                elif cores[-1].dim() == 3 and factors['int'].dim() == 2:
-                    cores[-1] = torch.einsum('iaj,jk->iak', (cores[-1], factors['int']))
+                if self.batch:
+                    if cores[-1].dim() == 3 and factors['int'].dim() == 2:
+                        cores[-1] = torch.einsum('bai,bi->bai', (cores[-1], factors['int']))
+                    elif cores[-1].dim() == 3 and factors['int'].dim() == 3:
+                        cores[-1] = torch.einsum('bai,bij->biaj', (cores[-1], factors['int']))
+                    elif cores[-1].dim() == 4 and factors['int'].dim() == 2:
+                        cores[-1] = torch.einsum('biaj,bj->bai', (cores[-1], factors['int']))
+                    elif cores[-1].dim() == 4 and factors['int'].dim() == 3:
+                        cores[-1] = torch.einsum('biaj,bjk->biak', (cores[-1], factors['int']))
+                else:
+                    if cores[-1].dim() == 2 and factors['int'].dim() == 1:
+                        cores[-1] = torch.einsum('ai,i->ai', (cores[-1], factors['int']))
+                    elif cores[-1].dim() == 2 and factors['int'].dim() == 2:
+                        cores[-1] = torch.einsum('ai,ij->iaj', (cores[-1], factors['int']))
+                    elif cores[-1].dim() == 3 and factors['int'].dim() == 1:
+                        cores[-1] = torch.einsum('iaj,j->ai', (cores[-1], factors['int']))
+                    elif cores[-1].dim() == 3 and factors['int'].dim() == 2:
+                        cores[-1] = torch.einsum('iaj,jk->iak', (cores[-1], factors['int']))
             else:  # We return a scalar
                 if factors['int'].numel() > 1:
                     return torch.sum(factors['int'])
                 return torch.squeeze(factors['int'])
         return tn.Tensor(cores, Us=Us)
 
-    def __setitem__(self, key, value):  # TODO not fully working yet
+    def __setitem__(self, key, value):  # TODO not fully working yet, check batch
         key = self._process_key(key)
         scalar = False
         if isinstance(value, np.ndarray):
-            value = tn.Tensor(torch.Tensor(value))
+            value = tn.Tensor(torch.tensor(value))
         elif isinstance(value, torch.Tensor):
             if value.dim() == 0:
                 value = value.item()
@@ -821,20 +950,36 @@ class Tensor(object):
             subtract_core[..., key[i], :] += chunk
             subtract_cores.append(subtract_core)
             if scalar:
-                if self.cores[i].dim() == 3:
-                    add_core = torch.zeros(1, self.shape[i], 1)
+                if self.batch:
+                    if self.cores[i].dim() == 4:
+                        add_core = torch.zeros(self.shape[0], 1, self.shape[i + 1], 1)
+                    else:
+                        add_core = torch.zeros(self.shape[0], self.shape[i + 1], 1)
                 else:
-                    add_core = torch.zeros(self.shape[i], 1)
+                    if self.cores[i].dim() == 3:
+                        add_core = torch.zeros(1, self.shape[i], 1)
+                    else:
+                        add_core = torch.zeros(self.shape[i], 1)
+
                 add_core[..., key[i], :] += 1
                 if i == 0:
                     add_core *= value
             else:
-                if chunk.shape[1] != value.shape[i]:
-                    raise ValueError('{}-th dimension mismatch in tensor assignment: {} (lhs) != {} (rhs)'.format(i, chunk.shape[1], value.shape[i]))
-                if self.cores[i].dim() == 3:
-                    add_core = torch.zeros(value.cores[i].shape[0], self.shape[i], value.cores[i].shape[2])
+                if self.batch:
+                    if chunk.shape[2] != value.shape[i]:
+                        raise ValueError('{}-th dimension mismatch in tensor assignment: {} (lhs) != {} (rhs)'.format(i, chunk.shape[2], value.shape[i]))
+                    if self.cores[i].dim() == 4:
+                        add_core = torch.zeros(value.cores[i].shape[0], value.cores[i].shape[1], self.shape[i], value.cores[i].shape[3])
+                    else:
+                        add_core = torch.zeros( value.cores[i].shape[0], self.shape[i], value.cores[i].shape[2])
                 else:
-                    add_core = torch.zeros(self.shape[i], value.cores[i].shape[1])
+                    if chunk.shape[1] != value.shape[i]:
+                        raise ValueError('{}-th dimension mismatch in tensor assignment: {} (lhs) != {} (rhs)'.format(i, chunk.shape[1], value.shape[i]))
+                    if self.cores[i].dim() == 3:
+                        add_core = torch.zeros(value.cores[i].shape[0], self.shape[i], value.cores[i].shape[2])
+                    else:
+                        add_core = torch.zeros(self.shape[i], value.cores[i].shape[1])
+
                 add_core[..., key[i], :] += value.cores[i]
             add_cores.append(add_core)
         # print(tn.Tensor(subtract_cores), tn.Tensor(add_cores))
@@ -870,10 +1015,17 @@ class Tensor(object):
         Us = []
         for n in range(self.dim()):
             if n in dim and self.Us[n] is not None:
-                if self.cores[n].dim() == 2:
-                    cores.append(torch.einsum('jk,aj->ak', (self.cores[n], self.Us[n])))
+                if self.batch:
+                    if self.cores[n].dim() == 3:
+                        cores.append(torch.einsum('bjk,baj->bak', (self.cores[n], self.Us[n])))
+                    else:
+                        cores.append(torch.einsum('bijk,baj->biak', (self.cores[n], self.Us[n])))
                 else:
-                    cores.append(torch.einsum('ijk,aj->iak', (self.cores[n], self.Us[n])))
+                    if self.cores[n].dim() == 2:
+                        cores.append(torch.einsum('jk,aj->ak', (self.cores[n], self.Us[n])))
+                    else:
+                        cores.append(torch.einsum('ijk,aj->iak', (self.cores[n], self.Us[n])))
+
                 Us.append(None)
             else:
                 if _clone:
@@ -906,19 +1058,36 @@ class Tensor(object):
         """
 
         t = self.decompress_tucker_factors(_clone=False)
-        shape = []
+
         device = t.cores[0].device
-        factor = torch.ones(1, self.ranks_tt[0]).to(device)
+        if self.batch:
+            batch_size = self.cores[0].shape[0]
+            shape = [batch_size]
+            factor = torch.ones(batch_size, 1, self.ranks_tt[0]).to(device)
+        else:
+            factor = torch.ones(1, self.ranks_tt[0]).to(device)
+            shape = []
+
         for n in range(t.dim()):
             shape.append(t.cores[n].shape[-2])
-            if t.cores[n].dim() == 2:  # CP core
-                if n < t.dim() - 1:
-                    factor = torch.einsum('ai,bi->abi', (factor, t.cores[n]))
-                else:
-                    factor = torch.einsum('ai,bi->ab', (factor, t.cores[n]))[..., None]
-            else:  # TT core
-                factor = torch.einsum('ai,ibj->abj', (factor, t.cores[n]))
-            factor = factor.reshape([-1, factor.shape[-1]])
+            if self.batch:
+                if t.cores[n].dim() == 3:  # CP core
+                    if n < t.dim() - 1:
+                        factor = torch.einsum('gai,gbi->gabi', (factor, t.cores[n]))
+                    else:
+                        factor = torch.einsum('gai,gbi->gab', (factor, t.cores[n]))[..., None]
+                else:  # TT core
+                    factor = torch.einsum('gai,gibj->gabj', (factor, t.cores[n]))
+                factor = factor.reshape([batch_size, -1, factor.shape[-1]])
+            else:
+                if t.cores[n].dim() == 2:  # CP core
+                    if n < t.dim() - 1:
+                        factor = torch.einsum('ai,bi->abi', (factor, t.cores[n]))
+                    else:
+                        factor = torch.einsum('ai,bi->ab', (factor, t.cores[n]))[..., None]
+                else:  # TT core
+                    factor = torch.einsum('ai,ibj->abj', (factor, t.cores[n]))
+                factor = factor.reshape([-1, factor.shape[-1]])
         if factor.shape[-1] > 1:
             factor = torch.sum(factor, dim=-1)
         else:
@@ -938,23 +1107,34 @@ class Tensor(object):
     def _cp_to_tt(self, factor=None):
         """
         Turn a CP factor into a TT core (each slice is a diagonal matrix)
-        :param factor: an integer between 0 to N-1. If None, all cores in this tensor will be converted
+        :param factor: CP factor. If None, all cores in this tensor will be converted
 
         """
 
         if factor is None:
-            if self.cores[0].dim() == 2:
-                self.cores[0] = self.cores[0][None, :, :]
+            if (self.cores[0].dim() == 3 and self.batch) or (self.cores[0].dim() == 2 and not self.batch):
+                self.cores[0] = self.cores[0][None, ...]
             for mu in range(1, self.dim()-1):
                 self.cores[mu] = self._cp_to_tt(self.cores[mu])
-            if self.cores[-1].dim() == 2:
-                self.cores[-1] = self.cores[-1].transpose(1, 0)[:, :, None]
+
+            if self.batch:
+                if self.cores[-1].dim() == 3:
+                    self.cores[-1] = self.cores[-1].transpose(-1, -2)[:, :, :, None]
+            else:
+                if self.cores[-1].dim() == 2:
+                    self.cores[-1] = self.cores[-1].transpose(-1, -2)[:, :, None]
             return
-        if factor.dim() == 3:  # Already a TT core
+        if (factor.dim() == 3 and not self.batch) or (factor.dim() == 4 and self.batch):  # Already a TT core
             return factor
-        core = torch.zeros(factor.shape[1], factor.shape[1] + 1, factor.shape[0])
-        core[:, 0, :] = factor.t()
-        return core.reshape(factor.shape[1] + 1, factor.shape[1], factor.shape[0]).permute(0, 2, 1)[:-1, :, :]
+
+        if self.batch:
+            core = torch.zeros(factor.shape[0], factor.shape[2], factor.shape[2] + 1, factor.shape[1])
+            core[:, :, 0, :] = factor.transpose(-1, -2)
+            return core.reshape(factor.shape[0], factor.shape[2] + 1, factor.shape[2], factor.shape[1]).permute(0, 1, 3, 2)[:, :-1, :, :]
+        else:
+            core = torch.zeros(factor.shape[1], factor.shape[1] + 1, factor.shape[0])
+            core[:, 0, :] = factor.t()
+            return core.reshape(factor.shape[1] + 1, factor.shape[1], factor.shape[0]).permute(0, 2, 1)[:-1, :, :]
 
     """
     Rounding and orthogonalization
@@ -973,10 +1153,17 @@ class Tensor(object):
             return
         Q, R = torch.qr(self.Us[mu])
         self.Us[mu] = Q
-        if self.cores[mu].dim() == 2:
-            self.cores[mu] = torch.einsum('jk,aj->ak', (self.cores[mu], R))
+
+        if self.batch:
+            if self.cores[mu].dim() == 3:
+                self.cores[mu] = torch.einsum('bjk,baj->bak', (self.cores[mu], R))
+            else:
+                self.cores[mu] = torch.einsum('bijk,baj->biak', (self.cores[mu], R))
         else:
-            self.cores[mu] = torch.einsum('ijk,aj->iak', (self.cores[mu], R))
+            if self.cores[mu].dim() == 2:
+                self.cores[mu] = torch.einsum('jk,aj->ak', (self.cores[mu], R))
+            else:
+                self.cores[mu] = torch.einsum('ijk,aj->iak', (self.cores[mu], R))
 
     def left_orthogonalize(self, mu):
         """
@@ -995,9 +1182,17 @@ class Tensor(object):
         assert 0 <= mu < self.dim()-1
         self.factor_orthogonalize(mu)
         Q, R = torch.qr(tn.left_unfolding(self.cores[mu]))
-        self.cores[mu] = torch.reshape(Q, self.cores[mu].shape[:-1] + (Q.shape[1], ))
+
+        if self.batch:
+            self.cores[mu] = torch.reshape(Q, self.cores[mu].shape[:-1] + (Q.shape[2], ))
+        else:
+            self.cores[mu] = torch.reshape(Q, self.cores[mu].shape[:-1] + (Q.shape[1], ))
         rightcoreR = tn.right_unfolding(self.cores[mu+1])
-        self.cores[mu+1] = torch.reshape(torch.mm(R, rightcoreR), (R.shape[0], ) + self.cores[mu+1].shape[1:])
+
+        if self.batch:
+            self.cores[mu+1] = torch.reshape(torch.mm(R, rightcoreR), (R.shape[0], R.shape[1]) + self.cores[mu+1].shape[2:])
+        else:
+            self.cores[mu+1] = torch.reshape(torch.mm(R, rightcoreR), (R.shape[0], ) + self.cores[mu+1].shape[1:])
         return R
 
     def right_orthogonalize(self, mu):
@@ -1016,12 +1211,20 @@ class Tensor(object):
 
         assert 1 <= mu < self.dim()
         self.factor_orthogonalize(mu)
-        Q, L = torch.qr(tn.right_unfolding(self.cores[mu]).permute(1, 0))  # Torch has no rq() decomposition
-        L = L.permute(1, 0)
-        Q = Q.permute(1, 0)
-        self.cores[mu] = torch.reshape(Q, (Q.shape[0], ) + self.cores[mu].shape[1:])
+        Q, L = torch.qr(tn.right_unfolding(self.cores[mu]).permute(-1, -2))  # Torch has no rq() decomposition
+        L = L.permute(-1, -2)
+        Q = Q.permute(-1, -2)
+
+        if self.batch:
+            self.cores[mu] = torch.reshape(Q, (Q.shape[0], Q.shape[1]) + self.cores[mu].shape[2:])
+        else:
+            self.cores[mu] = torch.reshape(Q, (Q.shape[0], ) + self.cores[mu].shape[1:])
+
         leftcoreL = tn.left_unfolding(self.cores[mu-1])
-        self.cores[mu-1] = torch.reshape(torch.mm(leftcoreL, L), self.cores[mu-1].shape[:-1] + (L.shape[1], ))
+        if self.batch:
+            self.cores[mu-1] = torch.reshape(torch.mm(leftcoreL, L), self.cores[mu-1].shape[:-1] + (L.shape[2], ))
+        else:
+            self.cores[mu-1] = torch.reshape(torch.mm(leftcoreL, L), self.cores[mu-1].shape[:-1] + (L.shape[1], ))
         return L
 
     def orthogonalize(self, mu):
@@ -1041,8 +1244,13 @@ class Tensor(object):
             mu += self.dim()
 
         self._cp_to_tt()
-        L = torch.ones(1, 1)
-        R = torch.ones(1, 1)
+        if self.batch:
+            batch_size = self.cores[0].shape[0]
+            L = torch.ones(batch_size, 1, 1)
+            R = torch.ones(batch_size, 1, 1)
+        else:
+            L = torch.ones(1, 1)
+            R = torch.ones(1, 1)
         for i in range(0, mu):
             R = self.left_orthogonalize(i)
         for i in range(self.dim()-1, mu, -1):
@@ -1117,7 +1325,7 @@ class Tensor(object):
         self.orthogonalize(N-1)  # Make everything left-orthogonal
         if verbose:
             print('Orthogonalization time:', time.time() - start)
-        delta = eps/max(1, torch.sqrt(torch.Tensor([N-1])))*torch.norm(self.cores[-1])
+        delta = eps/max(1, torch.sqrt(torch.tensor([N-1], dtype=torch.float64)))*torch.norm(self.cores[-1])
         delta = delta.item()
         for mu in range(N - 1, 0, -1):
             M = tn.right_unfolding(self.cores[mu])
@@ -1263,7 +1471,7 @@ class Tensor(object):
         :return: an integer
         """
 
-        return torch.prod(torch.Tensor(list(self.shape)))
+        return torch.prod(torch.tensor(list(self.shape)))
 
     def numcoef(self):
         """
@@ -1317,7 +1525,12 @@ def _broadcast(a, b):
     return result1, result2
 
 
-def _core_kron(a, b):
-    c = a[:, None, :, :, None] * b[None, :, :, None, :]
-    c = c.reshape([a.shape[0] * b.shape[0], -1, a.shape[-1] * b.shape[-1]])
+def _core_kron(a, b, batch=False):
+    if batch:
+        assert a.shape[0] == b.shape[0]
+        c = a[:, :, None, :, :, None] * b[:, None, :, :, None, :]
+        c = c.reshape([a.shape[0], a.shape[1] * b.shape[1], -1, a.shape[-1] * b.shape[-1]])
+    else:
+        c = a[:, None, :, :, None] * b[None, :, :, None, :]
+        c = c.reshape([a.shape[0] * b.shape[0], -1, a.shape[-1] * b.shape[-1]])
     return c
