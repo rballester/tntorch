@@ -5,7 +5,7 @@ import time
 
 def batch_tensor_norm(t):
     res = t**2
-    for i in range(a.dim() - 1):
+    for i in range(t.dim() - 1):
         res = res.sum(dim=1)
     return torch.sqrt(res)
 
@@ -31,12 +31,12 @@ def _full_rank_tt(data, batch=False):  # Naive TT formatting, don't even attempt
     for n in range(1, N):
         if batch:
             if resh.shape[1] < resh.shape[2]:
-                I = torch.eye(resh.shape[1]).reshape((1, resh.shape[1], resh.shape[1])).repeat(resh.shape[0], 1, 1).to(device)
+                I = torch.cat([torch.eye(resh.shape[1])[None, ...] for _ in range(resh.shape[0])]).to(device)
                 result.append(torch.reshape(I, [resh.shape[0], resh.shape[1] // shape[n], shape[n], resh.shape[1]]))
-                resh = torch.reshape(resh, (resh.shape[0], resh.shape[1] * shape[n], resh.shape[2] // shape[n + 1]))
+                resh = torch.reshape(resh, (resh.shape[0], resh.shape[1] * shape[n + 1], resh.shape[2] // shape[n + 1]))
             else:
                 result.append(torch.reshape(resh, [resh.shape[0], resh.shape[1] // shape[n], shape[n], resh.shape[2]]))
-                I = torch.eye(resh.shape[2]).reshape((1, resh.shape[2], resh.shape[2])).repeat(resh.shape[0], 1, 1).to(device)
+                I = torch.cat([torch.eye(resh.shape[2])[None, ...] for _ in range(resh.shape[0])]).to(device)
                 resh = torch.reshape(I, (resh.shape[0], resh.shape[2] * shape[n + 1], resh.shape[2] // shape[n + 1]))
         else:
             if resh.shape[0] < resh.shape[1]:
@@ -155,12 +155,14 @@ class Tensor(object):
                     if batch:
                         data_norms = batch_tensor_norm(data)
                         start = 1
+                        N = data.dim() - 1
                     else:
                         data_norm = torch.norm(data)
                         start = 0
+                        N = data.dim()
 
                     self.cores = []
-                    for n in range(start, data.dim()):
+                    for n in range(start, N):
                         gram = tn.unfolding(data, n, batch)
                         gram = gram.matmul(gram.transpose(-1, -2))
                         eigvals, eigvecs = torch.symeig(gram, eigenvectors=True)
@@ -229,9 +231,9 @@ class Tensor(object):
                         grams[n] = self.cores[n].transpose(-1, -2).matmul(self.cores[n])
 
                     if batch:
-                        errors.append((batch_tensor_norm(data - tn.Tensor(self.cores).torch(), batch=self.batch) / data_norms).mean())
+                        errors.append((batch_tensor_norm(data - tn.Tensor(self.cores, batch=self.batch).torch(), batch=self.batch) / data_norms).mean())
                     else:
-                        errors.append(torch.norm(data - tn.Tensor(self.cores).torch()) / data_norm)
+                        errors.append(torch.norm(data - tn.Tensor(self.cores, batch=self.batch).torch()) / data_norm)
                     if len(errors) >= 2 and errors[-2] - errors[-1] < tol:
                         converged = True
                     if verbose:
@@ -1125,12 +1127,9 @@ class Tensor(object):
             for mu in range(1, self.dim()-1):
                 self.cores[mu] = self._cp_to_tt(self.cores[mu])
 
-            if self.batch:
-                if self.cores[-1].dim() == 3:
-                    self.cores[-1] = self.cores[-1].transpose(-1, -2)[:, :, :, None]
-            else:
-                if self.cores[-1].dim() == 2:
-                    self.cores[-1] = self.cores[-1].transpose(-1, -2)[:, :, None]
+            if (self.cores[-1].dim() == 3 and self.batch) or (self.cores[-1].dim() == 2 and not self.batch):
+                self.cores[-1] = self.cores[-1].transpose(-1, -2)[..., None]
+
             return
         if (factor.dim() == 3 and not self.batch) or (factor.dim() == 4 and self.batch):  # Already a TT core
             return factor
@@ -1189,13 +1188,14 @@ class Tensor(object):
 
         assert 0 <= mu < self.dim()-1
         self.factor_orthogonalize(mu)
-        Q, R = torch.qr(tn.left_unfolding(self.cores[mu]))
+        Q, R = torch.qr(tn.left_unfolding(self.cores[mu], batch=self.batch))
 
         if self.batch:
             self.cores[mu] = torch.reshape(Q, self.cores[mu].shape[:-1] + (Q.shape[2], ))
         else:
             self.cores[mu] = torch.reshape(Q, self.cores[mu].shape[:-1] + (Q.shape[1], ))
-        rightcoreR = tn.right_unfolding(self.cores[mu+1])
+
+        rightcoreR = tn.right_unfolding(self.cores[mu+1], batch=self.batch)
 
         if self.batch:
             self.cores[mu+1] = torch.reshape(torch.matmul(R, rightcoreR), (R.shape[0], R.shape[1]) + self.cores[mu+1].shape[2:])
@@ -1219,16 +1219,16 @@ class Tensor(object):
 
         assert 1 <= mu < self.dim()
         self.factor_orthogonalize(mu)
-        Q, L = torch.qr(tn.right_unfolding(self.cores[mu]).permute(-1, -2))  # Torch has no rq() decomposition
+        Q, L = torch.qr(tn.right_unfolding(self.cores[mu], batch=self.batch).permute(-1, -2))  # Torch has no rq() decomposition
         L = L.permute(-1, -2)
         Q = Q.permute(-1, -2)
 
         if self.batch:
-            self.cores[mu] = torch.reshape(Q, (Q.shape[0], Q.shape[1]) + self.cores[mu].shape[2:])
+            self.cores[mu] = torch.reshape(Q, (Q.shape[:2]) + self.cores[mu].shape[2:])
         else:
             self.cores[mu] = torch.reshape(Q, (Q.shape[0], ) + self.cores[mu].shape[1:])
 
-        leftcoreL = tn.left_unfolding(self.cores[mu-1])
+        leftcoreL = tn.left_unfolding(self.cores[mu-1], batch=self.batch)
         if self.batch:
             self.cores[mu-1] = torch.reshape(torch.matmul(leftcoreL, L), self.cores[mu-1].shape[:-1] + (L.shape[2], ))
         else:
@@ -1259,7 +1259,7 @@ class Tensor(object):
         else:
             L = torch.ones(1, 1)
             R = torch.ones(1, 1)
-        for i in range(0, mu):
+        for i in range(mu):
             R = self.left_orthogonalize(i)
         for i in range(self.dim()-1, mu, -1):
             L = self.right_orthogonalize(i)
@@ -1358,13 +1358,14 @@ class Tensor(object):
             delta = eps/max(1, torch.sqrt(torch.tensor([N-1], dtype=torch.float64)))*torch.norm(self.cores[-1])
 
         delta = delta.item()
+
         for mu in range(N - 1, 0, -1):
-            M = tn.right_unfolding(self.cores[mu])
+            M = tn.right_unfolding(self.cores[mu], batch=self.batch)
             left, right = tn.truncated_svd(M, delta=delta, rmax=rmax[mu-1], left_ortho=False, algorithm=algorithm, verbose=verbose, batch=self.batch)
 
             if self.batch:
                 self.cores[mu] = torch.reshape(right, [self.cores[mu].shape[0], -1, self.cores[mu].shape[2], self.cores[mu].shape[3]])
-                self.cores[mu-1] = torch.einsum('bijk,bkl', (self.cores[mu-1], left))  # Pass factor to the left
+                self.cores[mu-1] = torch.einsum('bijk,bkl->bijl', (self.cores[mu-1], left))  # Pass factor to the left
             else:
                 self.cores[mu] = torch.reshape(right, [-1, self.cores[mu].shape[1], self.cores[mu].shape[2]])
                 self.cores[mu-1] = torch.einsum('ijk,kl', (self.cores[mu-1], left))  # Pass factor to the left

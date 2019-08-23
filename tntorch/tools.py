@@ -208,19 +208,22 @@ def unfolding(data, n, batch=False):
         return data.permute([n] + list(range(n)) + list(range(n + 1, data.dim()))).reshape([data.shape[n], -1])
 
 
-def right_unfolding(core):
+def right_unfolding(core, batch=False):
     """
     Computes the `right unfolding <https://epubs.siam.org/doi/pdf/10.1137/090752286>`_ of a 3D PyTorch tensor.
 
     :param core: a PyTorch tensor of shape :math:`I_1 \\times I_2 \\times I_3`
+    :param batch: boolean
 
     :return: a PyTorch matrix of shape :math:`I_1 \\times I_2 I_3`
     """
+    if batch:
+        return core.reshape([core.shape[0], core.shape[1], -1])
+    else:
+        return core.reshape([core.shape[0], -1])
 
-    return core.reshape([core.shape[0], -1])
 
-
-def left_unfolding(core):
+def left_unfolding(core, batch=False):
     """
     Computes the `left unfolding <https://epubs.siam.org/doi/pdf/10.1137/090752286>`_ of a 3D PyTorch tensor.
 
@@ -229,7 +232,10 @@ def left_unfolding(core):
     :return: a PyTorch matrix of shape :math:`I_1 I_2 \\times I_3`
     """
 
-    return core.reshape([-1, core.shape[-1]])
+    if batch:
+        return core.reshape([core.shape[0], -1, core.shape[-1]])
+    else:
+        return core.reshape([-1, core.shape[-1]])
 
 
 """
