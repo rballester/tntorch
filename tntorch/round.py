@@ -49,7 +49,7 @@ def round(t, **kwargs):
     return t2
 
 
-def truncated_svd(M, delta=None, eps=None, rmax=None, left_ortho=True, algorithm='svd', verbose=False):
+def truncated_svd(M, delta=None, eps=None, rmax=None, left_ortho=True, algorithm='svd', verbose=False, batch=False):
     """
     Decomposes a matrix M (size (m x n) in two factors U and V (sizes m x r and r x n) with bounded error (or given r).
 
@@ -60,6 +60,7 @@ def truncated_svd(M, delta=None, eps=None, rmax=None, left_ortho=True, algorithm
     :param left_ortho: if True (default), U will be orthonormal. If False, V will
     :param algorithm: 'svd' (default) or 'eig'. The latter is often faster, but less accurate
     :param verbose: Boolean
+    :param batch: Boolean
 
     :return: U, V
     """
@@ -74,6 +75,9 @@ def truncated_svd(M, delta=None, eps=None, rmax=None, left_ortho=True, algorithm
     assert rmax >= 1
     assert algorithm in ('svd', 'eig')
 
+    if batch:
+        batch_size = M.shape[0]
+
     if algorithm == 'svd':
         start = time.time()
         svd = torch.svd(M)[:2]
@@ -83,11 +87,18 @@ def truncated_svd(M, delta=None, eps=None, rmax=None, left_ortho=True, algorithm
             print('Time (SVD):', time.time() - start)
     else:
         start = time.time()
-        if M.shape[0] <= M.shape[1]:
-            gram = torch.mm(M, M.permute(1, 0))
+        if M.shape[-2] <= M.shape[-1]:
+            if batch:
+                gram = torch.matmul(M, M.permute(0, 2, 1))
+            else:
+                gram = torch.mm(M, M.permute(1, 0))
+
             singular_vectors = 'left'
         else:
-            gram = torch.mm(M.permute(1, 0), M)
+            if batch:
+                gram = torch.matmul(M.permute(0, 2, 1), M)
+            else:
+                gram = torch.mm(M.permute(1, 0), M)
             singular_vectors = 'right'
         if verbose:
             print('Time (gram):', time.time() - start)
@@ -99,38 +110,71 @@ def truncated_svd(M, delta=None, eps=None, rmax=None, left_ortho=True, algorithm
         w = torch.sqrt(w)
         svd = [v, w]
         # Sort eigenvalues and eigenvectors in decreasing importance
-        reverse = np.arange(len(svd[1])-1, -1, -1)
-        idx = np.argsort(svd[1])[reverse]
-        svd[0] = svd[0][:, idx]
-        svd[1] = svd[1][idx]
+        if batch:
+            reverse = np.arange(svd[1].shape[1]-1, -1, -1)
+        else:
+            reverse = np.arange(len(svd[1])-1, -1, -1)
 
-    if svd[1][0] < 1e-13:  # Special case: M = zero -> rank is 1
-        return torch.zeros([M.shape[0], 1]), torch.zeros([1, M.shape[1]])
+        idx = np.argsort(svd[1])[..., reverse]
+        svd[0] = svd[0][..., idx]
+        svd[1] = svd[1][..., idx]
+
+    if batch:
+        if (svd[1][0] - torch.zeros_like(svd[1][0])).mean() < 1e-13:
+            return torch.zeros([batch_size, M.shape[0], 1]), torch.zeros([batch_size, 1, M.shape[1]])
+    else:
+        if svd[1][0] < 1e-13:  # Special case: M = zero -> rank is 1
+            return torch.zeros([M.shape[0], 1]), torch.zeros([1, M.shape[1]])
 
     S = svd[1]**2
-    reverse = np.arange(len(S)-1, -1, -1)
-    where = np.where((torch.cumsum(S[reverse], dim=0) <= delta**2).to('cpu'))[0]
-    if len(where) == 0:
-        rank = max(1, int(min(rmax, len(S))))
+    if batch:
+        reverse = np.arange(S.shape[1]-1, -1, -1)
     else:
-        rank = max(1, int(min(rmax, len(S) - 1 - where[-1])))
+        reverse = np.arange(len(S)-1, -1, -1)
+
+    where = np.where((torch.cumsum(S[..., reverse], dim=0) <= delta**2).to('cpu'))[0]
+    if len(where) == 0:
+        if batch:
+            rank = max(1, int(min(rmax, S.shape[1])))
+        else:
+            rank = max(1, int(min(rmax, len(S))))
+    else:
+        if batch:
+            rank = max(1, int(min(rmax, S.shape[1] - 1 - where[-1])))
+        else:
+            rank = max(1, int(min(rmax, len(S) - 1 - where[-1])))
     left = svd[0]
-    left = left[:, :rank]
+    left = left[..., :rank]
 
     start = time.time()
     if singular_vectors == 'left':
         if left_ortho:
-            M2 = torch.mm(left.permute(1, 0), M)
+            if batch:
+                M2 = torch.matmul(left.permute(0, 2, 1), M)
+            else:
+                M2 = torch.matmul(left.permute(1, 0), M)
         else:
-            M2 = torch.mm((1. / svd[1][:rank])[:, None]*left.permute(1, 0), M)
-            left = left*svd[1][:rank]
+            if batch:
+                M2 = torch.matmul((1. / svd[1][:, :rank])[:, :, None]*left.permute(0, 2, 1), M)
+                left = left*svd[1][:, :rank]
+            else:
+                M2 = torch.mm((1. / svd[1][:rank])[:, None]*left.permute(1, 0), M)
+                left = left*svd[1][:rank]
     else:
         if left_ortho:
-            M2 = torch.mm(M, (left * (1. / svd[1][:rank])[None, :]))
-            left, M2 = M2, torch.mm(left, (torch.diag(svd[1][:rank]))).permute(1, 0)
+            if batch:
+                M2 = torch.matmul(M, (left * (1. / svd[1][:, :rank])[:, None, :]))
+                left, M2 = M2, torch.matmul(left, (torch.diag(svd[1][:, :rank]))).permute(0, 2, 1)
+            else:
+                M2 = torch.mm(M, (left * (1. / svd[1][:rank])[None, :]))
+                left, M2 = M2, torch.mm(left, (torch.diag(svd[1][:rank]))).permute(1, 0)
         else:
-            M2 = torch.mm(M, left)
-            left, M2 = M2, left.permute(1, 0)
+            if batch:
+                M2 = torch.matmul(M, left)
+                left, M2 = M2, left.permute(0, 2, 1)
+            else:
+                M2 = torch.mm(M, left)
+                left, M2 = M2, left.permute(1, 0)
     if verbose:
         print('Time (product):', time.time() - start)
 

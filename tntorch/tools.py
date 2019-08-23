@@ -392,6 +392,7 @@ def generate_basis(name, shape, orthonormal=False):
     :param name: 'dct', 'legendre', 'chebyshev' or 'hermite'
     :param shape: two integers
     :param orthonormal: whether to orthonormalize the basis
+    :param batch: boolean
 
     :return: a PyTorch matrix of `shape`
     """
