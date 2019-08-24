@@ -195,15 +195,16 @@ def unfolding(data, n, batch=False):
 
     :param data: a PyTorch tensor
     :param n: unfolding mode
+    :param batch: boolean
 
     :return: a PyTorch matrix
     """
     if batch:
         return data.permute(
-            [0, n] + \
-            list(range(1, n)) + \
-            list(range(n + 1, data.dim() - 1))
-        ).reshape([data.shape[0], data.shape[n], -1])
+            [0, n + 1] + \
+            list(range(1, n + 1)) + \
+            list(range(n + 2, data.dim()))
+        ).reshape([data.shape[0], data.shape[n + 1], -1])
     else:
         return data.permute([n] + list(range(n)) + list(range(n + 1, data.dim()))).reshape([data.shape[n], -1])
 

@@ -10,7 +10,7 @@ def batch_tensor_norm(t):
     return torch.sqrt(res)
 
 
-def _full_rank_tt(data, batch=False):  # Naive TT formatting, don't even attempt to compress
+def _full_rank_tt(data, batch=False): # Naive TT formatting, don't even attempt to compress
     data = data.to(torch.get_default_dtype())
     shape = data.shape
     result = []
@@ -147,22 +147,20 @@ class Tensor(object):
 
                     if batch:
                         data_norms = batch_tensor_norm(data)
-                        self.cores = [[torch.randn(sh, ranks_cp, device=device) for sh in data.shape[1:]] for _ in np.arange(data.shape[0])]
+                        self.cores = [torch.randn(data.shape[0], sh, ranks_cp, device=device) for sh in data.shape[1:]]
                     else:
                         data_norm = tn.norm(data)
                         self.cores = [torch.randn(sh, ranks_cp, device=device) for sh in data.shape]
-                else:  # We initialize CP factor to HOSVD
+                else: # We initialize CP factor to HOSVD
                     if batch:
                         data_norms = batch_tensor_norm(data)
-                        start = 1
                         N = data.dim() - 1
                     else:
                         data_norm = torch.norm(data)
-                        start = 0
                         N = data.dim()
 
                     self.cores = []
-                    for n in range(start, N):
+                    for n in range(N):
                         gram = tn.unfolding(data, n, batch)
                         gram = gram.matmul(gram.transpose(-1, -2))
                         eigvals, eigvecs = torch.symeig(gram, eigenvectors=True)
@@ -207,20 +205,22 @@ class Tensor(object):
                         if batch:
                             khatri = torch.ones(batch_size, 1, ranks_cp, device=device)
                             prod = torch.ones(batch_size, ranks_cp, ranks_cp, device=device)
-                            for m in range(self.dim()-1, 0, -1):
-                                if m != n:
-                                    prod *= grams[m]
-                                    khatri = torch.reshape(torch.einsum('bir,bjr->bijr', (self.cores[m], khatri)), [batch_size, -1, ranks_cp])
+                            idxs = 'bir,bjr->bijr'
+                            shape = [batch_size, -1, ranks_cp]
                         else:
                             khatri = torch.ones(1, ranks_cp, device=device)
                             prod = torch.ones(ranks_cp, ranks_cp, device=device)
-                            for m in range(self.dim()-1, -1, -1):
-                                if m != n:
-                                    prod *= grams[m]
-                                    khatri = torch.reshape(torch.einsum('ir,jr->ijr', (self.cores[m], khatri)), [-1, ranks_cp])
-                        unfolding = tn.unfolding(data, n, batch)
-                        unf_khatri_t = unfolding.matmul(khatri).transpose(-1, -2)
+                            idxs = 'ir,jr->ijr'
+                            shape = [-1, ranks_cp]
 
+                        for m in range(self.dim()-1, -1, -1):
+                            if m != n:
+                                prod *= grams[m]
+                                khatri = torch.reshape(torch.einsum(idxs, (self.cores[m], khatri)), shape)
+
+                        unfolding = tn.unfolding(data, n, batch)
+
+                        unf_khatri_t = unfolding.matmul(khatri).transpose(-1, -2)
                         if batch:
                             self.cores[n] = torch.cat(
                                 [torch.lstsq(unf_khatri_t[i],prod[i])[0].transpose(-1, -2)[None, ...] for i in range(batch_size)]
@@ -231,7 +231,7 @@ class Tensor(object):
                         grams[n] = self.cores[n].transpose(-1, -2).matmul(self.cores[n])
 
                     if batch:
-                        errors.append((batch_tensor_norm(data - tn.Tensor(self.cores, batch=self.batch).torch(), batch=self.batch) / data_norms).mean())
+                        errors.append((batch_tensor_norm(data - tn.Tensor(self.cores, batch=self.batch).torch()) / data_norms).mean())
                     else:
                         errors.append(torch.norm(data - tn.Tensor(self.cores, batch=self.batch).torch()) / data_norm)
                     if len(errors) >= 2 and errors[-2] - errors[-1] < tol:
@@ -306,7 +306,7 @@ class Tensor(object):
                 other = Tensor([torch.ones([1, self.shape[n], 1]) for n in range(self.dim())])
 
             other.cores[0].data *= factor
-        if self.dim() == 1:  # Special case
+        if self.dim() == 1: # Special case
             return Tensor([self.decompress_tucker_factors().cores[0] + other.decompress_tucker_factors().cores[0]])
 
         if self.batch:
@@ -453,7 +453,7 @@ class Tensor(object):
             if this.Us[n] is not None and other.Us[n] is not None and d1 < this.shape[n]:
                 cores.append(torch.reshape(torch.einsum(idx1, (core1, core2)), shape1))
                 Us.append(torch.reshape(torch.einsum(idx2, (this.Us[n], other.Us[n])), shape2))
-            else:  # Decompress spatially, then do normal TT-TT slice-wise kronecker product
+            else: # Decompress spatially, then do normal TT-TT slice-wise kronecker product
                 if this.Us[n] is not None:
                     core1 = torch.einsum(idx3, (core1, this.Us[n]))
                 if other.Us[n] is not None:
@@ -1135,13 +1135,17 @@ class Tensor(object):
             return factor
 
         if self.batch:
-            core = torch.zeros(factor.shape[0], factor.shape[2], factor.shape[2] + 1, factor.shape[1])
-            core[:, :, 0, :] = factor.transpose(-1, -2)
-            return core.reshape(factor.shape[0], factor.shape[2] + 1, factor.shape[2], factor.shape[1]).permute(0, 1, 3, 2)[:, :-1, :, :]
+            shape1 = (factor.shape[0], factor.shape[2], factor.shape[2] + 1, factor.shape[1])
+            shape2 = (factor.shape[0], factor.shape[2] + 1, factor.shape[2], factor.shape[1])
+            order = (0, 1, 3, 2)
         else:
-            core = torch.zeros(factor.shape[1], factor.shape[1] + 1, factor.shape[0])
-            core[:, 0, :] = factor.t()
-            return core.reshape(factor.shape[1] + 1, factor.shape[1], factor.shape[0]).permute(0, 2, 1)[:-1, :, :]
+            shape1 = (factor.shape[1], factor.shape[1] + 1, factor.shape[0])
+            shape2 = (factor.shape[1] + 1, factor.shape[1], factor.shape[0])
+            order = (0, 2, 1)
+
+        core = torch.zeros(shape1)
+        core[..., 0, :] = factor.transpose(-1, -2)
+        return core.reshape(shape2).permute(order)[..., :-1, :, :]
 
     """
     Rounding and orthogonalization
@@ -1219,9 +1223,15 @@ class Tensor(object):
 
         assert 1 <= mu < self.dim()
         self.factor_orthogonalize(mu)
-        Q, L = torch.qr(tn.right_unfolding(self.cores[mu], batch=self.batch).permute(-1, -2))  # Torch has no rq() decomposition
-        L = L.permute(-1, -2)
-        Q = Q.permute(-1, -2)
+        # Torch has no rq() decomposition
+        if self.batch:
+            Q, L = torch.qr(tn.right_unfolding(self.cores[mu], batch=self.batch).permute(0, 2, 1))
+            L = L.permute(0, 2, 1)
+            Q = Q.permute(0, 2, 1)
+        else:
+            Q, L = torch.qr(tn.right_unfolding(self.cores[mu], batch=self.batch).permute(1, 0))
+            L = L.permute(1, 0)
+            Q = Q.permute(1, 0)
 
         if self.batch:
             self.cores[mu] = torch.reshape(Q, (Q.shape[:2]) + self.cores[mu].shape[2:])
@@ -1278,6 +1288,7 @@ class Tensor(object):
         """
 
         N = self.dim()
+
         if not hasattr(rmax, '__len__'):
             rmax = [rmax]*N
         assert len(rmax) == N
@@ -1299,7 +1310,7 @@ class Tensor(object):
                 if self.batch:
                     self.Us[mu] = torch.cat(
                         [
-                            torch.eye(self.shape[mu]).to(device) for _ in range(batch_size)
+                            torch.eye(self.shape[mu + 1])[None, ...].to(device) for _ in range(batch_size)
                         ]
                     )
                 else:
