@@ -180,7 +180,7 @@ def gaussian(*shape, sigma_factor=0.2):
     for n in range(N):
         sigma = sigma_factor[n] * shape[n]
         if shape[n] == 1:
-            x = torch.Tensor([0])
+            x = torch.tensor([0])
         else:
             x = torch.linspace(-shape[n] / 2, shape[n] / 2, shape[n])
         U = torch.exp(-x**2 / (2*sigma**2))

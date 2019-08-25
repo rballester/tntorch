@@ -125,10 +125,13 @@ def meshgrid(*axes):
     :return: a list of N :class:`Tensor`, of N dimensions each
     """
 
+    device = None
     if not hasattr(axes, '__len__'):
         axes = [axes]
     if hasattr(axes[0], '__len__'):
         axes = axes[0]
+    if hasattr(axes[0], 'device'):
+        device = axes[0].device
     axes = list(axes)
     N = len(axes)
     for n in range(N):
@@ -137,9 +140,13 @@ def meshgrid(*axes):
 
     tensors = []
     for n in range(N):
-        cores = [torch.ones(1, len(ax), 1) for ax in axes]
-        cores[n] = torch.Tensor(axes[n].to(torch.get_default_dtype()))[None, :, None]
-        tensors.append(tn.Tensor(cores))
+        cores = [torch.ones(1, len(ax), 1).to(device) for ax in axes]
+        if isinstance(axes[n], torch.Tensor):
+            cores[n] = axes[n].type(torch.get_default_dtype())
+        else:
+            cores[n] = torch.tensor(axes[n].type(torch.get_default_dtype()))
+        cores[n] = cores[n][None, :, None].to(device)
+        tensors.append(tn.Tensor(cores, device=device))
     return tensors
 
 
@@ -182,32 +189,42 @@ def unbind(t, dim):
     return [t[[slice(None)]*dim + [sl] + [slice(None)]*(t.dim()-1-dim)] for sl in range(t.shape[dim])]
 
 
-def unfolding(data, n):
+def unfolding(data, n, batch=False):
     """
     Computes the `n-th mode unfolding <https://epubs.siam.org/doi/pdf/10.1137/07070111X>`_ of a PyTorch tensor.
 
     :param data: a PyTorch tensor
     :param n: unfolding mode
+    :param batch: boolean
 
     :return: a PyTorch matrix
     """
+    if batch:
+        return data.permute(
+            [0, n + 1] + \
+            list(range(1, n + 1)) + \
+            list(range(n + 2, data.dim()))
+        ).reshape([data.shape[0], data.shape[n + 1], -1])
+    else:
+        return data.permute([n] + list(range(n)) + list(range(n + 1, data.dim()))).reshape([data.shape[n], -1])
 
-    return data.permute([n] + list(range(n)) + list(range(n + 1, data.dim()))).reshape([data.shape[n], -1])
 
-
-def right_unfolding(core):
+def right_unfolding(core, batch=False):
     """
     Computes the `right unfolding <https://epubs.siam.org/doi/pdf/10.1137/090752286>`_ of a 3D PyTorch tensor.
 
     :param core: a PyTorch tensor of shape :math:`I_1 \\times I_2 \\times I_3`
+    :param batch: boolean
 
     :return: a PyTorch matrix of shape :math:`I_1 \\times I_2 I_3`
     """
+    if batch:
+        return core.reshape([core.shape[0], core.shape[1], -1])
+    else:
+        return core.reshape([core.shape[0], -1])
 
-    return core.reshape([core.shape[0], -1])
 
-
-def left_unfolding(core):
+def left_unfolding(core, batch=False):
     """
     Computes the `left unfolding <https://epubs.siam.org/doi/pdf/10.1137/090752286>`_ of a 3D PyTorch tensor.
 
@@ -216,7 +233,10 @@ def left_unfolding(core):
     :return: a PyTorch matrix of shape :math:`I_1 I_2 \\times I_3`
     """
 
-    return core.reshape([-1, core.shape[-1]])
+    if batch:
+        return core.reshape([core.shape[0], -1, core.shape[-1]])
+    else:
+        return core.reshape([-1, core.shape[-1]])
 
 
 """
@@ -349,7 +369,7 @@ def sample(t, P=1):
         fiber = torch.einsum('ijk,k->ij', (t.cores[mu], rights[mu + 1]))
         per_point = torch.einsum('ij,jk->ik', (lefts, fiber))
         rows = from_matrix(per_point)
-        Xs[:, mu] = torch.Tensor(rows)
+        Xs[:, mu] = torch.tensor(rows)
         lefts = torch.einsum('ij,jik->ik', (lefts, t.cores[mu][:, rows, :]))
 
     return Xs
@@ -379,6 +399,7 @@ def generate_basis(name, shape, orthonormal=False):
     :param name: 'dct', 'legendre', 'chebyshev' or 'hermite'
     :param shape: two integers
     :param orthonormal: whether to orthonormalize the basis
+    :param batch: boolean
 
     :return: a PyTorch matrix of `shape`
     """

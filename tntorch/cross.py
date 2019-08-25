@@ -63,7 +63,7 @@ def argmax(tensors=None, function=lambda x: x, rmax=10, max_iter=10, verbose=Fal
     return info['argmin']
 
 
-def cross(function=lambda x: x, domain=None, tensors=None, function_arg='vectors', ranks_tt=None, kickrank=3, rmax=100, eps=1e-6, max_iter=25, val_size=1000, verbose=True, return_info=False, record_samples=False, _minimize=False):
+def cross(function=lambda x: x, domain=None, tensors=None, function_arg='vectors', ranks_tt=None, kickrank=3, rmax=100, eps=1e-6, max_iter=25, val_size=1000, verbose=True, return_info=False, record_samples=False, _minimize=False, device=None):
     """
     Cross-approximation routine that samples a black-box function and returns an N-dimensional tensor train approximating it. It accepts either:
 
@@ -99,6 +99,7 @@ def cross(function=lambda x: x, domain=None, tensors=None, function_arg='vectors
     :param val_size: size of the validation set
     :param verbose: default is True
     :param return_info: if True, will also return a dictionary with informative metrics about the algorithm's outcome
+    :param device: PyTorch device
 
     :return: an N-dimensional TT :class:`Tensor` (if `return_info`=True, also a dictionary)
     """
@@ -117,6 +118,7 @@ def cross(function=lambda x: x, domain=None, tensors=None, function_arg='vectors
         f = function
     if tensors is None:
         tensors = tn.meshgrid(domain)
+
     if not hasattr(tensors, '__len__'):
         tensors = [tensors]
     tensors = [t.decompress_tucker_factors(_clone=False) for t in tensors]
@@ -136,7 +138,7 @@ def cross(function=lambda x: x, domain=None, tensors=None, function_arg='vectors
         Rs[n] = min(Rs[n-1]*Is[n-1], Rs[n], Is[n]*Rs[n+1])
 
     # Initialize cores at random
-    cores = [torch.randn(Rs[n], Is[n], Rs[n+1]) for n in range(N)]
+    cores = [torch.randn(Rs[n], Is[n], Rs[n+1]).to(device) for n in range(N)]
 
     # Prepare left and right sets
     lsets = [np.array([[0]])] + [None]*(N-1)
@@ -148,15 +150,15 @@ def cross(function=lambda x: x, domain=None, tensors=None, function_arg='vectors
         t_linterfaces = []
         t_rinterfaces = []
         for t in tensors:
-            linterfaces = [torch.ones(1, t.ranks_tt[0])] + [None]*(N-1)
-            rinterfaces = [None]*(N-1) + [torch.ones(t.ranks_tt[t.dim()], 1)]
+            linterfaces = [torch.ones(1, t.ranks_tt[0]).to(device)] + [None]*(N-1)
+            rinterfaces = [None]*(N-1) + [torch.ones(t.ranks_tt[t.dim()], 1).to(device)]
             for j in range(N-1):
-                M = torch.ones(t.cores[-1].shape[-1], len(rsets[j]))
+                M = torch.ones(t.cores[-1].shape[-1], len(rsets[j])).to(device)
                 for n in range(N-1, j, -1):
                     if t.cores[n].dim() == 3:  # TT core
-                        M = torch.einsum('iaj,ja->ia', [t.cores[n][:, rsets[j][:, n-1-j], :], M])
+                        M = torch.einsum('iaj,ja->ia', [t.cores[n][:, rsets[j][:, n-1-j], :].to(device), M])
                     else:  # CP factor
-                        M = torch.einsum('ai,ia->ia', [t.cores[n][rsets[j][:, n-1-j], :], M])
+                        M = torch.einsum('ai,ia->ia', [t.cores[n][rsets[j][:, n-1-j], :].to(device), M])
                 rinterfaces[j] = M
             t_linterfaces.append(linterfaces)
             t_rinterfaces.append(rinterfaces)
@@ -164,7 +166,7 @@ def cross(function=lambda x: x, domain=None, tensors=None, function_arg='vectors
     t_linterfaces, t_rinterfaces = init_interfaces()
 
     # Create a validation set
-    Xs_val = [torch.as_tensor(np.random.choice(I, int(val_size))) for I in Is]
+    Xs_val = [torch.as_tensor(np.random.choice(I, int(val_size))).to(device) for I in Is]
     ys_val = f(*[t[Xs_val].torch() for t in tensors])
     if ys_val.dim() > 1:
         assert ys_val.dim() == 2
@@ -186,8 +188,8 @@ def cross(function=lambda x: x, domain=None, tensors=None, function_arg='vectors
         'argmin': None
     }
     if record_samples:
-        info['sample_positions'] = torch.zeros(0, N)
-        info['sample_values'] = torch.zeros(0)
+        info['sample_positions'] = torch.zeros(0, N).to(device)
+        info['sample_values'] = torch.zeros(0).to(device)
 
     def evaluate_function(j):  # Evaluate function over Rs[j] x Rs[j+1] fibers, each of size I[j]
         Xs = []
@@ -245,9 +247,9 @@ def cross(function=lambda x: x, domain=None, tensors=None, function_arg='vectors
             V = torch.reshape(V, [-1, V.shape[2]])  # Left unfolding
             Q, R = torch.qr(V)
             if _minimize:
-                local, _ = maxvolpy.maxvol.rect_maxvol(Q.detach().numpy(), maxK=Q.shape[1])
+                local, _ = maxvolpy.maxvol.rect_maxvol(Q.detach().cpu().numpy(), maxK=Q.shape[1])
             else:
-                local, _ = maxvolpy.maxvol.maxvol(Q.detach().numpy())
+                local, _ = maxvolpy.maxvol.maxvol(Q.detach().cpu().numpy())
             V = torch.lstsq(Q.t(), Q[local, :].t())[0].t()
             cores[j] = torch.reshape(V, [Rs[j], Is[j], Rs[j+1]])
             left_locals.append(local)
@@ -271,9 +273,9 @@ def cross(function=lambda x: x, domain=None, tensors=None, function_arg='vectors
             V = torch.reshape(V, [Rs[j], -1])  # Right unfolding
             Q, R = torch.qr(V.t())
             if _minimize:
-                local, _ = maxvolpy.maxvol.rect_maxvol(Q.detach().numpy(), maxK=Q.shape[1])
+                local, _ = maxvolpy.maxvol.rect_maxvol(Q.detach().cpu().numpy(), maxK=Q.shape[1])
             else:
-                local, _ = maxvolpy.maxvol.maxvol(Q.detach().numpy())
+                local, _ = maxvolpy.maxvol.maxvol(Q.detach().cpu().numpy())
             V = torch.lstsq(Q.t(), Q[local, :].t())[0]
             cores[j] = torch.reshape(torch.as_tensor(V), [Rs[j], Is[j], Rs[j+1]])
 
@@ -336,6 +338,6 @@ def cross(function=lambda x: x, domain=None, tensors=None, function_arg='vectors
         info['left_locals'] = left_locals
         info['total_time'] = time.time()-start
         info['val_eps'] = val_eps
-        return tn.Tensor([torch.Tensor(c) for c in cores]), info
+        return tn.Tensor([c if isinstance(c, torch.Tensor) else torch.tensor(c) for c in cores]), info
     else:
-        return tn.Tensor([torch.Tensor(c) for c in cores])
+        return tn.Tensor([c if isinstance(c, torch.Tensor) else torch.tensor(c) for c in cores])
