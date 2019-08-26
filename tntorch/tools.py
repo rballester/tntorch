@@ -116,7 +116,7 @@ def transpose(t):
     return tn.Tensor(cores, Us, idxs)
 
 
-def meshgrid(*axes):
+def meshgrid(*axes, batch=False):
     """
     See NumPy's or PyTorch's `meshgrid()`.
 
@@ -146,7 +146,7 @@ def meshgrid(*axes):
         else:
             cores[n] = torch.tensor(axes[n].type(torch.get_default_dtype()))
         cores[n] = cores[n][None, :, None].to(device)
-        tensors.append(tn.Tensor(cores, device=device))
+        tensors.append(tn.Tensor(cores, device=device, batch=batch))
     return tensors
 
 

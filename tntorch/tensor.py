@@ -9,6 +9,14 @@ def batch_tensor_norm(t):
         res = res.sum(dim=1)
     return torch.sqrt(res)
 
+# Note: untill pytorch supports differentiable lstsq
+def lstsq(b, A, batch=False):
+    q, r = torch.qr(A)
+    if batch:
+        return torch.cat([torch.matmul(torch.matmul(r[i].inverse(), q[i].t()), b[i])[None, ...] for i in range(len(q))]).transpose(-1, -2)
+    else:
+        return torch.matmul(torch.matmul(r.inverse(), q.t()), b).transpose(-1, -2)
+
 
 def _full_rank_tt(data, batch=False): # Naive TT formatting, don't even attempt to compress
     data = data.to(torch.get_default_dtype())
@@ -168,7 +176,7 @@ class Tensor(object):
                         # Sort eigenvectors in decreasing importance
                         if batch:
                             reverse = np.arange(len(eigvals[0])-1, -1, -1)  # Negative steps not yet supported in PyTorch
-                            idx = np.argsort(eigvals.to('cpu'))[:, reverse[:ranks_cp]]
+                            idx = np.argsort(eigvals.detach().cpu().numpy())[:, reverse[:ranks_cp]]
                             self.cores.append(eigvecs[[[i] for i in range(len(idx))], :, idx].transpose(-1, -2))
                             if self.cores[-1].shape[2] < ranks_cp:  # Complete with random entries
                                 self.cores[-1] = torch.cat(
@@ -177,7 +185,8 @@ class Tensor(object):
                                         torch.randn(
                                             self.cores[-1].shape[0],
                                             self.cores[-1].shape[1],
-                                            ranks_cp-self.cores[-1].shape[2]
+                                            ranks_cp-self.cores[-1].shape[2],
+                                            device=device
                                         )
                                     ),
                                     dim=2
@@ -221,12 +230,8 @@ class Tensor(object):
                         unfolding = tn.unfolding(data, n, batch)
 
                         unf_khatri_t = unfolding.matmul(khatri).transpose(-1, -2)
-                        if batch:
-                            self.cores[n] = torch.cat(
-                                [torch.lstsq(unf_khatri_t[i],prod[i])[0].transpose(-1, -2)[None, ...] for i in range(batch_size)]
-                            )
-                        else:
-                            self.cores[n] = torch.lstsq(unf_khatri_t,prod)[0].transpose(-1, -2)
+                        self.cores[n] = lstsq(unf_khatri_t, prod, batch=batch)
+
 
                         grams[n] = self.cores[n].transpose(-1, -2).matmul(self.cores[n])
 

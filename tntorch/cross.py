@@ -6,7 +6,7 @@ import numpy as np
 import logging
 
 
-def minimum(tensors=None, function=lambda x: x, rmax=10, max_iter=10, verbose=False, **kwargs):
+def minimum(tensors=None, function=lambda x: x, rmax=10, max_iter=10, verbose=False, batch=False, **kwargs):
     """
     Estimate the minimal element of a tensor (or a function of one or several tensors)
 
@@ -14,17 +14,18 @@ def minimum(tensors=None, function=lambda x: x, rmax=10, max_iter=10, verbose=Fa
     :param rmax: used for :func:`cross.cross()`. Lower is faster; higher is more accurate (default is 10)
     :param max_iter: used for :func:`cross.cross()`. Lower is faster; higher is more accurate (default is 10)
     :param verbose: default is False
+    :param batch: boolean
     :param **kwargs: passed to :func:`cross.cross()`
 
     :return: a scalar
     """
 
-    _, info = cross(**kwargs, tensors=tensors, function=function, rmax=rmax, max_iter=max_iter, verbose=verbose, return_info=True, _minimize=True)
+    _, info = cross(**kwargs, tensors=tensors, function=function, rmax=rmax, max_iter=max_iter, verbose=verbose, return_info=True, _minimize=True, batch=batch)
     return info['min']
     # return t[argmin(rmax=rmax, max_iter=max_iter, verbose=verbose, **kwargs)]
 
 
-def argmin(tensors=None, function=lambda x: x, rmax=10, max_iter=10, verbose=False, **kwargs):
+def argmin(tensors=None, function=lambda x: x, rmax=10, max_iter=10, verbose=False, batch=False, **kwargs):
     """
     Estimate the minimizer of a tensor (position where its minimum is located).
 
@@ -37,7 +38,7 @@ def argmin(tensors=None, function=lambda x: x, rmax=10, max_iter=10, verbose=Fal
     return info['argmin']
 
 
-def maximum(tensors=None, function=lambda x: x, rmax=10, max_iter=10, verbose=False, **kwargs):
+def maximum(tensors=None, function=lambda x: x, rmax=10, max_iter=10, verbose=False, batch=False, **kwargs):
     """
     Estimate the maximal element of a tensor.
 
@@ -50,7 +51,7 @@ def maximum(tensors=None, function=lambda x: x, rmax=10, max_iter=10, verbose=Fa
     return -info['min']
 
 
-def argmax(tensors=None, function=lambda x: x, rmax=10, max_iter=10, verbose=False, **kwargs):
+def argmax(tensors=None, function=lambda x: x, rmax=10, max_iter=10, verbose=False, batch=False, **kwargs):
     """
     Estimate the maximizer of a tensor (position where its maximum is located).
 
@@ -63,7 +64,7 @@ def argmax(tensors=None, function=lambda x: x, rmax=10, max_iter=10, verbose=Fal
     return info['argmin']
 
 
-def cross(function=lambda x: x, domain=None, tensors=None, function_arg='vectors', ranks_tt=None, kickrank=3, rmax=100, eps=1e-6, max_iter=25, val_size=1000, verbose=True, return_info=False, record_samples=False, _minimize=False, device=None):
+def cross(function=lambda x: x, domain=None, tensors=None, function_arg='vectors', ranks_tt=None, kickrank=3, rmax=100, eps=1e-6, max_iter=25, val_size=1000, verbose=True, return_info=False, record_samples=False, _minimize=False, device=None, batch=False):
     """
     Cross-approximation routine that samples a black-box function and returns an N-dimensional tensor train approximating it. It accepts either:
 
@@ -100,6 +101,7 @@ def cross(function=lambda x: x, domain=None, tensors=None, function_arg='vectors
     :param verbose: default is True
     :param return_info: if True, will also return a dictionary with informative metrics about the algorithm's outcome
     :param device: PyTorch device
+    :param batch: boolean
 
     :return: an N-dimensional TT :class:`Tensor` (if `return_info`=True, also a dictionary)
     """
@@ -117,7 +119,7 @@ def cross(function=lambda x: x, domain=None, tensors=None, function_arg='vectors
     else:
         f = function
     if tensors is None:
-        tensors = tn.meshgrid(domain)
+        tensors = tn.meshgrid(domain, batch=batch)
 
     if not hasattr(tensors, '__len__'):
         tensors = [tensors]
@@ -338,6 +340,6 @@ def cross(function=lambda x: x, domain=None, tensors=None, function_arg='vectors
         info['left_locals'] = left_locals
         info['total_time'] = time.time()-start
         info['val_eps'] = val_eps
-        return tn.Tensor([c if isinstance(c, torch.Tensor) else torch.tensor(c) for c in cores]), info
+        return tn.Tensor([c if isinstance(c, torch.Tensor) else torch.tensor(c) for c in cores], batch=batch), info
     else:
-        return tn.Tensor([c if isinstance(c, torch.Tensor) else torch.tensor(c) for c in cores])
+        return tn.Tensor([c if isinstance(c, torch.Tensor) else torch.tensor(c) for c in cores], batch=batch)
