@@ -107,7 +107,7 @@ def truncated_svd(M, delta=None, eps=None, rmax=None, left_ortho=True, algorithm
         w, v = torch.symeig(gram, eigenvectors=True)
         if verbose:
             print('Time (symmetric EIG):', time.time() - start)
-        w[w < 0] = 0
+        w = torch.where(w < 0, torch.zeros_like(w), w)
         w = torch.sqrt(w)
         svd = [v, w]
         # Sort eigenvalues and eigenvectors in decreasing importance
