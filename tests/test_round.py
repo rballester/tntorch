@@ -28,6 +28,16 @@ def test_truncated_svd():
         assert torch.allclose(v1, v[i])
 
 
+def test_truncated_svd_eig():
+    gt = torch.rand((2, 32, 32))
+    u, v = tn.truncated_svd(gt, batch=True, algorithm='eig')
+
+    for i in range(len(gt)):
+        u1, v1 = tn.truncated_svd(gt[i], batch=False, algorithm='eig')
+        assert torch.allclose(u1, u[i])
+        assert torch.allclose(v1, v[i])
+
+
 def test_round_tt_svd():
 
     for i in range(100):

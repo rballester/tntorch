@@ -14,7 +14,7 @@ def minimum(tensors=None, function=lambda x: x, rmax=10, max_iter=10, verbose=Fa
     :param rmax: used for :func:`cross.cross()`. Lower is faster; higher is more accurate (default is 10)
     :param max_iter: used for :func:`cross.cross()`. Lower is faster; higher is more accurate (default is 10)
     :param verbose: default is False
-    :param batch: boolean
+    :param batch: Boolean
     :param **kwargs: passed to :func:`cross.cross()`
 
     :return: a scalar
@@ -101,7 +101,7 @@ def cross(function=lambda x: x, domain=None, tensors=None, function_arg='vectors
     :param verbose: default is True
     :param return_info: if True, will also return a dictionary with informative metrics about the algorithm's outcome
     :param device: PyTorch device
-    :param batch: boolean
+    :param batch: Boolean
 
     :return: an N-dimensional TT :class:`Tensor` (if `return_info`=True, also a dictionary)
     """
