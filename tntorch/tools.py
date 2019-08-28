@@ -116,7 +116,7 @@ def transpose(t):
     return tn.Tensor(cores, Us, idxs)
 
 
-def meshgrid(*axes):
+def meshgrid(*axes, batch=False):
     """
     See NumPy's or PyTorch's `meshgrid()`.
 
@@ -146,7 +146,7 @@ def meshgrid(*axes):
         else:
             cores[n] = torch.tensor(axes[n].type(torch.get_default_dtype()))
         cores[n] = cores[n][None, :, None].to(device)
-        tensors.append(tn.Tensor(cores, device=device))
+        tensors.append(tn.Tensor(cores, device=device, batch=batch))
     return tensors
 
 
@@ -195,7 +195,7 @@ def unfolding(data, n, batch=False):
 
     :param data: a PyTorch tensor
     :param n: unfolding mode
-    :param batch: boolean
+    :param batch: Boolean
 
     :return: a PyTorch matrix
     """
@@ -214,7 +214,7 @@ def right_unfolding(core, batch=False):
     Computes the `right unfolding <https://epubs.siam.org/doi/pdf/10.1137/090752286>`_ of a 3D PyTorch tensor.
 
     :param core: a PyTorch tensor of shape :math:`I_1 \\times I_2 \\times I_3`
-    :param batch: boolean
+    :param batch: Boolean
 
     :return: a PyTorch matrix of shape :math:`I_1 \\times I_2 I_3`
     """
@@ -399,7 +399,7 @@ def generate_basis(name, shape, orthonormal=False):
     :param name: 'dct', 'legendre', 'chebyshev' or 'hermite'
     :param shape: two integers
     :param orthonormal: whether to orthonormalize the basis
-    :param batch: boolean
+    :param batch: Boolean
 
     :return: a PyTorch matrix of `shape`
     """

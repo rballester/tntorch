@@ -9,6 +9,14 @@ def batch_tensor_norm(t):
         res = res.sum(dim=1)
     return torch.sqrt(res)
 
+# Note: untill pytorch supports differentiable lstsq
+def lstsq(b, A, batch=False):
+    q, r = torch.qr(A)
+    if batch:
+        return torch.cat([torch.matmul(torch.matmul(r[i].inverse(), q[i].t()), b[i])[None, ...] for i in range(len(q))]).transpose(-1, -2)
+    else:
+        return torch.matmul(torch.matmul(r.inverse(), q.t()), b).transpose(-1, -2)
+
 
 def _full_rank_tt(data, batch=False): # Naive TT formatting, don't even attempt to compress
     data = data.to(torch.get_default_dtype())
@@ -70,7 +78,8 @@ class Tensor(object):
 
     def __init__(self, data, Us=None, idxs=None, device=None, requires_grad=None,
                  ranks_cp=None, ranks_tucker=None, ranks_tt=None, eps=None,
-                 max_iter=25, tol=1e-4, verbose=False, batch=False):
+                 max_iter=25, tol=1e-4, verbose=False, batch=False,
+                 algorithm='svd',lstsq_algorithm='qr'):
 
         """
         The constructor can either:
@@ -94,10 +103,13 @@ class Tensor(object):
         :param tol: stopping criterion (change in relative error) when computing a CP decomposition using ALS
         :param verbose: Boolean
         :param batch: Boolean
+        :param algorithm: 'svd' (default) or 'eig'. The latter can be faster, but less accurate
+        :param lstsq_algorithm: 'qr' (default) or 'lstsq'. The latter is more accurate but doesn't allow backpropagation
 
         :return: a :class:`Tensor`
         """
 
+        assert lstsq_algorithm in ('qr', 'lstsq')
         self.batch = batch
 
         if isinstance(data, (list, tuple)):
@@ -142,7 +154,7 @@ class Tensor(object):
                     print('ALS', end='')
                 if ranks_tucker is not None:  # CP on Tucker's core
                     self.cores = _full_rank_tt(data, batch)
-                    self.round_tucker(rmax=ranks_tucker)
+                    self.round_tucker(rmax=ranks_tucker, algorithm=algorithm)
                     data = self.tucker_core()
 
                     if batch:
@@ -167,8 +179,8 @@ class Tensor(object):
 
                         # Sort eigenvectors in decreasing importance
                         if batch:
-                            reverse = np.arange(len(eigvals[0])-1, -1, -1)  # Negative steps not yet supported in PyTorch
-                            idx = np.argsort(eigvals.to('cpu'))[:, reverse[:ranks_cp]]
+                            reverse = torch.arange(len(eigvals[0])-1, -1, -1)
+                            idx = torch.argsort(eigvals)[:, reverse[:ranks_cp]]
                             self.cores.append(eigvecs[[[i] for i in range(len(idx))], :, idx].transpose(-1, -2))
                             if self.cores[-1].shape[2] < ranks_cp:  # Complete with random entries
                                 self.cores[-1] = torch.cat(
@@ -177,17 +189,18 @@ class Tensor(object):
                                         torch.randn(
                                             self.cores[-1].shape[0],
                                             self.cores[-1].shape[1],
-                                            ranks_cp-self.cores[-1].shape[2]
+                                            ranks_cp-self.cores[-1].shape[2],
+                                            device=device
                                         )
                                     ),
                                     dim=2
                                 )
                         else:
-                            reverse = np.arange(len(eigvals)-1, -1, -1)  # Negative steps not yet supported in PyTorch
-                            idx = np.argsort(eigvals.to('cpu'))[reverse[:ranks_cp]]
+                            reverse = torch.arange(len(eigvals)-1, -1, -1)
+                            idx = torch.argsort(eigvals)[reverse[:ranks_cp]]
                             self.cores.append(eigvecs[:, idx])
                             if self.cores[-1].shape[1] < ranks_cp:  # Complete with random entries
-                                self.cores[-1] = torch.cat((self.cores[-1], torch.randn(self.cores[-1].shape[0], ranks_cp-self.cores[-1].shape[1])), dim=1)
+                                self.cores[-1] = torch.cat((self.cores[-1], torch.randn(self.cores[-1].shape[0], ranks_cp-self.cores[-1].shape[1], device=device)), dim=1)
 
                 if verbose:
                     print(' -- initialization time =', time.time() - start)
@@ -221,12 +234,15 @@ class Tensor(object):
                         unfolding = tn.unfolding(data, n, batch)
 
                         unf_khatri_t = unfolding.matmul(khatri).transpose(-1, -2)
-                        if batch:
-                            self.cores[n] = torch.cat(
-                                [torch.lstsq(unf_khatri_t[i],prod[i])[0].transpose(-1, -2)[None, ...] for i in range(batch_size)]
-                            )
+                        if lstsq_algorithm == 'qr':
+                            self.cores[n] = lstsq(unf_khatri_t, prod, batch=batch)
                         else:
-                            self.cores[n] = torch.lstsq(unf_khatri_t,prod)[0].transpose(-1, -2)
+                            if batch:
+                                self.cores[n] = torch.cat(
+                                    [torch.lstsq(unf_khatri_t[i], prod[i])[None, ...] for i in range(batch_size)]
+                                )
+                            else:
+                                self.cores[n] = torch.lstsq(unf_khatri_t, prod)
 
                         grams[n] = self.cores[n].transpose(-1, -2).matmul(self.cores[n])
 
@@ -256,9 +272,9 @@ class Tensor(object):
                 else:
                     self.Us = [None]*data.dim()
                 if ranks_tucker is not None:
-                    self.round_tucker(rmax=ranks_tucker)
+                    self.round_tucker(rmax=ranks_tucker, algorithm=algorithm)
                 if ranks_tt is not None:
-                    self.round_tt(rmax=ranks_tt)
+                    self.round_tt(rmax=ranks_tt, algorithm=algorithm)
 
         # Check factor shapes
         if batch:

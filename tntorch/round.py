@@ -77,6 +77,7 @@ def truncated_svd(M, delta=None, eps=None, rmax=None, left_ortho=True, algorithm
 
     if batch:
         batch_size = M.shape[0]
+        device = M.device
 
     if algorithm == 'svd':
         start = time.time()
@@ -106,43 +107,48 @@ def truncated_svd(M, delta=None, eps=None, rmax=None, left_ortho=True, algorithm
         w, v = torch.symeig(gram, eigenvectors=True)
         if verbose:
             print('Time (symmetric EIG):', time.time() - start)
-        w[w < 0] = 0
+        w = torch.where(w < 0, torch.zeros_like(w), w)
         w = torch.sqrt(w)
         svd = [v, w]
         # Sort eigenvalues and eigenvectors in decreasing importance
         if batch:
-            reverse = np.arange(svd[1].shape[1]-1, -1, -1)
+            reverse = np.arange(len(svd[1][0])-1, -1, -1)
+            idx = torch.argsort(svd[1])[:, reverse]
+            svd[0] = torch.cat([svd[0][i, ..., idx[i]][None, ...] for i in range(len(idx))])
+            svd[1] = torch.cat([svd[1][i, ..., idx[i]][None, ...] for i in range(len(idx))])
         else:
             reverse = np.arange(len(svd[1])-1, -1, -1)
-
-        idx = np.argsort(svd[1])[..., reverse]
-        svd[0] = svd[0][..., idx]
-        svd[1] = svd[1][..., idx]
+            idx = torch.argsort(svd[1])[reverse]
+            svd[0] = svd[0][..., idx]
+            svd[1] = svd[1][..., idx]
 
     if batch:
         if (svd[1][0] - torch.zeros_like(svd[1][0])).mean() < 1e-13:
-            return torch.zeros([batch_size, M.shape[0], 1]), torch.zeros([batch_size, 1, M.shape[1]])
+            return torch.zeros([batch_size, M.shape[1], 1]), torch.zeros([batch_size, 1, M.shape[2]])
     else:
         if svd[1][0] < 1e-13:  # Special case: M = zero -> rank is 1
             return torch.zeros([M.shape[0], 1]), torch.zeros([1, M.shape[1]])
 
     S = svd[1]**2
+
     if batch:
         reverse = np.arange(S.shape[1]-1, -1, -1)
+        where = torch.where((torch.cumsum(S[:, reverse], dim=1) <= delta**2))[0]
     else:
         reverse = np.arange(len(S)-1, -1, -1)
+        where = torch.where((torch.cumsum(S[reverse], dim=0) <= delta**2))[0]
 
-    where = np.where((torch.cumsum(S[..., reverse], dim=0) <= delta**2).to('cpu'))[0]
     if len(where) == 0:
         if batch:
-            rank = max(1, int(min(rmax, S.shape[1])))
+            rank = max(1, int(min(rmax, len(S[0]))))
         else:
             rank = max(1, int(min(rmax, len(S))))
     else:
         if batch:
-            rank = max(1, int(min(rmax, S.shape[1] - 1 - where[-1])))
+            rank = max(1, int(min(rmax, len(S[0]) - 1 - where[-1])))
         else:
             rank = max(1, int(min(rmax, len(S) - 1 - where[-1])))
+
     left = svd[0]
     left = left[..., :rank]
 
@@ -152,16 +158,14 @@ def truncated_svd(M, delta=None, eps=None, rmax=None, left_ortho=True, algorithm
             if batch:
                 M2 = torch.matmul(left.permute(0, 2, 1), M)
             else:
-                M2 = torch.matmul(left.permute(1, 0), M)
+                M2 = torch.mm(left.permute(1, 0), M)
         else:
             if batch:
-                M2 = torch.matmul((1. / svd[1][:, :rank])[:, :, None]*left.permute(0, 2, 1), M)
-                a = left
-                b = svd[1][:, :rank]
-                left = torch.cat([(a[i] * b[i])[None, ...] for i in range(len(a))])
+                M2 = torch.matmul((1. / svd[1][:, :rank])[:, :, None] * left.permute(0, 2, 1), M)
+                left = torch.cat([(left[i] * svd[1][:, :rank][i])[None, ...] for i in range(len(left))])
             else:
                 M2 = torch.mm((1. / svd[1][:rank])[:, None]*left.permute(1, 0), M)
-                left = left*svd[1][:rank]
+                left = left * svd[1][:rank]
     else:
         if left_ortho:
             if batch:
