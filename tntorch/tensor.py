@@ -1128,7 +1128,7 @@ class Tensor(object):
         :return: a NumPy tensor
         """
 
-        return self.torch().detach().numpy()
+        return self.torch().detach().cpu().numpy()
 
     def _cp_to_tt(self, factor=None):
         """
