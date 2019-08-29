@@ -132,20 +132,13 @@ def truncated_svd(M, delta=None, eps=None, rmax=None, left_ortho=True, algorithm
     S = svd[1]**2
 
     if batch:
-        reverse = np.arange(S.shape[1]-1, -1, -1)
-        where = torch.where((torch.cumsum(S[:, reverse], dim=1) <= delta**2))[0]
+        rank = max(1, int(min(rmax, len(S[0]) - 1)))
     else:
         reverse = np.arange(len(S)-1, -1, -1)
         where = torch.where((torch.cumsum(S[reverse], dim=0) <= delta**2))[0]
-
-    if len(where) == 0:
-        if batch:
-            rank = max(1, int(min(rmax, len(S[0]))))
-        else:
+        
+        if len(where) == 0:
             rank = max(1, int(min(rmax, len(S))))
-    else:
-        if batch:
-            rank = max(1, int(min(rmax, len(S[0]) - 1 - where[-1])))
         else:
             rank = max(1, int(min(rmax, len(S) - 1 - where[-1])))
 
@@ -162,7 +155,7 @@ def truncated_svd(M, delta=None, eps=None, rmax=None, left_ortho=True, algorithm
         else:
             if batch:
                 M2 = torch.matmul((1. / svd[1][:, :rank])[:, :, None] * left.permute(0, 2, 1), M)
-                left = torch.cat([(left[i] * svd[1][:, :rank][i])[None, ...] for i in range(len(left))])
+                left = torch.einsum('bij,bj->bij', left, svd[1][:, :rank])
             else:
                 M2 = torch.mm((1. / svd[1][:rank])[:, None]*left.permute(1, 0), M)
                 left = left * svd[1][:rank]
