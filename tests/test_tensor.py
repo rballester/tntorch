@@ -51,3 +51,16 @@ def test_tucker_tensor():
             assert torch.allclose(core, b.cores[j][i, ...])
 
         assert torch.allclose(c.torch(), b.torch()[i])
+
+
+def test_tt_tensor_eig():
+    a = torch.rand(10, 5, 5, 5, 5)
+    b = tn.Tensor(a, ranks_tucker=3, batch=True, algorithm='eig')
+
+    for i in range(len(a)):
+        c = tn.Tensor(a[i], ranks_tucker=3, batch=False, algorithm='eig')
+
+        for j, core in enumerate(c.cores):
+            assert torch.allclose(core, b.cores[j][i, ...])
+
+        assert torch.allclose(c.torch(), b.torch()[i])

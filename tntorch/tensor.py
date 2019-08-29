@@ -79,7 +79,7 @@ class Tensor(object):
     def __init__(self, data, Us=None, idxs=None, device=None, requires_grad=None,
                  ranks_cp=None, ranks_tucker=None, ranks_tt=None, eps=None,
                  max_iter=25, tol=1e-4, verbose=False, batch=False,
-                 algorithm='svd',lstsq_algorithm='qr'):
+                 algorithm='svd', lstsq_algorithm='qr'):
 
         """
         The constructor can either:

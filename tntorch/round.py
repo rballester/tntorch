@@ -162,7 +162,7 @@ def truncated_svd(M, delta=None, eps=None, rmax=None, left_ortho=True, algorithm
         else:
             if batch:
                 M2 = torch.matmul((1. / svd[1][:, :rank])[:, :, None] * left.permute(0, 2, 1), M)
-                left = torch.cat([(left[i] * svd[1][:, :rank][i])[None, ...] for i in range(len(left))])
+                left = torch.einsum('bij,bj->bij', left, svd[1][:, :rank])
             else:
                 M2 = torch.mm((1. / svd[1][:rank])[:, None]*left.permute(1, 0), M)
                 left = left * svd[1][:rank]
