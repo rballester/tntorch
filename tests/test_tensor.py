@@ -26,6 +26,17 @@ def test_tt_tensor():
 
         assert torch.allclose(c.torch(), b.torch()[i])
 
+    a = torch.rand(10, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2)
+    b = tn.Tensor(a, ranks_tt=3, batch=True)
+
+    for i in range(len(a)):
+        c = tn.Tensor(a[i], ranks_tt=3, batch=False)
+
+        for j, core in enumerate(c.cores):
+            assert torch.allclose(core, b.cores[j][i, ...])
+
+        assert torch.allclose(c.torch(), b.torch()[i])
+
 
 def test_cp_tensor():
     a = torch.rand(10, 5, 5, 5, 5)

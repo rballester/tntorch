@@ -126,17 +126,17 @@ def truncated_svd(M, delta=None, eps=None, rmax=None, left_ortho=True, algorithm
         if (svd[1][0] - torch.zeros_like(svd[1][0])).mean() < 1e-13:
             return torch.zeros([batch_size, M.shape[1], 1]), torch.zeros([batch_size, 1, M.shape[2]])
     else:
-        if svd[1][0] < 1e-13:  # Special case: M = zero -> rank is 1
+        if svd[1][0] < 1e-13: # Special case: M = zero -> rank is 1
             return torch.zeros([M.shape[0], 1]), torch.zeros([1, M.shape[1]])
 
     S = svd[1]**2
 
     if batch:
-        rank = max(1, int(min(rmax, len(S[0]) - 1)))
+        rank = max(1, int(min(rmax, len(S[0]))))
     else:
         reverse = np.arange(len(S)-1, -1, -1)
         where = torch.where((torch.cumsum(S[reverse], dim=0) <= delta**2))[0]
-        
+
         if len(where) == 0:
             rank = max(1, int(min(rmax, len(S))))
         else:
