@@ -3,12 +3,6 @@ import torch
 import tntorch as tn
 import time
 
-def batch_tensor_norm(t):
-    res = t**2
-    for i in range(t.dim() - 1):
-        res = res.sum(dim=1)
-    return torch.sqrt(res)
-
 # Note: untill pytorch supports differentiable lstsq
 def lstsq(b, A, batch=False):
     q, r = torch.qr(A)
@@ -158,14 +152,14 @@ class Tensor(object):
                     data = self.tucker_core()
 
                     if batch:
-                        data_norms = batch_tensor_norm(data)
+                        data_norms = torch.sqrt(torch.sum(data**2, dim=list(range(1, data.dim()))))
                         self.cores = [torch.randn(data.shape[0], sh, ranks_cp, device=device) for sh in data.shape[1:]]
                     else:
                         data_norm = tn.norm(data)
                         self.cores = [torch.randn(sh, ranks_cp, device=device) for sh in data.shape]
                 else: # We initialize CP factor to HOSVD
                     if batch:
-                        data_norms = batch_tensor_norm(data)
+                        data_norms = torch.sqrt(torch.sum(data**2, dim=list(range(1, data.dim()))))
                         N = data.dim() - 1
                     else:
                         data_norm = torch.norm(data)
@@ -247,7 +241,8 @@ class Tensor(object):
                         grams[n] = self.cores[n].transpose(-1, -2).matmul(self.cores[n])
 
                     if batch:
-                        errors.append((batch_tensor_norm(data - tn.Tensor(self.cores, batch=self.batch).torch()) / data_norms).mean())
+                        err = data - tn.Tensor(self.cores, batch=self.batch).torch()
+                        errors.append((torch.sqrt(torch.sum(err**2, dim=list(range(1, err.dim())))) / data_norms).mean())
                     else:
                         errors.append(torch.norm(data - tn.Tensor(self.cores, batch=self.batch).torch()) / data_norm)
                     if len(errors) >= 2 and errors[-2] - errors[-1] < tol:
@@ -1380,7 +1375,7 @@ class Tensor(object):
         if verbose:
             print('Orthogonalization time:', time.time() - start)
         if self.batch:
-            delta = eps/max(1, torch.sqrt(torch.tensor([N-1], dtype=torch.float64)))*batch_tensor_norm(self.cores[-1]).mean()
+            delta = eps/max(1, torch.sqrt(torch.tensor([N-1], dtype=torch.float64)))*torch.sqrt(torch.sum(self.cores[-1]**2, dim=list(range(1, self.cores[-1].dim())))).mean()
         else:
             delta = eps/max(1, torch.sqrt(torch.tensor([N-1], dtype=torch.float64)))*torch.norm(self.cores[-1])
 
