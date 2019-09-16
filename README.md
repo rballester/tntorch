@@ -2,7 +2,7 @@
 
 # tntorch - Tensor Network Learning with PyTorch
 
-**New**: our [Read the Docs site](http://tntorch.readthedocs.io/) is out!
+**[Read the Docs site: *http://tntorch.readthedocs.io/*](http://tntorch.readthedocs.io/)**
 
 [Welcome to *tntorch*](https://github.com/VMML/tntorch/blob/master/docs/tutorials/introduction.ipynb), a PyTorch-powered modeling and learning library using tensor networks. Such networks are unique in that [they use *multilinear* neural units](https://arxiv.org/abs/1711.00811) (instead of non-linear activation units). Features include:
 
@@ -14,6 +14,7 @@
 - **Statistics** and **sensitivity analysis**
 - **Optimization** using autodifferentiation
 - **Misc. operations** on tensors: stacking, unfolding, sampling, derivating, etc.
+- **Batch operations** (work in progress)
 
 
 Available [tensor formats](https://github.com/rballester/tntorch/blob/master/docs/tutorials/main_formats.ipynb) include:
@@ -120,4 +121,4 @@ pytest
 
 Pull requests are welcome! 
 
-Besides using the [issue tracker](https://github.com/rballester/tntorch/issues), feel also free to contact me at <rballester@ifi.uzh.ch>.
+Besides using the [issue tracker](https://github.com/rballester/tntorch/issues), feel also free to contact me at <rafael.ballester@ie.edu>.
