@@ -4,7 +4,14 @@ import tntorch as tn
 import time
 
 # Note: untill pytorch supports differentiable lstsq
-def lstsq(b, A, batch=False):
+def lstsq(b, A):
+    if A.dim() == 3:
+        batch = True
+    elif A.dim() == 2:
+        batch = False
+    else:
+        raise RuntimeError('Wrong shape of A')
+
     q, r = torch.qr(A)
     if batch:
         return torch.cat([torch.matmul(torch.matmul(r[i].inverse(), q[i].t()), b[i])[None, ...] for i in range(len(q))]).transpose(-1, -2)
@@ -229,7 +236,7 @@ class Tensor(object):
 
                         unf_khatri_t = unfolding.matmul(khatri).transpose(-1, -2)
                         if lstsq_algorithm == 'qr':
-                            self.cores[n] = lstsq(unf_khatri_t, prod, batch=batch)
+                            self.cores[n] = lstsq(unf_khatri_t, prod)
                         else:
                             if batch:
                                 self.cores[n] = torch.cat(
@@ -721,6 +728,14 @@ class Tensor(object):
         """
 
         # Preprocessing
+        if self.batch and isinstance(key, (int, np.integer)):
+            cores = []
+            Us = []
+            for i, core in enumerate(self.cores):
+                cores.append(core[key])
+                Us.append(self.Us[i])
+            return tn.Tensor(cores, Us=Us)
+
         if isinstance(key, Tensor):
             if torch.abs(tn.sum(key)-1) > 1e-8:
                 raise ValueError("When indexing via a mask tensor, that mask should have exactly 1 accepting string")
@@ -845,11 +860,12 @@ class Tensor(object):
 
             if this_mode == 'none':
                 if self.batch:
-                    insert_core(factors, torch.cat(
-                        [
-                            torch.eye(self.ranks_tt[counter].item())[None, ...] for _ in range(batch_size)
-                        ]
-                    )[:, :, None, :], key=slice(None), U=None)
+                    insert_core(
+                        factors,
+                        torch.cat([torch.eye(self.ranks_tt[counter].item())[None, ...] for _ in range(batch_size)])[:, :, None, :],
+                        key=slice(None),
+                        U=None
+                    )
                 else:
                     insert_core(factors, torch.eye(self.ranks_tt[counter].item())[:, None, :], key=slice(None), U=None)
             elif this_mode == 'slice':

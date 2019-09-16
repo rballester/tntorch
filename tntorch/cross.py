@@ -240,7 +240,7 @@ def cross(function=lambda x: x, domain=None, tensors=None, function_arg='vectors
         left_locals = []
 
         # Left-to-right
-        for j in range(0, N-1):
+        for j in range(N-1):
 
             # Update tensors for current indices
             V = evaluate_function(j)
