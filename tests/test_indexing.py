@@ -60,6 +60,7 @@ def test_mixed():
         for idx in idxs:
             check(x, t, idx)
 
+    check_one_tensor(tn.rand([6, 7, 8, 9], ranks_tt=3, batch=True))
     check_one_tensor(tn.rand([6, 7, 8, 9], ranks_tt=3, ranks_tucker=2))
     check_one_tensor(tn.rand([6, 7, 8, 9], ranks_tt=None, ranks_tucker=2, ranks_cp=3))
     check_one_tensor(tn.rand([6, 7, 8, 9], ranks_tt=[4, None, None], ranks_tucker=2, ranks_cp=[None, None, 3, 3]))
@@ -72,3 +73,7 @@ def test_mixed():
     t = tn.rand([6, 7, 8, 9], ranks_cp=[3, 3, 3, 3])
     t.cores[-1] = t.cores[-1].permute(1, 0)[:, :, None]
     check_one_tensor(t)
+
+    t = tn.rand([6, 7, 8, 9], ranks_tt=3, batch=True)
+    check(t.numpy(), t, 0)
+    check(t.numpy(), t, [0, 1])

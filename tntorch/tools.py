@@ -24,9 +24,10 @@ def squeeze(t, dim=None):
         dim = np.where([s == 1 for s in t.shape])[0]
     if not hasattr(dim, '__len__'):
         dim = [dim]
+
     assert np.all(np.array(t.shape)[dim] == 1)
 
-    idx = [slice(None) for n in range(t.dim())]
+    idx = [slice(None) for n in range(len(t.shape))]
     for m in dim:
         idx[m] = 0
     return t[tuple(idx)]
@@ -276,13 +277,21 @@ def ttm(t, U, dim=None, transpose=False):
                 factor = U[dim.index(n)].t()
             else:
                 factor = U[dim.index(n)]
-            if factor.dim() == 1:
-                factor = factor[None, :]
+            if factor.dim() == 1 and not t.batch:
+                factor = factor[None, ...]
+            if factor.dim() == 2 and t.batch:
+                factor = factor[:,  None, ...]
             if t.Us[n] is None:
-                if t.cores[n].dim() == 3:
-                    cores.append(torch.einsum('iak,ja->ijk', (t.cores[n], factor)))
+                if t.batch:
+                    if t.cores[n].dim() == 4:
+                        cores.append(torch.einsum('biak,bja->bijk', (t.cores[n], factor)))
+                    else:
+                        cores.append(torch.einsum('bai,bja->bji', (t.cores[n], factor)))
                 else:
-                    cores.append(torch.einsum('ai,ja->ji', (t.cores[n], factor)))
+                    if t.cores[n].dim() == 3:
+                        cores.append(torch.einsum('iak,ja->ijk', (t.cores[n], factor)))
+                    else:
+                        cores.append(torch.einsum('ai,ja->ji', (t.cores[n], factor)))
                 Us.append(None)
             else:
                 cores.append(t.cores[n].clone())
@@ -293,7 +302,7 @@ def ttm(t, U, dim=None, transpose=False):
                 Us.append(None)
             else:
                 Us.append(t.Us[n].clone())
-    return tn.Tensor(cores, Us=Us, idxs=t.idxs)
+    return tn.Tensor(cores, Us=Us, idxs=t.idxs, batch=t.batch)
 
 
 """
