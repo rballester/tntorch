@@ -202,27 +202,44 @@ def gaussian_like(tensor, **kwargs):
     return gaussian(tensor.shape, **kwargs)
 
 
-def _create(function, *shape, ranks_tt=None, ranks_cp=None, ranks_tucker=None, requires_grad=False, device=None):
+def _create(function, *shape, ranks_tt=None, ranks_cp=None, ranks_tucker=None, requires_grad=False, device=None, batch=False):
     if hasattr(shape[0], '__len__'):
         shape = shape[0]
-    N = len(shape)
+
+    if batch:
+        N = len(shape) - 1
+    else:
+        N = len(shape)
     if not hasattr(ranks_tucker, "__len__"):
-        ranks_tucker = [ranks_tucker for n in range(len(shape))]
+        ranks_tucker = [ranks_tucker for n in range(N)]
     corespatials = []
-    for n in range(len(shape)):
+    for n in range(N):
         if ranks_tucker[n] is None:
-            corespatials.append(shape[n])
+            if batch:
+                corespatials.append(shape[n + 1])
+            else:
+                corespatials.append(shape[n])
         else:
             corespatials.append(ranks_tucker[n])
     if ranks_tt is None and ranks_cp is None:
         if ranks_tucker is None:
             raise ValueError('Specify at least one of: ranks_tt ranks_cp, ranks_tucker')
+
         # We imitate a Tucker decomposition: we set full TT-ranks
-        datashape = [corespatials[0], np.prod(corespatials) // corespatials[0]]
+        if batch:
+            datashape = [shape[0], corespatials[0], np.prod(corespatials) // corespatials[0]]
+        else:
+            datashape = [corespatials[0], np.prod(corespatials) // corespatials[0]]
+
         ranks_tt = []
+
         for n in range(1, N):
-            ranks_tt.append(min(datashape))
-            datashape = [datashape[0] * corespatials[n], datashape[1] // corespatials[n]]
+            if batch:
+                ranks_tt.append(min(datashape[1:]))
+                datashape = [shape[0], datashape[0] * corespatials[n], datashape[1] // corespatials[n]]
+            else:
+                ranks_tt.append(min(datashape))
+                datashape = [datashape[0] * corespatials[n], datashape[1] // corespatials[n]]
     if not hasattr(ranks_tt, "__len__"):
         ranks_tt = [ranks_tt]*(N-1)
     ranks_tt = [None] + list(ranks_tt) + [None]
@@ -246,16 +263,25 @@ def _create(function, *shape, ranks_tt=None, ranks_cp=None, ranks_tucker=None, r
 
     cores = []
     Us = []
-    for n in range(len(shape)):
+    for n in range(N):
         if ranks_tucker[n] is None:
             Us.append(None)
         else:
-            Us.append(function([shape[n], ranks_tucker[n]], requires_grad=requires_grad, device=device))
+            if batch:
+                Us.append(function([shape[0], shape[n], ranks_tucker[n]], requires_grad=requires_grad, device=device))
+            else:
+                Us.append(function([shape[n], ranks_tucker[n]], requires_grad=requires_grad, device=device))
         if ranks_cp[n] is None:
-            cores.append(function([coreranks[n], corespatials[n], coreranks[n+1]], requires_grad=requires_grad, device=device))
+            if batch:
+                cores.append(function([shape[0], coreranks[n], corespatials[n], coreranks[n+1]], requires_grad=requires_grad, device=device))
+            else:
+                cores.append(function([coreranks[n], corespatials[n], coreranks[n+1]], requires_grad=requires_grad, device=device))
         else:
-            cores.append(function([corespatials[n], ranks_cp[n]], requires_grad=requires_grad, device=device))
-    return tn.Tensor(cores, Us=Us)
+            if batch:
+                cores.append(function([shape[0], corespatials[n], ranks_cp[n]], requires_grad=requires_grad, device=device))
+            else:
+                cores.append(function([corespatials[n], ranks_cp[n]], requires_grad=requires_grad, device=device))
+    return tn.Tensor(cores, Us=Us, batch=batch)
 
 
 def arange(*args, **kwargs):

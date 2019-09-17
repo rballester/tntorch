@@ -3,14 +3,15 @@ import torch
 import tntorch as tn
 import time
 
-def batch_tensor_norm(t):
-    res = t**2
-    for i in range(t.dim() - 1):
-        res = res.sum(dim=1)
-    return torch.sqrt(res)
-
 # Note: untill pytorch supports differentiable lstsq
-def lstsq(b, A, batch=False):
+def lstsq(b, A):
+    if A.dim() == 3:
+        batch = True
+    elif A.dim() == 2:
+        batch = False
+    else:
+        raise RuntimeError('Wrong shape of A')
+
     q, r = torch.qr(A)
     if batch:
         return torch.cat([torch.matmul(torch.matmul(r[i].inverse(), q[i].t()), b[i])[None, ...] for i in range(len(q))]).transpose(-1, -2)
@@ -158,14 +159,14 @@ class Tensor(object):
                     data = self.tucker_core()
 
                     if batch:
-                        data_norms = batch_tensor_norm(data)
+                        data_norms = torch.sqrt(torch.sum(data**2, dim=list(range(1, data.dim()))))
                         self.cores = [torch.randn(data.shape[0], sh, ranks_cp, device=device) for sh in data.shape[1:]]
                     else:
                         data_norm = tn.norm(data)
                         self.cores = [torch.randn(sh, ranks_cp, device=device) for sh in data.shape]
                 else: # We initialize CP factor to HOSVD
                     if batch:
-                        data_norms = batch_tensor_norm(data)
+                        data_norms = torch.sqrt(torch.sum(data**2, dim=list(range(1, data.dim()))))
                         N = data.dim() - 1
                     else:
                         data_norm = torch.norm(data)
@@ -235,7 +236,7 @@ class Tensor(object):
 
                         unf_khatri_t = unfolding.matmul(khatri).transpose(-1, -2)
                         if lstsq_algorithm == 'qr':
-                            self.cores[n] = lstsq(unf_khatri_t, prod, batch=batch)
+                            self.cores[n] = lstsq(unf_khatri_t, prod)
                         else:
                             if batch:
                                 self.cores[n] = torch.cat(
@@ -247,7 +248,8 @@ class Tensor(object):
                         grams[n] = self.cores[n].transpose(-1, -2).matmul(self.cores[n])
 
                     if batch:
-                        errors.append((batch_tensor_norm(data - tn.Tensor(self.cores, batch=self.batch).torch()) / data_norms).mean())
+                        err = data - tn.Tensor(self.cores, batch=self.batch).torch()
+                        errors.append((torch.sqrt(torch.sum(err**2, dim=list(range(1, err.dim())))) / data_norms).mean())
                     else:
                         errors.append(torch.norm(data - tn.Tensor(self.cores, batch=self.batch).torch()) / data_norm)
                     if len(errors) >= 2 and errors[-2] - errors[-1] < tol:
@@ -726,6 +728,14 @@ class Tensor(object):
         """
 
         # Preprocessing
+        if self.batch and isinstance(key, (int, np.integer)):
+            cores = []
+            Us = []
+            for i, core in enumerate(self.cores):
+                cores.append(core[key])
+                Us.append(self.Us[i])
+            return tn.Tensor(cores, Us=Us)
+
         if isinstance(key, Tensor):
             if torch.abs(tn.sum(key)-1) > 1e-8:
                 raise ValueError("When indexing via a mask tensor, that mask should have exactly 1 accepting string")
@@ -850,11 +860,12 @@ class Tensor(object):
 
             if this_mode == 'none':
                 if self.batch:
-                    insert_core(factors, torch.cat(
-                        [
-                            torch.eye(self.ranks_tt[counter].item())[None, ...] for _ in range(batch_size)
-                        ]
-                    )[:, :, None, :], key=slice(None), U=None)
+                    insert_core(
+                        factors,
+                        torch.cat([torch.eye(self.ranks_tt[counter].item())[None, ...] for _ in range(batch_size)])[:, :, None, :],
+                        key=slice(None),
+                        U=None
+                    )
                 else:
                     insert_core(factors, torch.eye(self.ranks_tt[counter].item())[:, None, :], key=slice(None), U=None)
             elif this_mode == 'slice':
@@ -1380,7 +1391,7 @@ class Tensor(object):
         if verbose:
             print('Orthogonalization time:', time.time() - start)
         if self.batch:
-            delta = eps/max(1, torch.sqrt(torch.tensor([N-1], dtype=torch.float64)))*batch_tensor_norm(self.cores[-1]).mean()
+            delta = eps/max(1, torch.sqrt(torch.tensor([N-1], dtype=torch.float64)))*torch.sqrt(torch.sum(self.cores[-1]**2, dim=list(range(1, self.cores[-1].dim())))).mean()
         else:
             delta = eps/max(1, torch.sqrt(torch.tensor([N-1], dtype=torch.float64)))*torch.norm(self.cores[-1])
 
