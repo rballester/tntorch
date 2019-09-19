@@ -94,14 +94,24 @@ def accepted_inputs(t):
     def recursion(Xs, left, rights, bound, mu):
         if mu == t.dim():
             return
-        fiber = torch.einsum('ijk,k->ij', (t.cores[mu], rights[mu + 1]))
+
+        if t.batch:
+            fiber = torch.einsum('bijk,bk->bij', (t.cores[mu], rights[mu + 1]))
+        else:
+            fiber = torch.einsum('ijk,k->ij', (t.cores[mu], rights[mu + 1]))
+
         per_point = torch.matmul(left, fiber).round()
-        c = torch.cat((torch.tensor([0], dtype=torch.float64), per_point.cumsum(dim=0))).long()
+
+        if t.batch:
+            c = torch.cat((torch.tensor([0], dtype=torch.float64), per_point.cumsum(dim=1))).long()
+        else:
+            c = torch.cat((torch.tensor([0], dtype=torch.float64), per_point.cumsum(dim=0))).long()
+
         for i, p in enumerate(per_point):
             if c[i] == c[i+1]:  # Improductive prefix, don't go further
                 continue
             Xs[bound+c[i]:bound+c[i+1], mu] = i
-            recursion(Xs, torch.matmul(left, t.cores[mu][:, i, :]), rights, bound + c[i], mu+1)
+            recursion(Xs, torch.matmul(left, t.cores[mu][..., i, :]), rights, bound + c[i], mu+1)
 
     Xs = torch.zeros([round(tn.sum(t).item()), t.dim()], dtype=torch.long)
     rights = [torch.ones(1)]  # Precomputed right-product chains

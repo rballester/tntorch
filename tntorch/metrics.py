@@ -182,22 +182,35 @@ def sum(t, dim=None, keepdim=False, _normalize=False):
 
     :return: a scalar (if keepdim is False and all dims were chosen) or :class:`Tensor` otherwise
     """
-
     if dim is None:
         dim = np.arange(t.dim())
+
     if not hasattr(dim, '__len__'):
         dim = [dim]
+
     device = t.cores[0].device
-    if _normalize:
-        us = [(1./t.shape[d])*torch.ones(t.shape[d]).to(device) for d in dim]
+
+    if t.batch:
+        if _normalize:
+            us = [(1./t.shape[d])*torch.ones((t.shape[0], t.shape[d + 1])).to(device) for d in dim]
+        else:
+            us = [torch.ones((t.shape[0], t.shape[d + 1])).to(device) for d in dim]
     else:
-        us = [torch.ones(t.shape[d]).to(device) for d in dim]
+        if _normalize:
+            us = [(1./t.shape[d])*torch.ones(t.shape[d]).to(device) for d in dim]
+        else:
+            us = [torch.ones(t.shape[d]).to(device) for d in dim]
+
     result = tn.ttm(t, us, dim)
     if keepdim:
         return result
     else:
-        return tn.squeeze(result, dim)
-
+        if t.batch and t.shape[0] == 1:
+            return tn.squeeze(result, np.arange(len(t.shape)))
+        elif t.batch:
+            return tn.squeeze(result, np.arange(1, len(t.shape)))
+        else:
+            return tn.squeeze(result, np.arange(len(t.shape)))
 
 def mean(t, dim=None, keepdim=False):
     """

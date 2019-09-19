@@ -56,7 +56,6 @@ def test_mixed():
         idxs.append((None, slice(None), slice(None), slice(None), slice(None), None))
         idxs.append((None, slice(None), slice(None), slice(None), slice(None)))
 
-
         for idx in idxs:
             check(x, t, idx)
 
@@ -72,3 +71,30 @@ def test_mixed():
     t = tn.rand([6, 7, 8, 9], ranks_cp=[3, 3, 3, 3])
     t.cores[-1] = t.cores[-1].permute(1, 0)[:, :, None]
     check_one_tensor(t)
+
+    t = tn.rand([6, 7, 8, 9], ranks_tt=3, batch=True)
+    check(t.numpy(), t, 0)
+    check(t.numpy(), t, [0, 1])
+
+
+def test_batch():
+    def check_one_tensor(t):
+        x = t.numpy()
+
+        idxs = []
+        idxs.append(([0, 0, 0], None, None, 3))
+        idxs.append(([0, 0, 0, 0, 0], slice(None), None, 0))
+        idxs.append((0, [0]))
+        idxs.append(([0], None, None, None, 0, 1))
+        idxs.append((slice(None), [0, 1, 2, 3, 4, 5], [0, 1, 2, 3, 4, 5]))
+        idxs.append((slice(None), slice(None), slice(None), 0))
+        idxs.append((slice(None), slice(None), [0, 1], 0))
+        idxs.append((0, np.array([0]), None, 0))
+        idxs.append((slice(None), slice(None), slice(None), slice(None), None))
+
+        for idx in idxs:
+            check(x, t, idx)
+
+    check_one_tensor(tn.rand([6, 7, 8, 9], ranks_tt=3, batch=True))
+    check_one_tensor(tn.rand([6, 7, 8, 9], ranks_tucker=3, batch=True))
+    check_one_tensor(tn.rand([6, 7, 8, 9], ranks_cp=3, batch=True))
