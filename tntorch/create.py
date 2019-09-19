@@ -213,6 +213,8 @@ def _create(function, *shape, ranks_tt=None, ranks_cp=None, ranks_tucker=None, r
     if not hasattr(ranks_tucker, "__len__"):
         ranks_tucker = [ranks_tucker for n in range(N)]
     corespatials = []
+    if batch:
+        corespatials.append(shape[0])
     for n in range(N):
         if ranks_tucker[n] is None:
             if batch:
@@ -227,7 +229,7 @@ def _create(function, *shape, ranks_tt=None, ranks_cp=None, ranks_tucker=None, r
 
         # We imitate a Tucker decomposition: we set full TT-ranks
         if batch:
-            datashape = [shape[0], corespatials[0], np.prod(corespatials) // corespatials[0]]
+            datashape = [corespatials[0], corespatials[1], np.prod(corespatials[1:]) // corespatials[1]]
         else:
             datashape = [corespatials[0], np.prod(corespatials) // corespatials[0]]
 
@@ -236,7 +238,7 @@ def _create(function, *shape, ranks_tt=None, ranks_cp=None, ranks_tucker=None, r
         for n in range(1, N):
             if batch:
                 ranks_tt.append(min(datashape[1:]))
-                datashape = [shape[0], datashape[0] * corespatials[n], datashape[1] // corespatials[n]]
+                datashape = [datashape[0], datashape[1] * corespatials[n + 1], datashape[2] // corespatials[n + 1]]
             else:
                 ranks_tt.append(min(datashape))
                 datashape = [datashape[0] * corespatials[n], datashape[1] // corespatials[n]]
@@ -268,17 +270,17 @@ def _create(function, *shape, ranks_tt=None, ranks_cp=None, ranks_tucker=None, r
             Us.append(None)
         else:
             if batch:
-                Us.append(function([shape[0], shape[n], ranks_tucker[n]], requires_grad=requires_grad, device=device))
+                Us.append(function([shape[0], shape[n + 1], ranks_tucker[n]], requires_grad=requires_grad, device=device))
             else:
                 Us.append(function([shape[n], ranks_tucker[n]], requires_grad=requires_grad, device=device))
         if ranks_cp[n] is None:
             if batch:
-                cores.append(function([shape[0], coreranks[n], corespatials[n], coreranks[n+1]], requires_grad=requires_grad, device=device))
+                cores.append(function([shape[0], coreranks[n], corespatials[n + 1], coreranks[n+1]], requires_grad=requires_grad, device=device))
             else:
                 cores.append(function([coreranks[n], corespatials[n], coreranks[n+1]], requires_grad=requires_grad, device=device))
         else:
             if batch:
-                cores.append(function([shape[0], corespatials[n], ranks_cp[n]], requires_grad=requires_grad, device=device))
+                cores.append(function([shape[0], corespatials[n + 1], ranks_cp[n]], requires_grad=requires_grad, device=device))
             else:
                 cores.append(function([corespatials[n], ranks_cp[n]], requires_grad=requires_grad, device=device))
     return tn.Tensor(cores, Us=Us, batch=batch)

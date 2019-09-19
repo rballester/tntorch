@@ -268,11 +268,8 @@ class Tensor(object):
                         break
             else:
                 self.cores = _full_rank_tt(data, batch)
+                self.Us = [None] * (len(self.cores))
 
-                if batch:
-                    self.Us = [None] * (data.dim() - 1)
-                else:
-                    self.Us = [None]*data.dim()
                 if ranks_tucker is not None:
                     self.round_tucker(rmax=ranks_tucker, algorithm=algorithm)
                 if ranks_tt is not None:
@@ -283,7 +280,6 @@ class Tensor(object):
             N = self.dim() - 1
             d1 = 3
             d2 = 2
-
         else:
             N = self.dim()
             d1 = 2
@@ -305,7 +301,7 @@ class Tensor(object):
         if idxs is None:
             idxs = [torch.arange(sh, device=device) for sh in self.shape]
         self.idxs = idxs
-        if eps is not None:  # TT-SVD (or TT-EIG) algorithm
+        if eps is not None: # TT-SVD (or TT-EIG) algorithm
             if ranks_cp is not None or ranks_tucker is not None or ranks_tt is not None:
                 raise ValueError('Specify eps or ranks, but not both')
             self.round(eps)
@@ -544,10 +540,7 @@ class Tensor(object):
             if self.Us[n] is None:
                 shape.append(self.cores[n].shape[-2])
             else:
-                if self.batch:
-                    shape.append(self.Us[n].shape[1])
-                else:
-                    shape.append(self.Us[n].shape[0])
+                shape.append(self.Us[n].shape[-2])
         return torch.Size(shape)
 
     @property
@@ -797,58 +790,84 @@ class Tensor(object):
                 factors['index'] = None
                 factors['index_done'] = True
             if core is not None:
-                if factors['int'] is not None:  # There is a previous 1D/2D core (CP/Tucker) from an integer slicing
+                if factors['int'] is not None: # There is a previous 1D/2D core (CP/Tucker) from an integer slicing
                     if U is None:
                         Us.append(None)
+                        nCore = core[..., key, :]
                         if self.batch:
-                            cores.append(join_cores(factors['int'], core[batch_dim_idx, ..., key, :]))
-                        else:
-                            cores.append(join_cores(factors['int'], core[..., key, :]))
+                            nCore = nCore[batch_dim_idx]
+                            if isinstance(batch_dim_idx, (int, np.integer)):
+                                nCore = nCore[None, ...]
 
+                        cores.append(join_cores(factors['int'], nCore))
                     else:
-                        cores.append(join_cores(factors['int'], core))
+                        nU = U[..., key, :]
+                        nCore = core
                         if self.batch:
-                            Us.append(U[batch_dim_idx, ..., key, :])
-                        else:
-                            Us.append(U[..., key, :])
+                            nCore = nCore[batch_dim_idx]
+                            nU = nU[batch_dim_idx]
+                            if isinstance(batch_dim_idx, (int, np.integer)):
+                                nU = nU[None, ...]
+                                nCore = nCore[None, ...]
+
+                        cores.append(join_cores(factors['int'], nCore))
+                        Us.append(nU)
                     factors['int'] = None
                 else: # Easiest case
                     if U is None:
                         Us.append(None)
+                        nCore = core[..., key, :]
                         if self.batch:
-                            cores.append(core[batch_dim_idx, ..., key, :])
-                        else:
-                            cores.append(core[..., key, :])
+                            nCore = nCore[batch_dim_idx]
+                            if isinstance(batch_dim_idx, (int, np.integer)):
+                                nCore = nCore[None, ...]
+
+                        cores.append(nCore)
                     else:
-                        cores.append(core)
+                        nU = U[..., key, :]
+                        nCore = core
                         if self.batch:
-                            Us.append(U[batch_dim_idx, ..., key, :])
-                        else:
-                            Us.append(U[..., key, :])
+                            nCore = nCore[batch_dim_idx]
+                            nU = nU[batch_dim_idx]
+                            if isinstance(batch_dim_idx, (int, np.integer)):
+                                nU = nU[None, ...]
+                                nCore = nCore[None, ...]
+
+                        cores.append(nCore)
+                        Us.append(nU)
 
         def get_key(counter, key):
             if self.Us[counter] is None:
                 if self.batch:
-                    return self.cores[counter][batch_dim_idx, ..., key, :]
+                    nCore = self.cores[counter][..., key, :][batch_dim_idx]
+                    if isinstance(batch_dim_idx, (int, np.integer)):
+                        return nCore[None, ...]
+                    else:
+                        return nCore
                 else:
                     return self.cores[counter][..., key, :]
             else:
+                sl = self.Us[counter][..., key, :]
+
                 if self.batch:
-                    sl = self.Us[counter][batch_dim_idx, ..., key, :]
+                    sl = sl[batch_dim_idx]
+                    nCore = self.cores[counter][batch_dim_idx]
+                    if isinstance(batch_dim_idx, (int, np.integer)):
+                        sl = sl[None, ...]
+                        nCore = nCore[None, ...]
 
                     if sl.dim() == 2:  # key is an int
-                        if self.cores[counter].dim() == 4:
-                            return torch.einsum('bijk,bj->bik', (self.cores[counter], sl))
+                        if nCore.dim() == 4:
+                            return torch.einsum('bijk,bj->bik', (nCore, sl))
                         else:
-                            return torch.einsum('bji,bj->bi', (self.cores[counter], sl))
+                            return torch.einsum('bji,bj->bi', (nCore, sl))
                     else:
-                        if self.cores[counter].dim() == 4:
-                            return torch.einsum('bijk,baj->biak', (self.cores[counter], sl))
+                        if nCore.dim() == 4:
+                            return torch.einsum('bijk,baj->biak', (nCore, sl))
                         else:
-                            return torch.einsum('bji,baj->bai', (self.cores[counter], sl))
+                            return torch.einsum('bji,baj->bai', (nCore, sl))
                 else:
-                    sl = self.Us[counter][..., key, :]
-                    if sl.dim() == 1:  # key is an int
+                    if sl.dim() == 1: # key is an int
                         if self.cores[counter].dim() == 3:
                             return torch.einsum('ijk,j->ik', (self.cores[counter], sl))
                         else:
@@ -858,7 +877,6 @@ class Tensor(object):
                             return torch.einsum('ijk,aj->iak', (self.cores[counter], sl))
                         else:
                             return torch.einsum('ji,aj->ai', (self.cores[counter], sl))
-
 
         for i in range(len(key)):
             if hasattr(key[i], '__len__'):
@@ -876,15 +894,14 @@ class Tensor(object):
                 if self.batch:
                     if batch_dim_processed:
                         core = torch.cat([torch.eye(self.ranks_tt[counter - 1].item())[None, ...] for _ in range(batch_size)])
+                        insert_core(
+                            factors,
+                            core[:, :, None, :],
+                            key=slice(None),
+                            U=None
+                        )
                     else:
-                        core = torch.cat([torch.eye(self.ranks_tt[counter].item())[None, ...] for _ in range(batch_size)])
-
-                    insert_core(
-                        factors,
-                        core[:, :, None, :],
-                        key=slice(None),
-                        U=None
-                    )
+                        raise ValueError('Cannot change batch dimension')
                 else:
                     insert_core(factors, torch.eye(self.ranks_tt[counter].item())[:, None, :], key=slice(None), U=None)
             elif this_mode == 'slice':
@@ -894,9 +911,6 @@ class Tensor(object):
                     else:
                         batch_dim_processed = True
                         batch_dim_idx = key[i]
-
-                        if last_mode == 'none':
-                            factors[-1] = factors[-1][batch_dim_idx]
                 else:
                     insert_core(factors, self.cores[counter], key=key[i], U=self.Us[counter])
 
@@ -906,23 +920,25 @@ class Tensor(object):
                     raise IndexError("All index arrays must appear contiguously")
                 if factors['index'] is None:
                     if self.batch:
+                        first_index_len = len(key[i])
+                        first_index_dim = i
+
                         if batch_dim_processed:
                             factors['index'] = get_key(counter - 1, key[i])
                         else:
                             batch_dim_processed = True
                             batch_dim_idx = key[i]
-
-                            if last_mode == 'none':
-                                factors[-1] = factors[-1][batch_dim_idx]
                     else:
                         factors['index'] = get_key(counter, key[i])
                 else:
+                    if self.batch and first_index_dim == 0:
+                        raise ValueError('Advanced indexing is prohibited for batch dimension')
                     if factors['index'].shape[-2] != len(key[i]):
-                        raise ValueError("Index arrays must have the same length")
+                            raise ValueError('Index arrays must have the same length')
                     a1 = factors['index']
-                    a2 = get_key(counter, key[i]).to(device)
 
                     if self.batch:
+                        a2 = get_key(counter - 1, key[i]).to(device)
                         if a1.dim() == 3 and a2.dim() == 3:
                             factors['index'] = torch.einsum('bai,bai->bai', (a1, a2))
                         elif a1.dim() == 3 and a2.dim() == 4:
@@ -932,6 +948,8 @@ class Tensor(object):
                         elif a1.dim() == 4 and a2.dim() == 4:
                             factors['index'] = torch.einsum('biaj,bjak->biak', (a1, a2))
                     else:
+                        a2 = get_key(counter, key[i]).to(device)
+
                         if a1.dim() == 2 and a2.dim() == 2:
                             factors['index'] = torch.einsum('ai,ai->ai', (a1, a2))
                         elif a1.dim() == 2 and a2.dim() == 3:
@@ -940,6 +958,7 @@ class Tensor(object):
                             factors['index'] = torch.einsum('iaj,aj->iaj', (a1, a2))
                         elif a1.dim() == 3 and a2.dim() == 3:
                             factors['index'] = torch.einsum('iaj,jak->iak', (a1, a2))
+
                 counter += 1
             elif this_mode == 'int':
                 if self.batch:
@@ -963,9 +982,6 @@ class Tensor(object):
                     else:
                         batch_dim_processed = True
                         batch_dim_idx = key[i]
-
-                        if last_mode == 'none':
-                            factors[-1] = factors[-1][batch_dim_idx]
                 else:
                     if last_mode == 'index':
                         insert_core(factors)
@@ -992,14 +1008,18 @@ class Tensor(object):
         elif last_mode == 'int':
             if len(cores) > 0:  # We return a tensor: absorb existing cores with int factor
                 if self.batch:
-                    if cores[-1].dim() == 3 and factors['int'].dim() == 2:
-                        cores[-1] = torch.einsum('bai,bi->bai', (cores[-1], factors['int']))
-                    elif cores[-1].dim() == 3 and factors['int'].dim() == 3:
-                        cores[-1] = torch.einsum('bai,bij->biaj', (cores[-1], factors['int']))
-                    elif cores[-1].dim() == 4 and factors['int'].dim() == 2:
-                        cores[-1] = torch.einsum('biaj,bj->bai', (cores[-1], factors['int']))
-                    elif cores[-1].dim() == 4 and factors['int'].dim() == 3:
-                        cores[-1] = torch.einsum('biaj,bjk->biak', (cores[-1], factors['int']))
+                    nCore = cores[-1][batch_dim_idx]
+                    if isinstance(batch_dim_idx, (int, np.integer)):
+                        nCore = nCore[None, ...]
+
+                    if nCore.dim() == 3 and factors['int'].dim() == 2:
+                        cores[-1] = torch.einsum('bai,bi->bai', (nCore, factors['int']))
+                    elif nCore.dim() == 3 and factors['int'].dim() == 3:
+                        cores[-1] = torch.einsum('bai,bij->biaj', (nCore, factors['int']))
+                    elif nCore.dim() == 4 and factors['int'].dim() == 2:
+                        cores[-1] = torch.einsum('biaj,bj->bai', (nCore, factors['int']))
+                    elif nCore.dim() == 4 and factors['int'].dim() == 3:
+                        cores[-1] = torch.einsum('biaj,bjk->biak', (nCore, factors['int']))
                 else:
                     if cores[-1].dim() == 2 and factors['int'].dim() == 1:
                         cores[-1] = torch.einsum('ai,i->ai', (cores[-1], factors['int']))
@@ -1014,8 +1034,15 @@ class Tensor(object):
                     return torch.sum(factors['int'])
                 return torch.squeeze(factors['int'])
 
-        if self.batch and isinstance(batch_dim_idx, (int, np.integer)):
-            return tn.Tensor(cores, Us=Us)
+        if self.batch and (isinstance(batch_dim_idx, (int, np.integer))):
+            nUs = []
+            for U in Us:
+                if U is None:
+                    nUs.append(U)
+                else:
+                    nUs.append(U[0])
+
+            return tn.Tensor([core[0] for core in cores], Us=nUs, batch=False)
         else:
             return tn.Tensor(cores, Us=Us, batch=self.batch)
 
