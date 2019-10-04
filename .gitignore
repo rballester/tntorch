@@ -1,3 +1,5 @@
+dist
+build
 tntorch.egg-info/
 */__pycache__
 .cache
