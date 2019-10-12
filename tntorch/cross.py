@@ -64,7 +64,7 @@ def argmax(tensors=None, function=lambda x: x, rmax=10, max_iter=10, verbose=Fal
     return info['argmin']
 
 
-def cross(function=lambda x: x, domain=None, tensors=None, function_arg='vectors', ranks_tt=None, kickrank=3, rmax=100, eps=1e-6, max_iter=25, val_size=1000, verbose=True, return_info=False, record_samples=False, _minimize=False, device=None, batch=False):
+def cross(function=lambda x: x, domain=None, tensors=None, function_arg='vectors', ranks_tt=None, kickrank=3, rmax=100, eps=1e-6, max_iter=25, val_size=1000, verbose=True, return_info=False, record_samples=False, _minimize=False, device=None, batch=False, suppress_warnings=False):
     """
     Cross-approximation routine that samples a black-box function and returns an N-dimensional tensor train approximating it. It accepts either:
 
@@ -102,6 +102,7 @@ def cross(function=lambda x: x, domain=None, tensors=None, function_arg='vectors
     :param return_info: if True, will also return a dictionary with informative metrics about the algorithm's outcome
     :param device: PyTorch device
     :param batch: Boolean
+    :param suppress_warnings: Boolean
 
     :return: an N-dimensional TT :class:`Tensor` (if `return_info`=True, also a dictionary)
     """
@@ -326,7 +327,7 @@ def cross(function=lambda x: x, domain=None, tensors=None, function_arg='vectors
             Rs = newRs
             t_linterfaces, t_rinterfaces = init_interfaces()  # Recompute interfaces
 
-    if val_eps > eps and not _minimize:
+    if val_eps > eps and not _minimize and not suppress_warnings:
         logging.warning('eps={:g} (larger than {}) when cross-approximating {}'.format(val_eps, eps, function))
 
     if verbose:

@@ -738,7 +738,7 @@ class Tensor(object):
             return self[slicing]
 
         if isinstance(key, torch.Tensor):
-            key = np.array(key, dtype=np.int)
+            key = np.array(key.cpu(), dtype=np.int)
         if isinstance(key, np.ndarray) and key.ndim == 2:
             key = [key[:, col] for col in range(key.shape[1])]
 
@@ -1217,6 +1217,25 @@ class Tensor(object):
             factor = factor[..., 0]
         factor = factor.reshape(shape)
         return factor
+
+    def to(self, device):
+        """
+        Moves tensor to device.
+
+        :return: a tntorch tensor
+        """
+
+        for i in range(len(self.cores)):
+            self.cores[i] = self.cores[i].to(device)
+
+        for i in range(len(self.Us)):
+            if self.Us[i] is not None:
+                self.Us[i] = self.Us[i].to(device)
+
+        for i in range(len(self.idxs)):
+            self.idxs[i] = self.idxs[i].to(device)
+
+        return self
 
     def numpy(self):
         """
