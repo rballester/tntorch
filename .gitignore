@@ -1,5 +1,7 @@
 dist
 build
+*.pyc
 tntorch.egg-info/
 */__pycache__
 .cache
+
