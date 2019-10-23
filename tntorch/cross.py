@@ -64,7 +64,7 @@ def argmax(tensors=None, function=lambda x: x, rmax=10, max_iter=10, verbose=Fal
     return info['argmin']
 
 
-def cross(function=lambda x: x, domain=None, tensors=None, function_arg='vectors', ranks_tt=None, kickrank=3, rmax=100, eps=1e-6, max_iter=25, val_size=1000, verbose=True, return_info=False, record_samples=False, _minimize=False, device=None, batch=False, suppress_warnings=False):
+def cross(function=lambda x: x, domain=None, tensors=None, function_arg='vectors', ranks_tt=None, kickrank=3, rmax=100, eps=1e-6, max_iter=25, val_size=1000, verbose=True, return_info=False, record_samples=False, _minimize=False, device=None, batch=False, suppress_warnings=False, detach_evaluations=False):
     """
     Cross-approximation routine that samples a black-box function and returns an N-dimensional tensor train approximating it. It accepts either:
 
@@ -102,7 +102,8 @@ def cross(function=lambda x: x, domain=None, tensors=None, function_arg='vectors
     :param return_info: if True, will also return a dictionary with informative metrics about the algorithm's outcome
     :param device: PyTorch device
     :param batch: Boolean
-    :param suppress_warnings: Boolean
+    :param suppress_warnings: Boolean, if True, will hide the message about insufficient accuracy
+    :param detach_evaluations: Boolean, if True, will remove gradient buffers for the function
 
     :return: an N-dimensional TT :class:`Tensor` (if `return_info`=True, also a dictionary)
     """
@@ -119,6 +120,23 @@ def cross(function=lambda x: x, domain=None, tensors=None, function_arg='vectors
             return function(torch.cat([arg[:, None] for arg in args], dim=1))
     else:
         f = function
+
+    if detach_evaluations:
+        def build_function_wrapper(func):
+            def g(*args):
+                res = func(*args)
+                if hasattr(res, '__len__') and not isinstance(res, torch.Tensor):
+                    for i in range(len(res)):
+                        if isinstance(res[i], torch.Tensor):
+                            res[i] = res[i].detach()
+                else:
+                    if isinstance(res, torch.Tensor):
+                        res = res.detach()
+                return res
+            return g
+
+        f = build_function_wrapper(f)
+
     if tensors is None:
         tensors = tn.meshgrid(domain, batch=batch)
 
