@@ -755,6 +755,7 @@ class Tensor(object):
         cores = []
         Us = []
         counter = 0
+        first_index_dim = None
 
         def join_cores(c1, c2):
             if self.batch:
@@ -916,12 +917,14 @@ class Tensor(object):
 
                 counter += 1
             elif this_mode == 'index':
+                if self.batch and first_index_dim == 0:
+                    raise ValueError('Advanced indexing is prohibited for batch dimension')
                 if factors['index_done']:
                     raise IndexError("All index arrays must appear contiguously")
                 if factors['index'] is None:
                     if self.batch:
-                        first_index_len = len(key[i])
-                        first_index_dim = i
+                        if first_index_dim is None:
+                            first_index_dim = i
 
                         if batch_dim_processed:
                             factors['index'] = get_key(counter - 1, key[i])
@@ -931,8 +934,6 @@ class Tensor(object):
                     else:
                         factors['index'] = get_key(counter, key[i])
                 else:
-                    if self.batch and first_index_dim == 0:
-                        raise ValueError('Advanced indexing is prohibited for batch dimension')
                     if factors['index'].shape[-2] != len(key[i]):
                             raise ValueError('Index arrays must have the same length')
                     a1 = factors['index']
