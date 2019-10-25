@@ -1,3 +1,4 @@
+from pytest import raises
 import numpy as np
 import tntorch as tn
 import torch
@@ -98,3 +99,14 @@ def test_batch():
     check_one_tensor(tn.rand([6, 7, 8, 9], ranks_tt=3, batch=True))
     check_one_tensor(tn.rand([6, 7, 8, 9], ranks_tucker=3, batch=True))
     check_one_tensor(tn.rand([6, 7, 8, 9], ranks_cp=3, batch=True))
+
+    with raises(ValueError) as exc_info:
+        tn.rand([6, 7, 8, 9], ranks_tt=3, batch=True)[None, ...]
+
+    assert exc_info.type is ValueError
+
+    with raises(ValueError) as exc_info2:
+         tn.rand([6, 7, 8, 9], ranks_tt=3, batch=True)[[0], [0]]
+
+    assert exc_info2.type is ValueError
+
