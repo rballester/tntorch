@@ -1497,11 +1497,10 @@ class Tensor(object):
         if verbose:
             print('Orthogonalization time:', time.time() - start)
         if self.batch:
-            delta = eps/max(1, torch.sqrt(torch.tensor([N-1], dtype=torch.float64)))*torch.sqrt(torch.sum(self.cores[-1]**2, dim=list(range(1, self.cores[-1].dim())))).mean()
+            delta = None
         else:
             delta = eps/max(1, torch.sqrt(torch.tensor([N-1], dtype=torch.float64)))*torch.norm(self.cores[-1])
-
-        delta = delta.item()
+            delta = delta.item()
 
         for mu in range(N - 1, 0, -1):
             M = tn.right_unfolding(self.cores[mu], batch=self.batch)

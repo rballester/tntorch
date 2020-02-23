@@ -143,6 +143,10 @@ def truncated_svd(M, delta=None, eps=None, rmax=None, left_ortho=True, algorithm
             rank = max(1, int(min(rmax, len(S) - 1 - where[-1])))
 
     left = svd[0]
+    if batch:
+        factor = torch.max(torch.abs(svd[1])) * 1e-14 * torch.randn(*svd[1].shape).to(device)
+        mid = torch.where(svd[1] == 0, factor * torch.ones_like(svd[1]).to(device), svd[1])
+        svd = (left, mid)
     left = left[..., :rank]
 
     start = time.time()
