@@ -210,7 +210,7 @@ def sum(t, dim=None, keepdim=False, _normalize=False):
         elif t.batch:
             return tn.squeeze(result, np.arange(1, len(t.shape)))
         else:
-            return tn.squeeze(result, np.arange(len(t.shape)))
+            return tn.squeeze(result)
 
 def mean(t, dim=None, keepdim=False):
     """

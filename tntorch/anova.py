@@ -67,10 +67,10 @@ def truncate_anova(t, mask, keepdim=False, marginals=None):
     >>> x = tn.symbols(t.dim())[0]
     >>> t2 = tn.truncate_anova(t, mask=tn.only(x), keepdim=False)  # This tensor will depend on one variable only
 
-    :param t:
-    :param mask:
+    :param t: an N-dimensional :class:`Tensor`
+    :param mask: an N-dimensional mask
     :param keepdim: if True, all dummy dimensions will be preserved, otherwise they will disappear. Default is False
-    :param marginals: see :func:`anova_decomposition()`
+    :param marginals: see :func:`anova_decomposition()`. Defaults to uniform marginals
 
     :return: a :class:`Tensor`
     """
@@ -78,11 +78,11 @@ def truncate_anova(t, mask, keepdim=False, marginals=None):
     t = tn.undo_anova_decomposition(tn.mask(tn.anova_decomposition(t, marginals=marginals), mask=mask))
     if not keepdim:
         N = t.dim()
-        affecting = torch.sum(torch.tensor(tn.accepted_inputs(mask).double()), dim=0)
+        affecting = torch.sum(tn.accepted_inputs(mask).double(), dim=0)
         slices = [0 for n in range(N)]
         for i in np.where(affecting)[0]:
             slices[int(i)] = slice(None)
-        t = t[slices]
+        t = t[tuple(slices)]
     return t
 
 

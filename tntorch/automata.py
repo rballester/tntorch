@@ -103,9 +103,9 @@ def accepted_inputs(t):
         per_point = torch.matmul(left, fiber).round()
 
         if t.batch:
-            c = torch.cat((torch.tensor([0], dtype=torch.float64), per_point.cumsum(dim=1))).long()
+            c = torch.cat((torch.tensor([0], dtype=per_point.dtype), per_point.cumsum(dim=1))).long()
         else:
-            c = torch.cat((torch.tensor([0], dtype=torch.float64), per_point.cumsum(dim=0))).long()
+            c = torch.cat((torch.tensor([0], dtype=per_point.dtype), per_point.cumsum(dim=0))).long()
 
         for i, p in enumerate(per_point):
             if c[i] == c[i+1]:  # Improductive prefix, don't go further
