@@ -242,7 +242,7 @@ def cross(function=lambda x: x, domain=None, tensors=None, function_arg='vectors
         invalid = (torch.isnan(evaluation) | torch.isinf(evaluation)).nonzero()
         if len(invalid) > 0:
             invalid = invalid[0].item()
-            raise ValueError('Invalid return value for function {}: f({}) = {}'.format(function, ', '.join('{:g}'.format(x[invalid].cpu().numpy()) for x in Xs),
+            raise ValueError('Invalid return value for function {}: f({}) = {}'.format(function, ', '.join('{:g}'.format(x[invalid].detach().cpu().numpy()) for x in Xs),
                                                                          f(*[x[invalid:invalid+1][:, None] for x in Xs]).item()))
 
         V = torch.reshape(evaluation, [Rs[j], Is[j], Rs[j + 1]])
