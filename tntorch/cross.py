@@ -107,6 +107,12 @@ def cross(function=lambda x: x, domain=None, tensors=None, function_arg='vectors
 
     :return: an N-dimensional TT :class:`Tensor` (if `return_info`=True, also a dictionary)
     """
+    if device is None and tensors is not None: 
+        if type(tensors) == list:
+            device = tensors[0].cores[0].device
+        else:
+            device = tensors.cores[0].device
+        print('cross device is', device)
 
     try:
         import maxvolpy.maxvol
