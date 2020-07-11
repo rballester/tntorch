@@ -319,7 +319,7 @@ def mask(t, mask):
 
     :return: masked :class:`Tensor`
     """
-
+    device = t.cores[0].device
     if not hasattr(t, 'idxs'):
         idxs = [np.arange(sh) for sh in t.shape]
     else:
@@ -330,12 +330,12 @@ def mask(t, mask):
         idx = np.array(idxs[n])
         idx[idx >= mask.shape[n]] = mask.shape[n]-1  # Clamp
         if mask.Us[n] is None:
-            cores.append(mask.cores[n][..., idx, :])
+            cores.append(mask.cores[n][..., idx, :].to(device))
             Us.append(None)
         else:
-            cores.append(mask.cores[n])
+            cores.append(mask.cores[n].to(device))
             Us.append(mask.Us[n][idx, :])
-    mask = tn.Tensor(cores, Us)
+    mask = tn.Tensor(cores, Us, device=device)
     return t*mask
 
 

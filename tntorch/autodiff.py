@@ -43,7 +43,13 @@ def optimize(tensors, loss_function, optimizer=torch.optim.Adam, tol=1e-4, max_i
         loss = loss_function(*tensors)
         if not isinstance(loss, (tuple, list)):
             loss = [loss]
-        losses.append(reduce(lambda x, y: x + y, loss))
+        total_loss = sum(loss)
+        total_loss.backward(retain_graph=True)
+        optimizer.step()
+
+        losses.append(total_loss.detach())
+        
+
         if len(losses) >= 2:
             delta_loss = (losses[-1] - losses[-2])
         else:
@@ -60,8 +66,7 @@ def optimize(tensors, loss_function, optimizer=torch.optim.Adam, tol=1e-4, max_i
             if len(loss) > 1:
                 print(' = {:10.4}'.format(losses[-1].item()), end='')
             print(' | total time: {:9.4f}'.format(time.time() - start))
-        losses[-1].backward(retain_graph=True)
-        optimizer.step()
+
         iter += 1
     if verbose:
         print('iter: {: <{}} | loss: '.format(iter, len('{}'.format(max_iter))), end='')
