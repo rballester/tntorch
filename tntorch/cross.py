@@ -112,6 +112,8 @@ def cross(function=lambda x: x, domain=None, tensors=None, function_arg='vectors
             device = tensors[0].cores[0].device
         else:
             device = tensors.cores[0].device
+            
+    if verbose:
         print('cross device is', device)
 
     try:
