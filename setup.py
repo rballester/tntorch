@@ -21,7 +21,7 @@ setup(
     long_description=readme + '\n\n' + history,
     url='https://github.com/rballester/tntorch',
     author="Rafael Ballester-Ripoll",
-    author_email='rballester@ifi.uzh.ch',
+    author_email='rafael.ballester@ie.edu',
     packages=[
         'tntorch',
     ],
