@@ -98,7 +98,13 @@ Check out the [introductory notebook](https://github.com/rballester/tntorch/blob
 
 ## Installation
 
-The main dependencies are *NumPy* and *PyTorch*. To download and install *tntorch*:
+You can install *tntorch* using *pip*:
+
+```
+pip install tntorch
+```
+
+Alternatively, you can install from the source:
 
 ```
 git clone https://github.com/rballester/tntorch.git
