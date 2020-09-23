@@ -332,7 +332,7 @@ def cross(function=lambda x: x, domain=None, tensors=None, function_arg='vectors
                 print('| best: {:.8g}'.format(info['min']), end='')
             else:
                 print('| eps: {:.3e}'.format(val_eps), end='')
-            print(' | total time: {:8.4f} | largest rank: {:3d}'.format(time.time() - start, max(Rs)), end='')
+            print(' | time: {:8.4f} | largest rank: {:3d}'.format(time.time() - start, max(Rs)), end='')
             if converged:
                 print(' <- converged: eps < {}'.format(eps))
             elif i == max_iter-1:
