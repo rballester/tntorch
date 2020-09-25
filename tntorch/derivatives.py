@@ -83,6 +83,7 @@ def partial(t, dim, order=1, bounds=None, periodic=False, pad='top'):
         periodic = [periodic]*len(dim)
     if not isinstance(pad, list):
         pad = [pad]*len(dim)
+    device = t.cores[0].device
 
     t2 = t.clone()
     for i, d in enumerate(dim):
@@ -98,9 +99,9 @@ def partial(t, dim, order=1, bounds=None, periodic=False, pad='top'):
                 if t2.Us[d] is None:
                     t2.cores[d] = (t2.cores[d][..., 1:, :] - t2.cores[d][..., :-1, :]) / step
                     if t2.cores[d].dim() == 3:
-                        pad_slice = torch.zeros(t2.cores[d].shape[0], 1, t2.cores[d].shape[2])
+                        pad_slice = torch.zeros(t2.cores[d].shape[0], 1, t2.cores[d].shape[2], device=device)
                     else:
-                        pad_slice = torch.zeros(1, t2.cores[d].shape[1])
+                        pad_slice = torch.zeros(1, t2.cores[d].shape[1], device=device)
                     if pad[i] == 'top':
                         t2.cores[d] = torch.cat((t2.cores[d], pad_slice), dim=-2)
                     if pad[i] == 'bottom':
