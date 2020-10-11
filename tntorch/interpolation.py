@@ -1,3 +1,4 @@
+import numpy as np
 import tntorch as tn
 import torch
 import time
@@ -15,7 +16,7 @@ def als_completion(train_x, train_y, ranks_tt, shape=None, ws=None, x0=None, nit
     true rank structure
     ("Riemannian optimization for high-dimensional tensor completion", M. Steinlechner, 2015)
 
-    :param Xs: a P x N matrix
+    :param Xs: a P x N matrix of integers (tensor indices)
     :param ys: a vector with P elements
     :param ranks_tt: an integer (or list). Ignored if x0 is given
     :param shape: list of N integers. If None, the smallest shape that accommodates `Xs` will be chosen
@@ -100,3 +101,92 @@ def als_completion(train_x, train_y, ranks_tt, shape=None, ws=None, x0=None, nit
             print(' | time: {:8.4f}'.format(time.time() - start))
 
     return x0
+
+
+def sparse_tt_svd(Xs, ys, eps, shape=None, rmax=None):
+    """
+    TT-SVD for sparse tensors.
+
+    :param Xs: matrix P x N of sample coordinates (integers)
+    :param ys: P-sized vector of sample values
+    :param eps: prescribed accuracy (resulting relative error is guaranteed to be not larger than this)
+    :param shape: input tensor shape. If not specified, a tensor will be chosen such that `Xs` fits in
+    :param rmax: optionally, cap all ranks above this value
+    :param verbose:
+    :return: a TT
+    """
+
+    def sparse_covariance(Xs, ys, nrows):
+        u, v = torch.unique(Xs[:, 1:], dim=0, return_inverse=True)
+        D = torch.zeros(nrows, len(u))
+        D[Xs[:, 0], v] = ys
+        return D.mm(D.t())
+
+    def full_times_sparse(F, Xs, ys):
+        F = torch.Tensor(F)
+        u, v = torch.unique(Xs[:, 1:], dim=0, return_inverse=True)
+        idx = np.unique(v, return_index=True)[1]
+
+        D = torch.zeros(F.shape[1], len(u))
+        D[Xs[:, 0], v] = ys
+        FD = F.mm(D)
+        new_row = torch.remainder(torch.arange(FD.numel()), FD.shape[0])
+        newcols = Xs[idx, 1:][:, None, :].repeat(1, FD.shape[0], 1)  # , FD.shape[0], axis=1)
+        newcols = newcols.reshape(len(idx) * FD.shape[0], -1)
+        return torch.cat([new_row[:, None], newcols], dim=1), FD.t().flatten()
+
+    def sparse_truncate_svd(Xs, ys, nrows, delta, rmax):
+
+        cov = sparse_covariance(Xs, ys, nrows)
+
+        w, v = torch.symeig(cov, eigenvectors=True)
+        w[w < 0] = 0
+        w = torch.sqrt(w)
+        svd = [v, w]
+
+        # Sort eigenvalues and eigenvectors in decreasing importance
+        idx = np.argsort(svd[1])[torch.arange(len(svd[1])-1, -1, -1)]
+        svd[0] = svd[0][:, idx]
+        svd[1] = svd[1][idx]
+
+        S = svd[1]**2
+        where = torch.where(np.cumsum(S[torch.arange(len(S)-1, -1, -1)]) <= delta**2)[0]
+        if len(where) == 0:
+            rank = max(1, int(np.min([rmax, len(S)])))
+        else:
+            rank = max(1, int(np.min([rmax, len(S) - 1 - where[-1]])))
+        left = svd[0]
+        left = left[:, :rank]
+
+        Xs, ys = full_times_sparse(left.T, Xs, ys)
+        return left, Xs, ys
+
+    assert Xs.dim() == 2
+    assert ys.dim() == 1
+    N = Xs.shape[1]
+    if shape is None:
+        shape = [val.item() for val in torch.max(Xs, dim=0)[0]+1]
+    assert N == len(shape)
+    if rmax is None:
+        rmax = np.iinfo(np.int32).max
+
+    delta = eps / np.sqrt(N - 1) * torch.norm(ys).item()
+
+    # TT-SVD iteration
+    cores = []
+    curshape = shape.copy()
+    for n in range(1, N):
+        left, Xs, ys = sparse_truncate_svd(Xs, ys, curshape[0], delta=delta, rmax=rmax)
+        cores.append(left.reshape(left.shape[0]//shape[n-1], shape[n-1], left.shape[1]))
+        curshape[0] = left.shape[1]  # Rank of this unfolding
+
+        if n < N-1:  # Merge the two first indices (sparse reshape)
+            Xs = torch.cat([Xs[:, 0:1]*curshape[1] + Xs[:, 1:2], Xs[:, 2:]], dim=1)
+            curshape[1] *= curshape[0]
+            curshape = curshape[1:]
+
+    lastcore = torch.zeros(list(curshape))
+    lastcore[list(Xs.t())] = ys
+    cores.append(lastcore[:, :, None])
+
+    return tn.Tensor(cores)
