@@ -4,6 +4,7 @@ from .automata import *
 from .create import *
 from .cross import *
 from .derivatives import *
+from .interpolation import *
 from .logic import *
 from .metrics import *
 from .ops import *
