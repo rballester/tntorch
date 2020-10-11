@@ -1,10 +1,9 @@
 import tntorch as tn
 import torch
-import numpy as np
 import time
 
 
-def als_completion(train_x, train_y, ranks_tt, shape=None, ws=None, x0=None, max_iter=10, verbose=True):
+def als_completion(train_x, train_y, ranks_tt, shape=None, ws=None, x0=None, niter=10, verbose=True):
     """
     Complete an N-dimensional TT from P samples using alternating least squares (ALS).
     We assume only low-rank structure, and no smoothness/spatial locality. Such assumption requires that there is at
@@ -22,7 +21,7 @@ def als_completion(train_x, train_y, ranks_tt, shape=None, ws=None, x0=None, max
     :param shape: list of N integers. If None, the smallest shape that accommodates `Xs` will be chosen
     :param ws: a vector with P elements, with the weight of each sample (if None, 1 is assumed)
     :param x0: initial solution (a TT tensor). If None, a random tensor will be used
-    :param max_iter: number of ALS sweeps. Default is 10
+    :param niter: number of ALS sweeps. Default is 10
     :param verbose:
     :return: a `tntorch.Tensor'
     """
@@ -84,26 +83,19 @@ def als_completion(train_x, train_y, ranks_tt, shape=None, ws=None, x0=None, max
         return sse
 
     start = time.time()
-    for swp in range(max_iter):
+    for swp in range(niter):
 
         # Sweep: left-to-right
-        # if verbose:
-        #     print("Sweep: {}{{->}}".format(swp), end='')
         for mu in range(N-1):
             optimize_core(cores, mu, direction="right")
 
         # Sweep: right-to-left
-        # if verbose:
-        #     print(" {}{{<-}}".format(swp), end='')
         for mu in range(N-1, 0, -1):
             sse = optimize_core(cores, mu, direction="left")
         eps = torch.sqrt(sse) / normy
 
-        # if verbose:
-        #     print(" | eps: {}".format(torch.sqrt(sse) / normy))
-
         if verbose:
-            print('iter: {: <{}}'.format(swp, len('{}'.format(max_iter)) + 1), end='')
+            print('iter: {: <{}}'.format(swp, len('{}'.format(niter)) + 1), end='')
             print('| eps: {:.3e}'.format(eps), end='')
             print(' | time: {:8.4f}'.format(time.time() - start))
 
