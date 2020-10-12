@@ -327,7 +327,8 @@ def pce_interpolation(x, y, p=5, q=0.75, nnz=None, I=1024, rmax=500, eps=1e-3, v
 
     if verbose:
         print('Time: {:.3f}s | '.format(time.time() - start), end='')
-        print('LARS fitted {} nnz out of the {} candidates ({:.3g}%)'.format(nnz, ncandidates, nnz/ncandidates*100))
+        reco = M.matmul(torch.Tensor(lars.coef_))
+        print('LARS fitted {} nnz out of the {} ({:.3g}%), training eps = {:.5g}'.format(nnz, ncandidates, nnz/ncandidates*100, torch.norm(y-reco)/torch.norm(y)))
 
     # Assemble a TT-Tucker tensor:
     # The core is retrieved from the set of PCE coefficients found,
@@ -339,6 +340,6 @@ def pce_interpolation(x, y, p=5, q=0.75, nnz=None, I=1024, rmax=500, eps=1e-3, v
 
     if verbose:
         print('Time: {:.3f}s | '.format(time.time() - start), end='')
-        print('PCE finished, training relative error = {:.5g}'.format(tn.relative_error(y, t[x]).item()))
+        print('Conversion to tensor done, training eps = {:.5g}'.format(tn.relative_error(y, t[x]).item()))
 
     return t
