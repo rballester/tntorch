@@ -253,6 +253,10 @@ class PCEInterpolator:
             print('Time: {:.3f}s | '.format(time.time() - start), end='')
             print('PCE interpolation of {} training points in {} dimensions...'.format(P, N))
 
+        # Center each feature to improve stability of polynomial orthogonalization
+        self.x_mean = torch.mean(x, dim=0)
+        x = x.clone() - self.x_mean[None, :]
+
         # Save features' bounding box
         self.bounds = [(torch.min(x[:, n]).item(), torch.max(x[:, n]).item()) for n in range(N)]
 
@@ -292,11 +296,12 @@ class PCEInterpolator:
             Create a truncated polynomial basis with S elements that is orthogonal
             with respect to a given measure.
 
-            The elements are computed using Gram-Schmidt's orthonormalization process,
-            and lead to a PCE family that can be used for any probability distribution of
+            The elements are computed using a modified [1] version of Gram-Schmidt's orthonormalization
+            process, and lead to a PCE family that can be used for any probability distribution of
             the inputs [1].
 
-            [1] "Modeling Arbitrary Uncertainties Using Gram-Schmidt Polynomial Chaos", Witteveen and Bijl, 2012
+            [1] https://en.wikipedia.org/wiki/Gram%E2%80%93Schmidt_process#Numerical_stability
+            [2] "Modeling Arbitrary Uncertainties Using Gram-Schmidt Polynomial Chaos", Witteveen and Bijl, 2012
 
             :param x: list of observed inputs
             :param S: an integer: how many basis elements to form.
@@ -306,15 +311,23 @@ class PCEInterpolator:
             assert x.dim() == 1
 
             xpowers = x[:, None] ** torch.arange(S)[None, :]
-            psipsi = torch.zeros(S)
+
+            def proj(u, v):
+                xu = xpowers.matmul(u)
+                xv = xpowers.matmul(v)
+                return torch.mean(xu * xv) / torch.mean(xu * xu) * u
+
+            def norm(u):
+                xu = xpowers.matmul(u)
+                return torch.sqrt(torch.mean(xu * xu))
+
             Psi = torch.eye(S, S)
             for s in range(1, S):
-                xeval = xpowers.matmul(Psi[:, :s])
-                psipsi[s - 1] = torch.mean(xeval[:, s - 1] ** 2)
-                epsi = torch.mean(xpowers[:, s:s + 1] * xeval[:, :s], dim=0)
-                cjk = epsi / psipsi[:s]
-                Psi[:, s] -= torch.sum(Psi[:, :s] * cjk[None, :], dim=1)
-            Psi /= torch.sqrt(torch.mean(xpowers.matmul(Psi) ** 2, dim=0, keepdim=True))
+                u = Psi[:, s]
+                for k in range(s):
+                    u = u - proj(Psi[:, k], u)
+                Psi[:, s] = u / norm(u)
+
             return Psi
 
         # Build orthogonal polynomial bases based on the
@@ -341,7 +354,7 @@ class PCEInterpolator:
             print('LARS fitted {} nnz out of the {} ({:.3g}%), training eps = {:.5g}'.format(nnz, ncandidates, nnz/ncandidates*100, torch.norm(y-reco)/torch.norm(y)))
 
     def predict(self, x):
-        return self._design_matrix(x).matmul(self.coef)
+        return self._design_matrix(x-self.x_mean[None, :]).matmul(self.coef)
 
     def to_tensor(self, grid=512, rmax=200, eps=1e-3, verbose=True):
         """
