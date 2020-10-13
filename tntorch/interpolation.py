@@ -196,150 +196,192 @@ def sparse_tt_svd(Xs, ys, eps, shape=None, rmax=None):
     return tn.Tensor(cores)
 
 
-def pce_interpolation(x, y, p=5, q=0.75, nnz=None, I=1024, rmax=500, eps=1e-3, verbose=True):
+class PCEInterpolator:
     """
-    Polynomial chaos expansion (PCE) interpolation. This function requires scikit-learn to run.
-    Parameter distributions are approximated as histograms of the training data, and orthogonal polynomial is learned using Gram-Schmidt [2].
+    Polynomial chaos expansion (PCE) interpolator. This class requires scikit-learn to run, and
+    therefore is CPU-only. Parameter distributions are fully empirical. Orthogonal polynomial families
+    are learned using Gram-Schmidt [1].
 
-    The main hyperparameters are q, p, and nnz.
-
-    Coefficient selection follows [1]. A sparse regularization is enforced: only entries x whose coordinates satisfy ||x||_q < p are considered, where the
-     Lq norm is used and `p` is a threshold. Additionally, among that space of candidates, at most `nnz` can be non-zero
-      (they are selected using Least Angle Regression, LARS).
+    Coefficient selection follows [2]. A sparse regularization is enforced: only entries x whose coordinates satisfy
+    ||x||_q < p are considered, where the Lq norm is used and `p` is a threshold. Additionally, among that space of
+    candidates, at most `nnz` can be non-zero (they are selected using Least Angle Regression, LARS).
 
     We assume parameters are independently distributed; however, the regressor will often work well
-    even if this doesn't hold [1].
+    even if this doesn't hold [2].
 
-    [1] "Data-driven polynomial chaos expansion for machine learning regression", Torre et al. 2020
-    [2] "Modeling Arbitrary Uncertainties Using Gram-Schmidt Polynomial Chaos", Witteveen and Bijl, 2012
-
-    :param x: a matrix of shape P x N (floats; input features)
-    :param y: a vector of size P
-    :param p: threshold for the hyperbolic truncation norm. Default is 5
-    :param q: the truncation will use norm Lq. Default is 0.75
-    :param nnz: how many non-zero coefficients to search at most. Default is number of samples / 3
-    :param I: the resulting tensor will have this spatial resolution. Default is 1024
-    :param rmax: the TT cores will be capped at this rank. Default is 500
-    :param eps: rounding error to cast PCE into TT. Default is 1e-3
-    :param verbose: Boolean; default is True
-    :return: a `tntorch.Tensor` in the TT-Tucker format
+    [1] "Modeling Arbitrary Uncertainties Using Gram-Schmidt Polynomial Chaos", Witteveen and Bijl, 2012
+    [2] "Data-driven Polynomial Chaos Expansion for Machine Learning Regression", Torre et al. 2020
     """
 
-    import sklearn.linear_model
+    def __init__(self):
+        pass
 
-    assert x.dim() == 2
-    P = x.shape[0]
-    N = x.shape[1]
-    assert y.shape[0] == P
-    assert y.dim() == 1
-    assert 0 <= q <= 1
-    if nnz is None:
-        nnz = P//3
+    def _design_matrix(self, x):
+        N = len(self.Psis)
+        S = self.Psis[0].shape[0]
+        M = torch.cat([(x[:, n:n+1]**torch.arange(S)[None, :]).matmul(self.Psis[n])[:, None, :] for n in range(N)], dim=1)
+        idx = torch.arange(N)[None, :].repeat(len(self.coords), 1)
+        M = M[:, idx.flatten(), self.coords.flatten()]
+        M = M.reshape(-1, self.coords.shape[0], self.coords.shape[1])
+        M = torch.prod(M, dim=2)
+        return M
 
-    if verbose:
-        start = time.time()
-        print('Time: {:.3f}s | '.format(time.time() - start), end='')
-        print('PCE interpolation of {} training points in {} dimensions...'.format(P, N))
+    def fit(self, x, y, p=5, q=0.75, nnz=None, matrix_size_limit=5e7, verbose=True):
+        """
+        :param x: a matrix of shape P x N floats (input features)
+        :param y: a vector of size P
+        :param p: threshold for the hyperbolic truncation norm. Default is 5
+        :param q: the truncation will use norm Lq. Default is 0.75
+        :param nnz: how many non-zero coefficients to search at most using LARS. Default is number of samples / 3
+        :param matrix_size_limit: abort if the design matrix exceeds this number of elements. Default is 5e7
+        :param verbose: Boolean; default is True
+        """
 
-    # Normalize and discretize all features to integers in [0, I-1]
-    x -= torch.min(x, dim=0, keepdim=True)[0]
-    x /= torch.max(x, dim=0, keepdim=True)[0]
-    x = torch.round(x*(I-1)).long()
+        import sklearn.linear_model
+        assert x.dim() == 2
+        assert x.dtype.is_floating_point
+        P = x.shape[0]
+        N = x.shape[1]
+        assert y.shape[0] == P
+        assert y.dim() == 1
+        assert 0 <= q <= 1
+        if nnz is None:
+            nnz = P//3
 
-    # Find the coordinates of all coefficient candidates (i.e. all that satisfy ||x||_q < p)
-    idx = np.zeros(N, dtype=np.int32)
+        if verbose:
+            start = time.time()
+            print('Time: {:.3f}s | '.format(time.time() - start), end='')
+            print('PCE interpolation of {} training points in {} dimensions...'.format(P, N))
 
-    def find_candidates(p):
-        # Traverse the whole hypercube of possible coefficients (size S**N)
-        # Since hyperbolic truncation selects a contiguous region, this is efficient
+        # Save features' bounding box
+        self.bounds = [(torch.min(x[:, n]).item(), torch.max(x[:, n]).item()) for n in range(N)]
+
+        # Find the coordinates of all coefficient candidates (i.e. all that satisfy ||x||_q < p)
+        idx = np.zeros(N, dtype=np.uint8)
+
+        def find_candidates(p):
+            # Traverse the whole hypercube of possible coefficients (size S**N)
+            # Since hyperbolic truncation selects a contiguous region, this is efficient
+            S = int(np.ceil(p))
+            coords = []
+            while True:
+                pos = N-1
+                while pos >= 0 and (max(idx) >= S or np.sum(idx ** q) >= p ** q):
+                    idx[pos] = 0
+                    idx[pos - 1] += 1
+                    pos -= 1
+                if pos < 0:  # Traversed the entire hypercube
+                    break
+                coords.append(idx.copy())
+                idx[-1] += 1
+                if len(coords)*P > matrix_size_limit:
+                    raise ValueError('Design matrix exceeds matrix_size_limit ({:g} elements). Decrease p or q, or increase matrix_size_limit'.format(matrix_size_limit))
+            return torch.Tensor(coords).long()
+
+        self.coords = find_candidates(p)
+        nnz = min(nnz, len(self.coords))
         S = int(np.ceil(p))
-        coords = []
-        while True:
-            pos = N-1
-            while pos >= 0 and (max(idx) >= S or np.sum(idx ** q) >= p ** q):
-                idx[pos] = 0
-                idx[pos - 1] += 1
-                pos -= 1
-            if pos < 0:  # Traversed the entire hypercube
-                break
-            coords.append(idx.copy())
-            idx[-1] += 1
-            if len(coords) > 1e3:
-                raise ValueError('Space of non-zero coefficients is too large')
-        return torch.Tensor(coords).long()
 
-    coords = find_candidates(p)
-    nnz = min(nnz, len(coords))
-    S = int(np.ceil(p))
+        if verbose:
+            ncandidates = len(self.coords)
+            print('Time: {:.3f}s | '.format(time.time() - start), end='')
+            print('Hyperbolic truncation candidates = {} out of {} ({:.3g}%)'.format(ncandidates, S**N, ncandidates / (S**N)*100))
 
-    if verbose:
-        ncandidates = len(coords)
-        print('Time: {:.3f}s | '.format(time.time() - start), end='')
-        print('Candidates after hyperbolic truncation = {} out of {} ({:.3g}%)'.format(ncandidates, S ** N, ncandidates / (S ** N) * 100))
+        def gram_schmidt(x, S):
+            """
+            Create a truncated polynomial basis with S elements that is orthogonal
+            with respect to a given measure.
 
-    def gram_schmidt(weights, S):
+            The elements are computed using Gram-Schmidt's orthonormalization process,
+            and lead to a PCE family that can be used for any probability distribution of
+            the inputs [1].
+
+            [1] "Modeling Arbitrary Uncertainties Using Gram-Schmidt Polynomial Chaos", Witteveen and Bijl, 2012
+
+            :param x: list of observed inputs
+            :param S: an integer: how many basis elements to form.
+            :return: a matrix of shape S x S (one column per basis element)
+            """
+
+            assert x.dim() == 1
+
+            xpowers = x[:, None] ** torch.arange(S)[None, :]
+            psipsi = torch.zeros(S)
+            Psi = torch.eye(S, S)
+            for s in range(1, S):
+                xeval = xpowers.matmul(Psi[:, :s])
+                psipsi[s - 1] = torch.mean(xeval[:, s - 1] ** 2)
+                epsi = torch.mean(xpowers[:, s:s + 1] * xeval[:, :s], dim=0)
+                cjk = epsi / psipsi[:s]
+                Psi[:, s] -= torch.sum(Psi[:, :s] * cjk[None, :], dim=1)
+            Psi /= torch.sqrt(torch.mean(xpowers.matmul(Psi) ** 2, dim=0, keepdim=True))
+            return Psi
+
+        # Build orthogonal polynomial bases based on the
+        # empirical marginals (frequencies) from the input features
+        self.Psis = [gram_schmidt(x[:, n], S) for n in range(N)]
+
+        # Assemble the design matrix from the training features
+        M = self._design_matrix(x)
+
+        if verbose:
+            print('Time: {:.3f}s | '.format(time.time() - start), end='')
+            print('Assembled the {} x {} design matrix'.format(M.shape[0], M.shape[1]))
+
+        # Solve the sparse regression problem using LARS
+        lars = sklearn.linear_model.Lars(n_nonzero_coefs=nnz, fit_intercept=False)
+        lars.fit(M, y)
+        nonzeros = np.where(lars.coef_)[0]
+        self.coef = torch.Tensor(lars.coef_[nonzeros])
+        self.coords = self.coords[nonzeros, :]
+
+        if verbose:
+            print('Time: {:.3f}s | '.format(time.time() - start), end='')
+            reco = M.matmul(torch.Tensor(lars.coef_))
+            print('LARS fitted {} nnz out of the {} ({:.3g}%), training eps = {:.5g}'.format(nnz, ncandidates, nnz/ncandidates*100, torch.norm(y-reco)/torch.norm(y)))
+
+    def predict(self, x):
+        return self._design_matrix(x).matmul(self.coef)
+
+    def to_tensor(self, grid=512, rmax=200, eps=1e-3, verbose=True):
         """
-        Create a truncated polynomial basis (with S elements) that is orthogonal
-        with respect to a given measure.
+        Convert the interpolator to a TT-Tucker tensor.
 
-        The elements are computed using Gram-Schmidt's orthonormalization process,
-        and lead to a PCE family that can be used for any probability distribution of
-        the inputs.
-
-        :param weights: a vector containing the measure values
-        :param S: an integer: how many basis elements to form.
-        :return: a matrix of shape len(weight) x S (one column per basis element)
+        :param grid: one of the following:
+            - integer I: the training data's bounding box at resolution I
+            will be used to define the tensor product grid. Default is 512
+            - list of N vectors: vectors defining the tensor grid
+        :param rmax: the TT cores will be capped at this rank. Default is 500
+        :param eps: rounding error to cast PCE into TT. Default is 1e-3
+        :param verbose: Boolean; default is True
+        :return: a `tntorch.Tensor` in the TT-Tucker format
         """
 
-        assert weights.dim() == 1
+        N = len(self.Psis)
+        S = self.Psis[0].shape[0]
+        if not hasattr(grid, '__len__'):
+            grid = [torch.linspace(self.bounds[n][0], self.bounds[n][1], grid) for n in range(N)]
+        assert len(grid) == N
 
-        I = len(weights)
-        e = torch.linspace(-1, 1, I)[:, None] ** torch.arange(S)[None, :]
-        psipsi = torch.zeros(S)
-        psi = torch.zeros(I, S)
-        psi[:, 0] = 1
-        for s in range(1, S):
-            psipsi[s-1] = torch.sum(psi[:, s-1]**2*weights)
-            epsi = torch.einsum('i,is,i->s', e[:, s], psi[:, :s], weights)
-            cjk = epsi/psipsi[:s]
-            psi[:, s] = e[:, s] - torch.sum(psi[:, :s]*cjk[None, :], dim=1)
-        psi /= torch.sqrt(torch.sum(psi**2*weights[:, None], dim=0, keepdim=True))
-        return psi
+        start = time.time()
 
-    # Build orthogonal polynomial bases based on the
-    # empirical marginals (frequencies) from the input features
-    Ms = []
-    for n in range(N):
-        unique, counts = torch.unique(x[:, n], return_counts=True)
-        marginal = torch.zeros(I)
-        marginal[unique] = counts.double()/P
-        Ms.append(gram_schmidt(marginal, S))
+        # Assemble a TT-Tucker tensor:
+        # The core is retrieved from the set of PCE coefficients found,
+        # and is formed in the TT format using sparse TT-SVD
+        t = tn.sparse_tt_svd(self.coords, self.coef, rmax=rmax, eps=eps)
+        eps = torch.norm(t[self.coords].torch()-self.coef)/torch.norm(self.coef)
 
-    # Assemble the design matrix
-    M = torch.cat([Ms[n][x[:, n], :][:, None, :] for n in range(N)], dim=1)
-    idx = torch.arange(N)[None, :].repeat(len(coords), 1)
-    M = M[:, idx.flatten(), coords.flatten()].reshape(-1, coords.shape[0], coords.shape[1])
-    M = torch.prod(M, dim=2)
+        # The factors are the polynomial bases evaluated on the grid vectors
+        Us = []
+        for n in range(N):
+            Us.append(
+                (grid[n][:, None]**torch.arange(S)).to(torch.get_default_dtype()).matmul(
+                    self.Psis[n][:, :t.shape[n]])
+            )
+        t.Us = Us
 
-    # Solve the sparse regression problem using LARS
-    lars = sklearn.linear_model.Lars(n_nonzero_coefs=nnz, fit_intercept=False)
-    lars.fit(M, y)
+        if verbose:
+            print('Time: {:.3f}s | '.format(time.time() - start), end='')
+            print('Conversion to tensor done, eps = {:.5g}'.format(eps.item()))
 
-    if verbose:
-        print('Time: {:.3f}s | '.format(time.time() - start), end='')
-        reco = M.matmul(torch.Tensor(lars.coef_))
-        print('LARS fitted {} nnz out of the {} ({:.3g}%), training eps = {:.5g}'.format(nnz, ncandidates, nnz/ncandidates*100, torch.norm(y-reco)/torch.norm(y)))
-
-    # Assemble a TT-Tucker tensor:
-    # The core is retrieved from the set of PCE coefficients found,
-    # and is computed using sparse TT-SVD
-    nonzeros = np.where(lars.coef_)[0]
-    t = tn.sparse_tt_svd(coords[nonzeros, :], lars.coef_[nonzeros], rmax=rmax, eps=eps)
-    # The factors are simply the polynomial bases
-    t.Us = [Ms[n][:, :t.shape[n]] for n in range(N)]
-
-    if verbose:
-        print('Time: {:.3f}s | '.format(time.time() - start), end='')
-        print('Conversion to tensor done, training eps = {:.5g}'.format(tn.relative_error(y, t[x]).item()))
-
-    return t
+        return t
