@@ -27,6 +27,7 @@ def als_completion(train_x, train_y, ranks_tt, shape=None, ws=None, x0=None, nit
     :return: a `tntorch.Tensor'
     """
 
+    assert not train_x.dtype.is_floating_point
     assert train_x.dim() == 2
     assert train_y.dim() == 1
     if ws is None:
@@ -165,6 +166,7 @@ def sparse_tt_svd(Xs, ys, eps, shape=None, rmax=None):
         Xs = torch.Tensor(Xs)
     if isinstance(ys, np.ndarray):
         ys = torch.Tensor(ys)
+    assert not Xs.dtype.is_floating_point
     assert Xs.dim() == 2
     assert ys.dim() == 1
     N = Xs.shape[1]
@@ -226,13 +228,17 @@ class PCEInterpolator:
         M = torch.prod(M, dim=2)
         return M
 
-    def fit(self, x, y, p=5, q=0.75, nnz=None, matrix_size_limit=5e7, verbose=True):
+    def fit(self, x, y, p=5, q=0.75, val_split=0.1, matrix_size_limit=5e7, verbose=True):
         """
+        Fit the model to a training dataset (x, y) using LARS. The optimal number of non-zero
+        coefficients to select is automatically found via a validation set.
+
         :param x: a matrix of shape P x N floats (input features)
         :param y: a vector of size P
         :param p: threshold for the hyperbolic truncation norm. Default is 5
         :param q: the truncation will use norm Lq. Default is 0.75
-        :param nnz: how many non-zero coefficients to search at most using LARS. Default is number of samples / 3
+            the optimal will be selected using a validation set
+        :param val_split: the fraction of elements to use for validation (default is 0.1)
         :param matrix_size_limit: abort if the design matrix exceeds this number of elements. Default is 5e7
         :param verbose: Boolean; default is True
         """
@@ -245,23 +251,31 @@ class PCEInterpolator:
         assert y.shape[0] == P
         assert y.dim() == 1
         assert 0 <= q <= 1
-        if nnz is None:
-            nnz = P//3
 
-        if verbose:
-            start = time.time()
-            print('Time: {:.3f}s | '.format(time.time() - start), end='')
-            print('PCE interpolation of {} training points in {} dimensions...'.format(P, N))
+        # Save features' bounding box
+        self.bounds = [(torch.min(x[:, n]).item(), torch.max(x[:, n]).item()) for n in range(N)]
 
         # Center each feature to improve stability of polynomial orthogonalization
         self.x_mean = torch.mean(x, dim=0)
         x = x.clone() - self.x_mean[None, :]
 
-        # Save features' bounding box
-        self.bounds = [(torch.min(x[:, n]).item(), torch.max(x[:, n]).item()) for n in range(N)]
+        # Split into train and validation sets
+        n_val = int(P*val_split)
+        val_idx = np.random.choice(P, n_val)
+        train_idx = np.delete(np.arange(P), val_idx)
+        train_y = y[train_idx]
+        val_y = y[val_idx]
+
+        if verbose:
+            start = time.time()
+            print('PCE interpolation of {} points ({} train + {} val) in {}D'.format(P, P-n_val, n_val, N))
+
+        if verbose:
+            print('Time: {:.3f}s | '.format(time.time() - start), end='')
+            print('Selecting candidates after truncation...', end='')
 
         # Find the coordinates of all coefficient candidates (i.e. all that satisfy ||x||_q < p)
-        idx = np.zeros(N, dtype=np.uint8)
+        idx = np.zeros(N, dtype=np.int)
 
         def find_candidates(p):
             # Traverse the whole hypercube of possible coefficients (size S**N)
@@ -283,13 +297,13 @@ class PCEInterpolator:
             return torch.Tensor(coords).long()
 
         self.coords = find_candidates(p)
-        nnz = min(nnz, len(self.coords))
         S = int(np.ceil(p))
 
         if verbose:
             ncandidates = len(self.coords)
+            print(' done, {} out of {}'.format(ncandidates, S**N))
             print('Time: {:.3f}s | '.format(time.time() - start), end='')
-            print('Hyperbolic truncation candidates = {} out of {} ({:.3g}%)'.format(ncandidates, S**N, ncandidates / (S**N)*100))
+            print('Assembling the {} x {} design matrix...'.format(P, len(self.coords)), end='', flush=True)
 
         def gram_schmidt(x, S):
             """
@@ -298,7 +312,7 @@ class PCEInterpolator:
 
             The elements are computed using a modified [1] version of Gram-Schmidt's orthonormalization
             process, and lead to a PCE family that can be used for any probability distribution of
-            the inputs [1].
+            the inputs [2].
 
             [1] https://en.wikipedia.org/wiki/Gram%E2%80%93Schmidt_process#Numerical_stability
             [2] "Modeling Arbitrary Uncertainties Using Gram-Schmidt Polynomial Chaos", Witteveen and Bijl, 2012
@@ -331,29 +345,57 @@ class PCEInterpolator:
             return Psi
 
         # Build orthogonal polynomial bases based on the
-        # empirical marginals (frequencies) from the input features
+        # empirical marginals of the input features
         self.Psis = [gram_schmidt(x[:, n], S) for n in range(N)]
 
         # Assemble the design matrix from the training features
         M = self._design_matrix(x)
+        train_M = M[train_idx, ...]
+        val_M = M[val_idx, ...]
 
         if verbose:
+            print(' done')
             print('Time: {:.3f}s | '.format(time.time() - start), end='')
-            print('Assembled the {} x {} design matrix'.format(M.shape[0], M.shape[1]))
+            print('Finding best nnz for LARS...', end='', flush=True)
 
         # Solve the sparse regression problem using LARS
-        lars = sklearn.linear_model.Lars(n_nonzero_coefs=nnz, fit_intercept=False)
+        lars = sklearn.linear_model.Lars(n_nonzero_coefs=min(train_M.shape), fit_intercept=False, fit_path=True)
+        lars.fit(train_M, train_y)
+
+        # Find the validation eps for every choice of nnz (LARS' solution path)
+        reco_path = torch.einsum('pc,cd->pd', val_M, torch.Tensor(lars.coef_path_))
+        error_path = torch.sqrt(torch.sum((reco_path - val_y[:, None])**2, dim=0))/torch.norm(val_y)
+        argmin = torch.argmin(error_path)  # Pick the best nnz
+        nnz = len(np.where(lars.coef_path_[:, argmin])[0])
+
+        if verbose:
+            print(' done, val eps = {:.5g} at nnz = {}'.format(error_path[argmin], nnz))
+            print('Time: {:.3f}s | '.format(time.time() - start), end='')
+            print('Refitting at optimal nnz...', end='', flush=True)
+
+        # Retrain now on the entire input dataset and optimal nnz
+        lars = sklearn.linear_model.Lars(n_nonzero_coefs=nnz, fit_intercept=False, fit_path=False)
         lars.fit(M, y)
+
+        # Remove features not selected by LARS
+        lars.coef_ = lars.coef_[0, :]
         nonzeros = np.where(lars.coef_)[0]
         self.coef = torch.Tensor(lars.coef_[nonzeros])
         self.coords = self.coords[nonzeros, :]
 
         if verbose:
-            print('Time: {:.3f}s | '.format(time.time() - start), end='')
-            reco = M.matmul(torch.Tensor(lars.coef_))
-            print('LARS fitted {} nnz out of the {} ({:.3g}%), training eps = {:.5g}'.format(nnz, ncandidates, nnz/ncandidates*100, torch.norm(y-reco)/torch.norm(y)))
+            reco = M[:, nonzeros].matmul(self.coef)
+            print(' done, training eps = {:.5g}'.format(torch.norm(y-reco)/torch.norm(y)))
+            print('Time: {:.3f}s'.format(time.time() - start), flush=True)
+            print()
 
     def predict(self, x):
+        """
+        Predict regression values for an input.
+
+        :param x: a matrix of shape P x N floats (input features)
+        :return: a vector of size P
+        """
         return self._design_matrix(x-self.x_mean[None, :]).matmul(self.coef)
 
     def to_tensor(self, grid=512, rmax=200, eps=1e-3, verbose=True):
@@ -374,9 +416,14 @@ class PCEInterpolator:
         S = self.Psis[0].shape[0]
         if not hasattr(grid, '__len__'):
             grid = [torch.linspace(self.bounds[n][0], self.bounds[n][1], grid) for n in range(N)]
+        for n in range(N):  # Apply centering correction
+            grid[n] -= self.x_mean[n]
         assert len(grid) == N
 
-        start = time.time()
+        if verbose:
+            start = time.time()
+            print('Time: {:.3f}s | '.format(time.time() - start), end='')
+            print('Converting to TT-Tucker format...', end='', flush=True)
 
         # Assemble a TT-Tucker tensor:
         # The core is retrieved from the set of PCE coefficients found,
@@ -394,7 +441,8 @@ class PCEInterpolator:
         t.Us = Us
 
         if verbose:
-            print('Time: {:.3f}s | '.format(time.time() - start), end='')
-            print('Conversion to tensor done, eps = {:.5g}'.format(eps.item()))
+            print(' done, eps = {:.5g}'.format(eps.item()))
+            print('Time: {:.3f}s'.format(time.time() - start), flush=True)
+            print()
 
         return t
