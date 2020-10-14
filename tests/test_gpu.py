@@ -8,7 +8,7 @@ device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 def test_tt():
     X = torch.randn(16, 16, 16)
-    y1 = tn.Tensor(X, ranks_tt=3)
+    y1 = tn.Tensor(X, ranks_tt=3).torch()
     y2 = tn.Tensor(X, ranks_tt=3, device=device).torch().cpu()
     assert torch.abs(y1-y2).max() < 1e-5
 

@@ -1499,7 +1499,7 @@ class Tensor(object):
         if self.batch:
             delta = None
         else:
-            delta = eps/max(1, torch.sqrt(torch.tensor([N-1], dtype=torch.float64)))*torch.norm(self.cores[-1])
+            delta = eps/max(1, torch.sqrt(torch.tensor([N-1], dtype=torch.float64, device=self.cores[-1].device)))*torch.norm(self.cores[-1])
             delta = delta.item()
 
         for mu in range(N - 1, 0, -1):
@@ -1654,10 +1654,10 @@ class Tensor(object):
         """
         Counts the total number of uncompressed elements of this tensor.
 
-        :return: an integer
+        :return: a float64 (often, a tensor's size will not fit in integer type)
         """
 
-        return torch.prod(torch.tensor(list(self.shape)))
+        return torch.round(torch.prod(torch.tensor(self.shape).double()))
 
     def numcoef(self):
         """
