@@ -4,7 +4,7 @@ import torch
 import time
 
 
-def als_completion(train_x, train_y, ranks_tt, shape=None, ws=None, x0=None, niter=10, verbose=True):
+def als_completion(X, y, ranks_tt, shape=None, ws=None, x0=None, niter=10, verbose=True):
     """
     Complete an N-dimensional TT from P samples using alternating least squares (ALS).
     We assume only low-rank structure, and no smoothness/spatial locality. Such assumption requires that there is at
@@ -16,10 +16,10 @@ def als_completion(train_x, train_y, ranks_tt, shape=None, ws=None, x0=None, nit
     true rank structure
     ("Riemannian optimization for high-dimensional tensor completion", M. Steinlechner, 2015)
 
-    :param Xs: a P x N matrix of integers (tensor indices)
-    :param ys: a vector with P elements
+    :param X: a P X N matrix of integers (tensor indices)
+    :param y: a vector with P elements
     :param ranks_tt: an integer (or list). Ignored if x0 is given
-    :param shape: list of N integers. If None, the smallest shape that accommodates `Xs` will be chosen
+    :param shape: list of N integers. If None, the smallest shape that accommodates `X` will be chosen
     :param ws: a vector with P elements, with the weight of each sample (if None, 1 is assumed)
     :param x0: initial solution (a TT tensor). If None, a random tensor will be used
     :param niter: number of ALS sweeps. Default is 10
@@ -27,28 +27,28 @@ def als_completion(train_x, train_y, ranks_tt, shape=None, ws=None, x0=None, nit
     :return: a `tntorch.Tensor'
     """
 
-    assert not train_x.dtype.is_floating_point
-    assert train_x.dim() == 2
-    assert train_y.dim() == 1
+    assert not X.dtype.is_floating_point
+    assert X.dim() == 2
+    assert y.dim() == 1
     if ws is None:
-        ws = torch.ones(len(train_y))
-    train_x = train_x.long()
+        ws = torch.ones(len(y))
+    X = X.long()
     if shape is None:
-        shape = [val.item() for val in torch.max(train_x, dim=0)[0]+1]
-    train_y = train_y.to(torch.get_default_dtype())
-    P = train_x.shape[0]
-    N = train_x.shape[1]
+        shape = [val.item() for val in torch.max(X, dim=0)[0] + 1]
+    y = y.to(torch.get_default_dtype())
+    P = X.shape[0]
+    N = X.shape[1]
     if x0 is None:
         x0 = tn.rand(shape, ranks_tt=ranks_tt)
     # All tensor slices must contain at least one sample point
     for dim in range(N):
-        if torch.unique(train_x[:, dim]).numel() != x0.shape[dim]:
+        if torch.unique(X[:, dim]).numel() != x0.shape[dim]:
             raise ValueError('One groundtruth sample is needed for every tensor slice')
 
     if verbose:
         print('Completing a {}D tensor of size {} using {} samples...'.format(N, list(shape), P))
 
-    normy = torch.norm(train_y)
+    normy = torch.norm(y)
     x0.orthogonalize(0)
     cores = x0.cores
 
@@ -59,18 +59,18 @@ def als_completion(train_x, train_y, ranks_tt, shape=None, ws=None, x0=None, nit
     rights = [None] * N
     rights[-1] = torch.ones(1, P, 1)
     for dim in range(N-2, -1, -1):
-        rights[dim] = torch.einsum('ijk,kjl->ijl', (cores[dim+1][:, train_x[:, dim+1], :], rights[dim+1]))
+        rights[dim] = torch.einsum('ijk,kjl->ijl', (cores[dim+1][:, X[:, dim + 1], :], rights[dim + 1]))
 
     def optimize_core(cores, mu, direction):
         sse = 0
         for index in range(cores[mu].shape[1]):
-            idx = torch.where(train_x[:, mu] == index)[0]
+            idx = torch.where(X[:, mu] == index)[0]
             leftside = lefts[mu][0, idx, :]
             rightside = rights[mu][:, idx, 0]
             lhs = rightside.t()[:, :, None]
             rhs = leftside[:, None, :]
             A = torch.reshape(lhs*rhs, [len(idx), -1])*ws[idx, None]
-            b = train_y[idx]*ws[idx]
+            b = y[idx] * ws[idx]
             sol = torch.lstsq(b, A)[0][:A.shape[1], :]
             residuals = torch.norm(A.matmul(sol)[:, 0] - b) ** 2
             cores[mu][:, index, :] = torch.reshape(sol, cores[mu][:, index, :].shape)#.t()
@@ -78,10 +78,10 @@ def als_completion(train_x, train_y, ranks_tt, shape=None, ws=None, x0=None, nit
         # Update product chains for next core
         if direction == 'right':
             x0.left_orthogonalize(mu)
-            lefts[mu+1] = torch.einsum('ijk,kjl->ijl', (lefts[mu], cores[mu][:, train_x[:, mu], :]))
+            lefts[mu+1] = torch.einsum('ijk,kjl->ijl', (lefts[mu], cores[mu][:, X[:, mu], :]))
         else:
             x0.right_orthogonalize(mu)
-            rights[mu-1] = torch.einsum('ijk,kjl->ijl', (cores[mu][:, train_x[:, mu], :], rights[mu]))
+            rights[mu-1] = torch.einsum('ijk,kjl->ijl', (cores[mu][:, X[:, mu], :], rights[mu]))
         return sse
 
     start = time.time()
@@ -104,14 +104,14 @@ def als_completion(train_x, train_y, ranks_tt, shape=None, ws=None, x0=None, nit
     return x0
 
 
-def sparse_tt_svd(Xs, ys, eps, shape=None, rmax=None):
+def sparse_tt_svd(X, y, eps, shape=None, rmax=None):
     """
     TT-SVD for sparse tensors.
 
-    :param Xs: matrix P x N of sample coordinates (integers)
-    :param ys: P-sized vector of sample values
+    :param X: matrix P X N of sample coordinates (integers)
+    :param y: P-sized vector of sample values
     :param eps: prescribed accuracy (resulting relative error is guaranteed to be not larger than this)
-    :param shape: input tensor shape. If not specified, a tensor will be chosen such that `Xs` fits in
+    :param shape: input tensor shape. If not specified, a tensor will be chosen such that `X` fits in
     :param rmax: optionally, cap all ranks above this value
     :param verbose:
     :return: a TT
@@ -162,40 +162,81 @@ def sparse_tt_svd(Xs, ys, eps, shape=None, rmax=None):
         Xs, ys = full_times_sparse(left.T, Xs, ys)
         return left, Xs, ys
 
-    if isinstance(Xs, np.ndarray):
-        Xs = torch.Tensor(Xs)
-    if isinstance(ys, np.ndarray):
-        ys = torch.Tensor(ys)
-    assert not Xs.dtype.is_floating_point
-    assert Xs.dim() == 2
-    assert ys.dim() == 1
-    N = Xs.shape[1]
+    if isinstance(X, np.ndarray):
+        X = torch.Tensor(X)
+    if isinstance(y, np.ndarray):
+        y = torch.Tensor(y)
+    assert not X.dtype.is_floating_point
+    assert X.dim() == 2
+    assert y.dim() == 1
+    N = X.shape[1]
     if shape is None:
-        shape = [val.item() for val in torch.max(Xs, dim=0)[0]+1]
+        shape = [val.item() for val in torch.max(X, dim=0)[0] + 1]
     assert N == len(shape)
     if rmax is None:
         rmax = np.iinfo(np.int32).max
 
-    delta = eps / np.sqrt(N - 1) * torch.norm(ys).item()
+    delta = eps / np.sqrt(N - 1) * torch.norm(y).item()
 
     # TT-SVD iteration
     cores = []
     curshape = shape.copy()
     for n in range(1, N):
-        left, Xs, ys = sparse_truncate_svd(Xs, ys, curshape[0], delta=delta, rmax=rmax)
+        left, X, y = sparse_truncate_svd(X, y, curshape[0], delta=delta, rmax=rmax)
         cores.append(left.reshape(left.shape[0]//shape[n-1], shape[n-1], left.shape[1]))
         curshape[0] = left.shape[1]  # Rank of this unfolding
 
         if n < N-1:  # Merge the two first indices (sparse reshape)
-            Xs = torch.cat([Xs[:, 0:1]*curshape[1] + Xs[:, 1:2], Xs[:, 2:]], dim=1)
+            X = torch.cat([X[:, 0:1] * curshape[1] + X[:, 1:2], X[:, 2:]], dim=1)
             curshape[1] *= curshape[0]
             curshape = curshape[1:]
 
     lastcore = torch.zeros(list(curshape))
-    lastcore[list(Xs.t())] = ys
+    lastcore[list(X.t())] = y
     cores.append(lastcore[:, :, None])
 
     return tn.Tensor(cores)
+
+
+def get_bounding_box(X):
+    """
+    Compute the bounding box of a set of points.
+
+    :param X: a tensor of shape ... X N, where N is the number of features
+    :return: a list of N pairs [bottom, top]
+    """
+
+    return [(torch.min(X[..., n]).item(), torch.max(X[..., n]).item()) for n in range(X.shape[-1])]
+
+
+def discretize(X, bbox=None, I=512, domain=None):
+    """
+    Convert floating point features into dicrete tensor indices.
+
+    :param X: a float tensor of shape ... X N, where N is the number of features
+    :param bbox: a list of N pairs [bottom, top]. If None (default), X's own bounding box will be used.
+        Values falling outside the box will be clamped.
+    :param I: grid resolution. Default is 512
+    :param domain: optional list of N vectors to specify the grid. Overrides `bbox` and `I`
+    :return: an integer tensor of shape ... X N
+    """
+
+    assert X.dtype.is_floating_point
+    X = X.clone()
+    if domain is not None:
+        for n in range(X.shape[1]):
+            X[:, n] = torch.Tensor(np.interp(X[:, n].numpy(), domain[n].numpy(), np.arange(len(domain[n]))))
+        return torch.round(X).long()
+    if bbox is None:
+        bbox = tn.get_bounding_box(X)
+    assert len(bbox) == X.shape[-1]
+    bbox = torch.Tensor(bbox)
+    X -= bbox[:, 0][[None] * (X.dim() - 1) + [slice(None)]]
+    X /= (bbox[:, 1] - bbox[:, 0])[[None] * (X.dim() - 1) + [slice(None)]]
+    X = torch.round(X * (I - 1)).long()
+    X[X < 0] = 0
+    X[X > I - 1] = I - 1
+    return X
 
 
 class PCEInterpolator:
@@ -204,8 +245,8 @@ class PCEInterpolator:
     therefore is CPU-only. Parameter distributions are fully empirical. Orthogonal polynomial families
     are learned using Gram-Schmidt [1].
 
-    Coefficient selection follows [2]. A sparse regularization is enforced: only entries x whose coordinates satisfy
-    ||x||_q < p are considered, where the Lq norm is used and `p` is a threshold. Additionally, among that space of
+    Coefficient selection follows [2]. A sparse regularization is enforced: only entries X whose coordinates satisfy
+    ||X||_q < p are considered, where the Lq norm is used and `p` is a threshold. Additionally, among that space of
     candidates, at most `nnz` can be non-zero (they are selected using Least Angle Regression, LARS).
 
     We assume parameters are independently distributed; however, the regressor will often work well
@@ -228,12 +269,12 @@ class PCEInterpolator:
         M = torch.prod(M, dim=2)
         return M
 
-    def fit(self, x, y, p=5, q=0.75, val_split=0.1, seed=0, matrix_size_limit=5e7, retrain=True, verbose=True):
+    def fit(self, X, y, p=5, q=0.75, val_split=0.1, seed=0, matrix_size_limit=5e7, retrain=True, verbose=True):
         """
-        Fit the model to a training dataset (x, y) using LARS. The optimal number of non-zero
+        Fit the model to a training dataset (X, y) using LARS. The optimal number of non-zero
         coefficients to select is automatically found via a validation set.
 
-        :param x: a matrix of shape P x N floats (input features)
+        :param X: a matrix of shape P X N floats (input features)
         :param y: a vector of size P
         :param p: threshold for the hyperbolic truncation norm. Default is 5
         :param q: the truncation will use norm Lq. Default is 0.75
@@ -247,28 +288,28 @@ class PCEInterpolator:
         """
 
         import sklearn.linear_model
-        assert x.dim() == 2
-        assert x.dtype.is_floating_point
-        P = x.shape[0]
-        N = x.shape[1]
+        assert X.dim() == 2
+        assert X.dtype.is_floating_point
+        P = X.shape[0]
+        N = X.shape[1]
         assert y.shape[0] == P
         assert y.dim() == 1
         assert 0 <= q <= 1
 
         # Save features' bounding box
-        self.bounds = [(torch.min(x[:, n]).item(), torch.max(x[:, n]).item()) for n in range(N)]
+        self.bbox = tn.get_bounding_box(X)
 
         # Center each feature to improve stability of polynomial orthogonalization
-        self.x_mean = torch.mean(x, dim=0)
-        x = x.clone() - self.x_mean[None, :]
+        self.X_mean = torch.mean(X, dim=0)
+        X = X.clone() - self.X_mean[None, :]
 
         # Split into train and validation sets
         n_val = int(P*val_split)
         rng = np.random.default_rng(seed=seed)
-        val_idx = rng.choice(P, n_val)
-        train_idx = np.delete(np.arange(P), val_idx)
-        train_y = y[train_idx]
-        val_y = y[val_idx]
+        idx_val = rng.choice(P, n_val)
+        idx_train = np.delete(np.arange(P), idx_val)
+        y_train = y[idx_train]
+        y_val = y[idx_val]
 
         if verbose:
             start = time.time()
@@ -278,7 +319,7 @@ class PCEInterpolator:
             print('{:.3f}s | '.format(time.time() - start), end='')
             print('Hyperbolic truncation...', end='')
 
-        # Find the coordinates of all coefficient candidates (i.e. all that satisfy ||x||_q < p)
+        # Find the coordinates of all coefficient candidates (i.e. all that satisfy ||X||_q < p)
         idx = np.zeros(N, dtype=np.int)
 
         def find_candidates(p):
@@ -307,7 +348,7 @@ class PCEInterpolator:
             ncandidates = len(self.coords)
             print(' done, we kept {} / {} candidates'.format(ncandidates, S**N))
             print('{:.3f}s | '.format(time.time() - start), end='')
-            print('Assembling a {} x {} design matrix...'.format(P, len(self.coords)), end='', flush=True)
+            print('Assembling a {} X {} design matrix...'.format(P, len(self.coords)), end='', flush=True)
 
         def gram_schmidt(x, S):
             """
@@ -323,7 +364,7 @@ class PCEInterpolator:
 
             :param x: list of observed inputs
             :param S: an integer: how many basis elements to form.
-            :return: a matrix of shape S x S (one column per basis element)
+            :return: a matrix of shape S X S (one column per basis element)
             """
 
             assert x.dim() == 1
@@ -350,12 +391,12 @@ class PCEInterpolator:
 
         # Build orthogonal polynomial bases based on the
         # empirical marginals of the input features
-        self.Psis = [gram_schmidt(x[:, n], S) for n in range(N)]
+        self.Psis = [gram_schmidt(X[:, n], S) for n in range(N)]
 
         # Assemble the design matrix from the training features
-        M = self._design_matrix(x)
-        train_M = M[train_idx, ...]
-        val_M = M[val_idx, ...]
+        M = self._design_matrix(X)
+        M_train = M[idx_train, ...]
+        M_val = M[idx_val, ...]
 
         if verbose:
             print(' done')
@@ -363,12 +404,12 @@ class PCEInterpolator:
             print('Finding best nnz in LARS...', end='', flush=True)
 
         # Solve the sparse regression problem using LARS
-        lars = sklearn.linear_model.Lars(n_nonzero_coefs=train_M.shape[1], fit_intercept=False, fit_path=True)
-        lars.fit(train_M, train_y)
+        lars = sklearn.linear_model.Lars(n_nonzero_coefs=M_train.shape[1], fit_intercept=False, fit_path=True)
+        lars.fit(M_train, y_train)
 
         # Find the validation eps for every choice of nnz (LARS' solution path)
-        reco_path = torch.einsum('pc,cd->pd', val_M, torch.Tensor(lars.coef_path_))
-        error_path = torch.sqrt(torch.sum((reco_path - val_y[:, None])**2, dim=0))/torch.norm(val_y)
+        reco_path = torch.einsum('pc,cd->pd', M_val, torch.Tensor(lars.coef_path_))
+        error_path = torch.sqrt(torch.sum((reco_path - y_val[:, None])**2, dim=0))/torch.norm(y_val)
         argmin = torch.argmin(error_path)  # Pick the best nnz
         nnz = len(np.where(lars.coef_path_[:, argmin])[0])
 
@@ -393,6 +434,7 @@ class PCEInterpolator:
                 reco = M[:, nonzeros].matmul(self.coef)
                 print(' done, training eps={:.5g}'.format(torch.norm(y-reco)/torch.norm(y)))
                 print('{:.3f}s'.format(time.time() - start), flush=True)
+                print()
 
         else:
             nonzeros = np.where(lars.coef_path_[:, argmin])[0]
@@ -400,23 +442,25 @@ class PCEInterpolator:
             self.coords = self.coords[nonzeros, :]
             print()
 
-    def predict(self, x):
+    def predict(self, X):
         """
         Predict regression values for an input.
 
-        :param x: a matrix of shape P x N floats (input features)
+        :param X: a matrix of shape P X N floats (input features)
         :return: a vector of size P
         """
-        return self._design_matrix(x-self.x_mean[None, :]).matmul(self.coef)
+        return self._design_matrix(X - self.X_mean[None, :]).matmul(self.coef)
 
-    def to_tensor(self, grid=512, rmax=200, eps=1e-3, verbose=True):
+    def to_tensor(self, domain=512, rmax=200, eps=1e-3, verbose=True):
         """
         Convert the interpolator to a TT-Tucker tensor.
 
-        :param grid: one of the following:
-            - integer I: the training data's bounding box at resolution I
-            will be used to define the tensor product grid. Default is 512
-            - list of N vectors: vectors defining the tensor grid
+        :param bbox: list of N pairs defining the tensor's rectangular range. If None (default),
+            we use the bounding box of the data used to learn the tensor
+        :param I: resolution of the resulting tensor. Default is 512
+        :param domain: one of the following:
+            - list of N vectors to specify the tensor grid
+            - integer I: the training data set's bounding box will be used, at resolution I. Default is 512
         :param rmax: the TT cores will be capped at this rank. Default is 500
         :param eps: rounding error to cast PCE into TT. Default is 1e-3
         :param verbose: Boolean; default is True
@@ -425,11 +469,11 @@ class PCEInterpolator:
 
         N = len(self.Psis)
         S = self.Psis[0].shape[0]
-        if not hasattr(grid, '__len__'):
-            grid = [torch.linspace(self.bounds[n][0], self.bounds[n][1], grid) for n in range(N)]
-        for n in range(N):  # Apply centering correction
-            grid[n] -= self.x_mean[n]
-        assert len(grid) == N
+        if not isinstance(domain, (list, tuple)):
+            print(self.bbox)
+            domain = [torch.linspace(self.bbox[n][0], self.bbox[n][1], domain) for n in range(N)]
+        assert len(domain) == N
+        domain_centered = [domain[n] - self.X_mean[n] for n in range(N)]
 
         if verbose:
             start = time.time()
@@ -450,7 +494,7 @@ class PCEInterpolator:
         Us = []
         for n in range(N):
             Us.append(
-                (grid[n][:, None]**torch.arange(S)).to(torch.get_default_dtype()).matmul(
+                (domain_centered[n][:, None]**torch.arange(S)).to(torch.get_default_dtype()).matmul(
                     self.Psis[n][:, :t.shape[n]])
             )
         t.Us = Us
