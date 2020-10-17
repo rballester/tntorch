@@ -455,9 +455,6 @@ class PCEInterpolator:
         """
         Convert the interpolator to a TT-Tucker tensor.
 
-        :param bbox: list of N pairs defining the tensor's rectangular range. If None (default),
-            we use the bounding box of the data used to learn the tensor
-        :param I: resolution of the resulting tensor. Default is 512
         :param domain: one of the following:
             - list of N vectors to specify the tensor grid
             - integer I: the training data set's bounding box will be used, at resolution I. Default is 512
@@ -470,7 +467,6 @@ class PCEInterpolator:
         N = len(self.Psis)
         S = self.Psis[0].shape[0]
         if not isinstance(domain, (list, tuple)):
-            print(self.bbox)
             domain = [torch.linspace(self.bbox[n][0], self.bbox[n][1], domain) for n in range(N)]
         assert len(domain) == N
         domain_centered = [domain[n] - self.X_mean[n] for n in range(N)]
