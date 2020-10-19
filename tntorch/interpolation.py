@@ -239,6 +239,29 @@ def discretize(X, bbox=None, I=512, domain=None):
     return X
 
 
+def empirical_marginals(X, domain):
+    """
+    Given a matrix of sample points, get its discrete marginal distribution over a
+    specified domain.
+
+    :param X: a P x N matrix
+    :param domain: a list of N vectors
+    :return: a list of N vectors
+    """
+
+    assert X.dim() == 2
+    assert X.shape[1] == len(domain)
+    P = X.shape[0]
+    N = X.shape[1]
+
+    X_discrete = tn.discretize(X, domain=domain)
+    result = [torch.zeros(len(domain[n])) for n in range(N)]
+    for n in range(N):
+        unique, counts = torch.unique(X_discrete[:, n], return_counts=True)
+        result[n][unique.numpy()] = counts.double() / P
+    return result
+
+
 class PCEInterpolator:
     """
     Polynomial chaos expansion (PCE) interpolator. This class requires scikit-learn to run, and
