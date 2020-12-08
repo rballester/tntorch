@@ -209,7 +209,7 @@ def get_bounding_box(X):
     return [(torch.min(X[..., n]).item(), torch.max(X[..., n]).item()) for n in range(X.shape[-1])]
 
 
-def discretize(X, bbox=None, I=512, domain=None):
+def features2indices(X, bbox=None, I=512, domain=None):
     """
     Convert floating point features into dicrete tensor indices.
 
@@ -237,6 +237,23 @@ def discretize(X, bbox=None, I=512, domain=None):
     X[X < 0] = 0
     X[X > I - 1] = I - 1
     return X
+
+
+def indices2features(X, bbox=None, I=512, domain=None):
+
+    assert not X.dtype.is_floating_point
+    assert X.dim() == 2
+
+    result = torch.zeros_like(X).to(torch.get_default_dtype())
+    if domain is None:
+        domain = [torch.linspace(
+            b[0] + (b[1]-b[0])/(2*I),
+            b[1] - (b[1]-b[0])/(2*I),
+            I) for b in bbox]
+    for n in range(X.shape[1]):
+        result[:, n] = domain[n][X[:, n]]
+    return result
+
 
 
 def empirical_marginals(X, domain):
@@ -324,7 +341,8 @@ class PCEInterpolator:
 
         # Center each feature to improve stability of polynomial orthogonalization
         self.X_mean = torch.mean(X, dim=0)
-        X = X.clone() - self.X_mean[None, :]
+        self.X_std = torch.std(X, dim=0)
+        X = (X.clone() - self.X_mean[None, :])/self.X_std[None, :]
 
         # Split into train and validation sets
         n_val = int(P*val_split)
@@ -345,7 +363,7 @@ class PCEInterpolator:
         # Find the coordinates of all coefficient candidates (i.e. all that satisfy ||X||_q < p)
         idx = np.zeros(N, dtype=np.int)
 
-        def find_candidates(p):
+        def find_candidates(p, q):
             # Traverse the whole hypercube of possible coefficients (size S**N)
             # Since hyperbolic truncation selects a contiguous region, this is efficient
             S = int(np.ceil(p))
@@ -364,7 +382,7 @@ class PCEInterpolator:
                     raise ValueError('Design matrix exceeds matrix_size_limit ({:g} elements). Decrease p or q, or increase matrix_size_limit'.format(matrix_size_limit))
             return torch.Tensor(coords).long()
 
-        self.coords = find_candidates(p)
+        self.coords = find_candidates(p, q)
         S = int(np.ceil(p))
 
         if verbose:
@@ -441,7 +459,9 @@ class PCEInterpolator:
             print('{:.3f}s | '.format(time.time() - start), end='')
 
         if retrain:
-            print('Retraining at nnz={}...'.format(nnz), end='', flush=True)
+
+            if verbose:
+                print('Retraining at nnz={}...'.format(nnz), end='', flush=True)
 
             # Retrain now on the entire input dataset and optimal nnz
             lars = sklearn.linear_model.Lars(n_nonzero_coefs=nnz, fit_intercept=False, fit_path=False)
@@ -450,6 +470,8 @@ class PCEInterpolator:
             # Remove features not selected by LARS
             lars.coef_ = lars.coef_[0, :]
             nonzeros = np.where(lars.coef_)[0]
+            self.allcoords = self.coords
+            self.allcoef = torch.Tensor(lars.coef_)
             self.coef = torch.Tensor(lars.coef_[nonzeros])
             self.coords = self.coords[nonzeros, :]
 
@@ -472,7 +494,7 @@ class PCEInterpolator:
         :param X: a matrix of shape P X N floats (input features)
         :return: a vector of size P
         """
-        return self._design_matrix(X - self.X_mean[None, :]).matmul(self.coef)
+        return self._design_matrix((X - self.X_mean[None, :])/self.X_std[None, :]).matmul(self.coef)
 
     def to_tensor(self, domain=512, rmax=200, eps=1e-3, verbose=True):
         """
@@ -490,9 +512,12 @@ class PCEInterpolator:
         N = len(self.Psis)
         S = self.Psis[0].shape[0]
         if not isinstance(domain, (list, tuple)):
-            domain = [torch.linspace(self.bbox[n][0], self.bbox[n][1], domain) for n in range(N)]
+            domain = [torch.linspace(
+                self.bbox[n][0]+(self.bbox[n][1]-self.bbox[n][0])/(2*domain),
+                self.bbox[n][1]-(self.bbox[n][1]-self.bbox[n][0])/(2*domain),
+                domain) for n in range(N)]
         assert len(domain) == N
-        domain_centered = [domain[n] - self.X_mean[n] for n in range(N)]
+        domain_centered = [(domain[n] - self.X_mean[n])/self.X_std[n] for n in range(N)]
 
         if verbose:
             start = time.time()
