@@ -107,12 +107,12 @@ def cross(function=lambda x: x, domain=None, tensors=None, function_arg='vectors
 
     :return: an N-dimensional TT :class:`Tensor` (if `return_info`=True, also a dictionary)
     """
-    if device is None and tensors is not None: 
+    if device is None and tensors is not None:
         if type(tensors) == list:
             device = tensors[0].cores[0].device
         else:
             device = tensors.cores[0].device
-            
+
     if verbose:
         print('cross device is', device)
 
@@ -201,6 +201,7 @@ def cross(function=lambda x: x, domain=None, tensors=None, function_arg='vectors
         assert ys_val.dim() == 2
         assert ys_val.shape[1] == 1
         ys_val = ys_val[:, 0]
+
     assert len(ys_val) == val_size
     norm_ys_val = torch.norm(ys_val)
 
@@ -247,7 +248,7 @@ def cross(function=lambda x: x, domain=None, tensors=None, function_arg='vectors
         # Check for nan/inf values
         if evaluation.dim() == 2:
             evaluation = evaluation[:, 0]
-        invalid = (torch.isnan(evaluation) | torch.isinf(evaluation)).nonzero()
+        invalid = torch.nonzero(torch.isnan(evaluation) | torch.isinf(evaluation))
         if len(invalid) > 0:
             invalid = invalid[0].item()
             raise ValueError('Invalid return value for function {}: f({}) = {}'.format(function, ', '.join('{:g}'.format(x[invalid].detach().cpu().numpy()) for x in Xs),
