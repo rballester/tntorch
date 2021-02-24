@@ -708,7 +708,7 @@ class Tensor(object):
         if any([k is Ellipsis for k in key]):
             raise IndexError('Only one ellipsis is allowed, at most')
         if len(self.shape) - (len(key) - nonecount) < 0:
-            raise IndexError('Too many index entries')
+            raise IndexError('Too many index entries {} vs {}'.format(len(self.shape), len(key) - nonecount))
 
         # Fill remaining unspecified dimensions with slice(None)
         key = key + [slice(None)] * (len(self.shape) - (len(key) - nonecount))
