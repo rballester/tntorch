@@ -543,6 +543,11 @@ class Tensor(object):
                 shape.append(self.Us[n].shape[-2])
         return torch.Size(shape)
 
+    def b(self):
+        if not self.batch:
+            raise ValueError
+        return self.cores[0].shape[0]
+
     @property
     def ranks_tt(self):
         """

@@ -279,6 +279,46 @@ def empirical_marginals(X, domain):
     return result
 
 
+def gram_schmidt(x, S):
+    """
+    Create a truncated polynomial basis with S elements that is orthogonal
+    with respect to a given measure.
+
+    The elements are computed using a modified [1] version of Gram-Schmidt's orthonormalization
+    process, and lead to a PCE family that can be used for any probability distribution of
+    the inputs [2].
+
+    [1] https://en.wikipedia.org/wiki/Gram%E2%80%93Schmidt_process#Numerical_stability
+    [2] "Modeling Arbitrary Uncertainties Using Gram-Schmidt Polynomial Chaos", Witteveen and Bijl, 2012
+
+    :param x: list of observed inputs
+    :param S: an integer: how many basis elements to form.
+    :return: a matrix of shape S X S (one column per basis element)
+    """
+
+    assert x.dim() == 1
+
+    xpowers = x[:, None] ** torch.arange(S, device=x.device)[None, :]
+
+    def proj(u, v):
+        xu = xpowers.matmul(u)
+        xv = xpowers.matmul(v)
+        return torch.mean(xu * xv) / torch.mean(xu * xu) * u
+
+    def norm(u):
+        xu = xpowers.matmul(u)
+        return torch.sqrt(torch.mean(xu * xu))
+
+    Psi = torch.eye(S, S, device=x.device)
+    for s in range(1, S):
+        u = Psi[:, s]
+        for k in range(s):
+            u = u - proj(Psi[:, k], u)
+        Psi[:, s] = u / norm(u)
+
+    return Psi
+
+
 class PCEInterpolator:
     """
     Polynomial chaos expansion (PCE) interpolator. This class requires scikit-learn to run, and
@@ -390,45 +430,6 @@ class PCEInterpolator:
             print(' done, we kept {} / {} candidates'.format(ncandidates, S**N))
             print('{:.3f}s | '.format(time.time() - start), end='')
             print('Assembling a {} X {} design matrix...'.format(P, len(self.coords)), end='', flush=True)
-
-        def gram_schmidt(x, S):
-            """
-            Create a truncated polynomial basis with S elements that is orthogonal
-            with respect to a given measure.
-
-            The elements are computed using a modified [1] version of Gram-Schmidt's orthonormalization
-            process, and lead to a PCE family that can be used for any probability distribution of
-            the inputs [2].
-
-            [1] https://en.wikipedia.org/wiki/Gram%E2%80%93Schmidt_process#Numerical_stability
-            [2] "Modeling Arbitrary Uncertainties Using Gram-Schmidt Polynomial Chaos", Witteveen and Bijl, 2012
-
-            :param x: list of observed inputs
-            :param S: an integer: how many basis elements to form.
-            :return: a matrix of shape S X S (one column per basis element)
-            """
-
-            assert x.dim() == 1
-
-            xpowers = x[:, None] ** torch.arange(S)[None, :]
-
-            def proj(u, v):
-                xu = xpowers.matmul(u)
-                xv = xpowers.matmul(v)
-                return torch.mean(xu * xv) / torch.mean(xu * xu) * u
-
-            def norm(u):
-                xu = xpowers.matmul(u)
-                return torch.sqrt(torch.mean(xu * xu))
-
-            Psi = torch.eye(S, S)
-            for s in range(1, S):
-                u = Psi[:, s]
-                for k in range(s):
-                    u = u - proj(Psi[:, k], u)
-                Psi[:, s] = u / norm(u)
-
-            return Psi
 
         # Build orthogonal polynomial bases based on the
         # empirical marginals of the input features

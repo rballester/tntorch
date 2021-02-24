@@ -212,28 +212,46 @@ def sum(t, dim=None, keepdim=False, _normalize=False):
         else:
             return tn.squeeze(result)
 
-def mean(t, dim=None, keepdim=False):
+
+def mean(t, dim=None, marginals=None, keepdim=False):
     """
     Computes the mean of a :class:`Tensor` along all or some of its dimensions.
 
     :param t: a :class:`Tensor`
     :param dim: an int or list of ints (default: all)
+    :param marginals: an optional list of vectors
     :param keepdim: whether to keep the same number of dimensions
 
     :return: a scalar (if keepdim is False and all dims were chosen) or :class:`Tensor` otherwise
     """
 
+    if marginals is not None:
+        pdfcores = [torch.ones(sh)/sh for sh in t.shape]
+        if dim is None:
+            dim = range(t.dim())
+        for d, marg in zip(dim, marginals):
+            pdfcores[d] = marg[None, :, None] / marg.sum()
+        pdf = tn.Tensor(pdfcores)
+        return tn.sum(t*pdf, dim, keepdim)
+
     return tn.sum(t, dim, keepdim, _normalize=True)
 
 
-def var(t):
+def var(t, marginals=None):
     """
     Computes the variance of a :class:`Tensor`.
 
     :param t: a :class:`Tensor`
+    :param marginals: an optional list of vectors
 
     :return: a scalar :math:`\ge 0`
     """
+
+    if marginals is not None:
+        assert len(marginals) == t.dim()
+        tcentered = t - tn.mean(t, marginals=marginals)
+        pdf = tn.Tensor([marg[None, :, None] / marg.sum() for marg in marginals])
+        return tn.dot(tcentered*pdf, tcentered)
 
     return tn.normsq(t-tn.mean(t)) / t.numel()
 
@@ -275,35 +293,41 @@ def kurtosis(t, fisher=True):
     return tn.mean(((t-tn.mean(t))/tn.std(t))**4) - fisher*3
 
 
-def raw_moment(t, k, eps=1e-6):
+def raw_moment(t, k, marginals=None, eps=1e-6, algorithm='eig'):
     """
     Compute a raw moment :math:`\\mathbb{E}[t^k]'.
 
     :param t: input :class:`Tensor`
     :param k: the desired moment order (integer :math:`\ge 1`)
+    :param marginals: an optional list of vectors
     :param eps: relative error for rounding (default is 1e-6)
 
     :return: the :math:`k`-th order raw moment of `t`
     """
 
-    return hadamard_sum([t]*k, eps=eps) / t.numel()
+    if marginals is not None:
+        pdf = tn.Tensor([marg[None, :, None]/marg.sum() for marg in marginals])
+        return hadamard_sum([t]*(k-1) + [t*pdf], eps=eps, algorithm=algorithm)
+
+    return hadamard_sum([t]*k, eps=eps, algorithm=algorithm) / t.numel()
 
 
-def normalized_moment(t, k, eps=1e-12):
+def normalized_moment(t, k, marginals=None, eps=1e-12, algorithm='eig'):
     """
     Compute a normalized central moment :math:`\\mathbb{E}[(t - \\mathbb{E}[t])^k] / \\sigma^k'.
 
     :param t: input :class:`Tensor`
     :param k: the desired moment order (integer :math:`\ge 1`)
+    :param marginals: an optional list of vectors
     :param eps: relative error for rounding (default is 1e-12)
 
     :return: the :math:`k`-th order normalized moment of `t`
     """
 
-    return raw_moment(t-tn.mean(t), k=k, eps=eps) / tn.var(t)**(k/2.) / t.numel()
+    return raw_moment(t-tn.mean(t, marginals=marginals), k=k, marginals=marginals, eps=eps, algorithm=algorithm) / tn.var(t, marginals=marginals)**(k/2.)# / t.numel()
 
 
-def hadamard_sum(ts, eps=1e-6):
+def hadamard_sum(ts, eps=1e-6, algorithm='eig'):
     """
     Given tensors :math:`t_1, \\dots, t_M`, computes :math:'\\Sum (t_1 \\circ \\dots \\circ t_M)'.
 
@@ -311,6 +335,7 @@ def hadamard_sum(ts, eps=1e-6):
 
     :param ts: a list of :class:`Tensor` (the algorithm will use temporary TT-format copies of those)
     :param eps: relative error used at each rounding step (default is 1e-6)
+    :param algorithm: 'eig' (default) or 'svd'
 
     :return: a scalar
     """
@@ -339,7 +364,7 @@ def hadamard_sum(ts, eps=1e-6):
             c = diag_core(cores[m], m)
             cs.append(c.reshape(c.shape[0], c.shape[1]*c.shape[2], c.shape[3]))
         t = tn.Tensor(cs)
-        t.round_tt(eps)
+        t.round_tt(eps, algorithm=algorithm)
         cs = t.cores
         cs = [cs[m].reshape([cs[m].shape[0], cores[m].shape[0], cores[m].shape[2], cs[m].shape[-1]]) for m in range(M)]
         return cs
@@ -361,7 +386,7 @@ def hadamard_sum(ts, eps=1e-6):
             c = torch.einsum('ijkl,akbc->iajblc', (thiscores[m], nextcores[m]))  # vecmat product
             c = torch.reshape(c, [c.shape[0]*c.shape[1]*c.shape[2], c.shape[3], c.shape[4]*c.shape[5]])
             newcores.append(c)
-        thiscores = tn.round_tt(tn.Tensor(newcores), eps=eps).cores
+        thiscores = tn.round_tt(tn.Tensor(newcores), eps=eps, algorithm=algorithm).cores
 
         if n < N-1:
             for m in range(M):  # Cast the vector as a TT-matrix for the next iteration
