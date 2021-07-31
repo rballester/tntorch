@@ -159,7 +159,7 @@ def active_subspace(t):
             M[i, j] = tn.dot(grad[i], grad[j]) / t.numel()
             M[j, i] = M[i, j]
 
-    w, v = torch.symeig(M, eigenvectors=True)
+    w, v = torch.linalg.eigh(M)
     idx = range(t.dim()-1, -1, -1)
     w = w[idx]
     v = v[:, idx]

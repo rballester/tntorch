@@ -12,7 +12,7 @@ def lstsq(b, A):
     else:
         raise RuntimeError('Wrong shape of A')
 
-    q, r = torch.qr(A)
+    q, r = torch.linalg.qr(A)
     if batch:
         return torch.cat([torch.matmul(torch.matmul(r[i].inverse(), q[i].t()), b[i])[None, ...] for i in range(len(q))]).transpose(-1, -2)
     else:
@@ -176,7 +176,7 @@ class Tensor(object):
                     for n in range(N):
                         gram = tn.unfolding(data, n, batch)
                         gram = gram.matmul(gram.transpose(-1, -2))
-                        eigvals, eigvecs = torch.symeig(gram, eigenvectors=True)
+                        eigvals, eigvecs = torch.linalg.eigh(gram)
 
                         # Sort eigenvectors in decreasing importance
                         if batch:
@@ -240,10 +240,10 @@ class Tensor(object):
                         else:
                             if batch:
                                 self.cores[n] = torch.cat(
-                                    [torch.lstsq(unf_khatri_t[i], prod[i])[None, ...] for i in range(batch_size)]
+                                    [torch.linalg.lstsq(prod[i], unf_khatri_t[i])[None, ...] for i in range(batch_size)]
                                 )
                             else:
-                                self.cores[n] = torch.lstsq(unf_khatri_t, prod)
+                                self.cores[n] = torch.linalg.lstsq(prod, unf_khatri_t)
 
                         grams[n] = self.cores[n].transpose(-1, -2).matmul(self.cores[n])
 
@@ -738,7 +738,7 @@ class Tensor(object):
             return self[slicing]
 
         if isinstance(key, torch.Tensor):
-            key = np.array(key.cpu(), dtype=np.int)
+            key = np.array(key.cpu(), dtype=int)
         if isinstance(key, np.ndarray) and key.ndim == 2:
             key = [key[:, col] for col in range(key.shape[1])]
 
@@ -1295,7 +1295,7 @@ class Tensor(object):
 
         if self.Us[mu] is None:
             return
-        Q, R = torch.qr(self.Us[mu])
+        Q, R = torch.linalg.qr(self.Us[mu])
         self.Us[mu] = Q
 
         if self.batch:
@@ -1325,7 +1325,7 @@ class Tensor(object):
 
         assert 0 <= mu < self.dim()-1
         self.factor_orthogonalize(mu)
-        Q, R = torch.qr(tn.left_unfolding(self.cores[mu], batch=self.batch))
+        Q, R = torch.linalg.qr(tn.left_unfolding(self.cores[mu], batch=self.batch))
 
         if self.batch:
             self.cores[mu] = torch.reshape(Q, self.cores[mu].shape[:-1] + (Q.shape[2], ))
@@ -1358,11 +1358,11 @@ class Tensor(object):
         self.factor_orthogonalize(mu)
         # Torch has no rq() decomposition
         if self.batch:
-            Q, L = torch.qr(tn.right_unfolding(self.cores[mu], batch=self.batch).permute(0, 2, 1))
+            Q, L = torch.linalg.qr(tn.right_unfolding(self.cores[mu], batch=self.batch).permute(0, 2, 1))
             L = L.permute(0, 2, 1)
             Q = Q.permute(0, 2, 1)
         else:
-            Q, L = torch.qr(tn.right_unfolding(self.cores[mu], batch=self.batch).permute(1, 0))
+            Q, L = torch.linalg.qr(tn.right_unfolding(self.cores[mu], batch=self.batch).permute(1, 0))
             L = L.permute(1, 0)
             Q = Q.permute(1, 0)
 
@@ -1451,10 +1451,10 @@ class Tensor(object):
 
             # Send non-orthogonality to factor
             if self.batch:
-                Q, R = torch.qr(torch.reshape(self.cores[mu].permute(0, 1, 3, 2), [self.cores[mu].shape[0], -1, self.cores[mu].shape[2]]))
+                Q, R = torch.linalg.qr(torch.reshape(self.cores[mu].permute(0, 1, 3, 2), [self.cores[mu].shape[0], -1, self.cores[mu].shape[2]]))
                 self.cores[mu] = torch.reshape(Q, [self.cores[mu].shape[0], self.cores[mu].shape[1], self.cores[mu].shape[3], -1]).permute(0, 1, 3, 2)
             else:
-                Q, R = torch.qr(torch.reshape(self.cores[mu].permute(0, 2, 1), [-1, self.cores[mu].shape[1]]))
+                Q, R = torch.linalg.qr(torch.reshape(self.cores[mu].permute(0, 2, 1), [-1, self.cores[mu].shape[1]]))
                 self.cores[mu] = torch.reshape(Q, [self.cores[mu].shape[0], self.cores[mu].shape[2], -1]).permute(0, 2, 1)
 
             self.Us[mu] = torch.matmul(self.Us[mu], R.transpose(-1, -2))
