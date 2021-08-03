@@ -1,5 +1,14 @@
 import tntorch as tn
 import torch
+from tntorch.tensor import lstsq
+torch.set_default_dtype(torch.float64)
+
+def test_lstsq():
+    A = torch.rand((5, 6))
+    b = torch.rand((5, 6))
+
+    assert torch.allclose(lstsq(b, A, 'lstsq'), lstsq(b, A, 'qr'))
+    assert torch.norm(lstsq(b, A, 'qr') - lstsq(b, A, 'cvxpylayers', lam=0, eps=1e-8)) < 1e-3
 
 def test_tensor():
     a = torch.rand(10, 5, 5, 5, 5)

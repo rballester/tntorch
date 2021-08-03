@@ -3,20 +3,38 @@ import torch
 import tntorch as tn
 import time
 
-# Note: untill pytorch supports differentiable lstsq
-def lstsq(b, A):
-    if A.dim() == 3:
-        batch = True
-    elif A.dim() == 2:
-        batch = False
-    else:
-        raise RuntimeError('Wrong shape of A')
+# The derivative of lstsq() is not implemented as of PyTorch 1.9.0,
+# so we use cvxpylayer solver
+def lstsq(b, A, method='qr', lam=1e-3, eps=1e-3):
+    if method == 'qr':
+        Q, R = torch.linalg.qr(A.transpose(-1, -2))
+        X = b.transpose(-1, -2) @ torch.linalg.pinv(R) @ Q.transpose(-1, -2)
 
-    q, r = torch.linalg.qr(A)
-    if batch:
-        return torch.cat([torch.matmul(torch.matmul(r[i].inverse(), q[i].t()), b[i])[None, ...] for i in range(len(q))]).transpose(-1, -2)
+        return X
+    elif method == 'cvxpylayers':
+        try:
+            import cvxpy as cp
+        except ModuleNotFoundError:
+            raise ModuleNotFoundError("Selected method requires optional cvxpy package, which can be installed by 'pip install cvxpy'.")
+        try:
+            from cvxpylayers.torch import CvxpyLayer
+        except ModuleNotFoundError:
+            raise ModuleNotFoundError("Selected method requires optional cvxpylayers package, which can be installed by 'pip install cvxpylayers'.")
+
+        Acp = cp.Parameter(A.shape)
+        bcp = cp.Parameter(b.shape)
+        x = cp.Variable((A.shape[-1], b.shape[-1]))
+
+        obj = cp.sum_squares(Acp @ x - bcp) + lam * cp.pnorm(x, p=2)**2
+        prob = cp.Problem(cp.Minimize(obj))
+        prob_th = CvxpyLayer(prob, [Acp, bcp], [x])
+
+        return prob_th(A, b, solver_args={'eps': eps})[0].transpose(-1, -2)
+    elif method == 'lstsq':
+        X = torch.linalg.lstsq(A, b)[0]
+        return X.transpose(-1, -2)
     else:
-        return torch.matmul(torch.matmul(r.inverse(), q.t()), b).transpose(-1, -2)
+        raise ValueError('Wrong value of method parameter, only qr and cvxpylayers are supported')
 
 
 def _full_rank_tt(data, batch=False): # Naive TT formatting, don't even attempt to compress
@@ -105,12 +123,12 @@ class Tensor(object):
         :param verbose: Boolean
         :param batch: Boolean
         :param algorithm: 'svd' (default) or 'eig'. The latter can be faster, but less accurate
-        :param lstsq_algorithm: 'qr' (default) or 'lstsq'. The latter is more accurate but doesn't allow backpropagation
+        :param lstsq_algorithm: 'qr' (default), 'cvxpylayers' or 'lstsq'. The latter is more accurate but doesn't allow backpropagation
 
         :return: a :class:`Tensor`
         """
 
-        assert lstsq_algorithm in ('qr', 'lstsq')
+        assert lstsq_algorithm in ('qr', 'lstsq', 'cvxpylayers')
         self.batch = batch
 
         if isinstance(data, (list, tuple)):
@@ -235,15 +253,7 @@ class Tensor(object):
                         unfolding = tn.unfolding(data, n, batch)
 
                         unf_khatri_t = unfolding.matmul(khatri).transpose(-1, -2)
-                        if lstsq_algorithm == 'qr':
-                            self.cores[n] = lstsq(unf_khatri_t, prod)
-                        else:
-                            if batch:
-                                self.cores[n] = torch.cat(
-                                    [torch.linalg.lstsq(prod[i], unf_khatri_t[i])[None, ...] for i in range(batch_size)]
-                                )
-                            else:
-                                self.cores[n] = torch.linalg.lstsq(prod, unf_khatri_t)
+                        self.cores[n] = lstsq(unf_khatri_t, prod, lstsq_algorithm)
 
                         grams[n] = self.cores[n].transpose(-1, -2).matmul(self.cores[n])
 
