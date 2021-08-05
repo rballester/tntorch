@@ -78,7 +78,6 @@ def truncated_svd(M, delta=None, eps=None, rmax=None, left_ortho=True, algorithm
 
     if batch:
         batch_size = M.shape[0]
-        device = M.device
 
     if algorithm == 'svd':
         start = time.time()

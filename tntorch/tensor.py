@@ -42,43 +42,44 @@ def _full_rank_tt(data, batch=False): # Naive TT formatting, don't even attempt 
     shape = data.shape
     result = []
 
-    if batch:
-        N = data.dim() - 1
-    else:
-        N = data.dim()
-
     data = data if isinstance(data, torch.Tensor) else torch.tensor(data)
     device = data.device
 
     if batch:
-        resh = torch.reshape(data, [shape[0], shape[1], -1])
+        N = data.dim() - 1
+        resh = data.reshape([*shape[:2], -1])
+        d1 = 1
+        d2 = 2
     else:
-        resh = torch.reshape(data, [shape[0], -1])
+        N = data.dim()
+        resh = data.reshape([shape[0], -1])
+        d1 = 0
+        d2 = 1
 
     for n in range(1, N):
-        if batch:
-            if resh.shape[1] < resh.shape[2]:
-                I = torch.cat([torch.eye(resh.shape[1])[None, ...] for _ in range(resh.shape[0])]).to(device)
-                result.append(torch.reshape(I, [resh.shape[0], resh.shape[1] // shape[n], shape[n], resh.shape[1]]))
+        if resh.shape[d1] < resh.shape[d2]:
+            if batch:
+                I = torch.eye(resh.shape[1]).repeat(resh.shape[0], 1, 1)
+                result.append(I.reshape([resh.shape[0], resh.shape[1] // shape[n], shape[n], resh.shape[1]]))
                 resh = torch.reshape(resh, (resh.shape[0], resh.shape[1] * shape[n + 1], resh.shape[2] // shape[n + 1]))
             else:
-                result.append(torch.reshape(resh, [resh.shape[0], resh.shape[1] // shape[n], shape[n], resh.shape[2]]))
-                I = torch.cat([torch.eye(resh.shape[2])[None, ...] for _ in range(resh.shape[0])]).to(device)
-                resh = torch.reshape(I, (resh.shape[0], resh.shape[2] * shape[n + 1], resh.shape[2] // shape[n + 1]))
-        else:
-            if resh.shape[0] < resh.shape[1]:
-                result.append(torch.reshape(torch.eye(resh.shape[0]).to(device), [resh.shape[0] // shape[n - 1],
-                                                                           shape[n - 1], resh.shape[0]]))
+                I = torch.eye(resh.shape[0])
+                result.append(I.reshape([resh.shape[0] // shape[n - 1], shape[n - 1], resh.shape[0]]).to(device))
                 resh = torch.reshape(resh, (resh.shape[0] * shape[n], resh.shape[1] // shape[n]))
+        else:
+            if batch:
+                result.append(resh.reshape([resh.shape[0], resh.shape[1] // shape[n], shape[n], resh.shape[2]]))
+                I = torch.eye(resh.shape[2]).repeat(resh.shape[0], 1, 1)
+                resh = I.reshape((resh.shape[0], resh.shape[2] * shape[n + 1], resh.shape[2] // shape[n + 1]))
             else:
-                result.append(torch.reshape(resh, [resh.shape[0] // shape[n - 1],
-                                                       shape[n - 1], resh.shape[1]]))
-                resh = torch.reshape(torch.eye(resh.shape[1]).to(device), (resh.shape[1] * shape[n], resh.shape[1] // shape[n]))
+                result.append(resh.reshape([resh.shape[0] // shape[n - 1], shape[n - 1], resh.shape[1]]))
+                I = torch.eye(resh.shape[1])
+                resh = I.reshape(resh.shape[1] * shape[n], resh.shape[1] // shape[n]).to(device)
 
     if batch:
-        result.append(torch.reshape(resh, [resh.shape[0], resh.shape[1] // shape[N], shape[N], 1]))
+        result.append(resh.reshape([resh.shape[0], resh.shape[1] // shape[N], shape[N], 1]))
     else:
-        result.append(torch.reshape(resh, [resh.shape[0] // shape[N - 1], shape[N - 1], 1]))
+        result.append(resh.reshape([resh.shape[0] // shape[N - 1], shape[N - 1], 1]))
     return result
 
 
@@ -159,11 +160,11 @@ class Tensor(object):
                 raise ValueError('A tntorch.Tensor may be built either from a list of cores, one NumPy ndarray, or one PyTorch tensor')
             N = data.dim()
         if Us is None:
-            Us = [None]*N
+            Us = [None] * N
         self.Us = Us
         if isinstance(data, torch.Tensor):
             if data.dim() == 0:
-                data = data*torch.ones(1, device=device)
+                data = data * torch.ones(1, device=device)
             if ranks_cp is not None:  # Compute CP from full tensor: CP-ALS
                 if ranks_tt is not None:
                     raise ValueError('ALS for CP-TT is not yet supported')
@@ -171,7 +172,42 @@ class Tensor(object):
                 start = time.time()
                 if verbose:
                     print('ALS', end='')
-                if ranks_tucker is not None:  # CP on Tucker's core
+                if ranks_tucker is None: # We initialize CP factor to HOSVD
+                    if batch:
+                        data_norms = torch.sqrt(torch.sum(data**2, dim=list(range(1, data.dim()))))
+                        N = data.dim() - 1
+                    else:
+                        data_norm = tn.norm(data)
+                        N = data.dim()
+
+                    self.cores = []
+                    for n in range(N):
+                        gram = tn.unfolding(data, n, batch)
+                        gram = gram @ gram.transpose(-1, -2)
+                        eigvals, eigvecs = torch.linalg.eigh(gram)
+
+                        # Sort eigenvectors in decreasing importance
+                        if batch:
+                            assert len(eigvals[0]) == len(eigvals[-1])
+                            reverse = torch.arange(len(eigvals[0]) - 1, -1, -1)
+                            idx = torch.argsort(eigvals)[:, reverse[:ranks_cp]]
+                            self.cores.append(eigvecs[[[i] for i in range(len(idx))], :, idx].transpose(-1, -2))
+                            if self.cores[-1].shape[2] < ranks_cp:  # Complete with random entries
+                                self.cores[-1] = torch.cat((
+                                    self.cores[-1],
+                                    torch.randn(
+                                        self.cores[-1].shape[0],
+                                        self.cores[-1].shape[1],
+                                        ranks_cp-self.cores[-1].shape[2],
+                                        device=device
+                                    )), dim=2)
+                        else:
+                            reverse = torch.arange(len(eigvals)-1, -1, -1)
+                            idx = torch.argsort(eigvals)[reverse[:ranks_cp]]
+                            self.cores.append(eigvecs[:, idx])
+                            if self.cores[-1].shape[1] < ranks_cp:  # Complete with random entries
+                                self.cores[-1] = torch.cat((self.cores[-1], torch.randn(self.cores[-1].shape[0], ranks_cp-self.cores[-1].shape[1], device=device)), dim=1)
+                else: # CP on Tucker's core
                     self.cores = _full_rank_tt(data, batch)
                     self.round_tucker(rmax=ranks_tucker, algorithm=algorithm)
                     data = self.tucker_core()
@@ -182,52 +218,14 @@ class Tensor(object):
                     else:
                         data_norm = tn.norm(data)
                         self.cores = [torch.randn(sh, ranks_cp, device=device) for sh in data.shape]
-                else: # We initialize CP factor to HOSVD
-                    if batch:
-                        data_norms = torch.sqrt(torch.sum(data**2, dim=list(range(1, data.dim()))))
-                        N = data.dim() - 1
-                    else:
-                        data_norm = torch.norm(data)
-                        N = data.dim()
-
-                    self.cores = []
-                    for n in range(N):
-                        gram = tn.unfolding(data, n, batch)
-                        gram = gram.matmul(gram.transpose(-1, -2))
-                        eigvals, eigvecs = torch.linalg.eigh(gram)
-
-                        # Sort eigenvectors in decreasing importance
-                        if batch:
-                            reverse = torch.arange(len(eigvals[0])-1, -1, -1)
-                            idx = torch.argsort(eigvals)[:, reverse[:ranks_cp]]
-                            self.cores.append(eigvecs[[[i] for i in range(len(idx))], :, idx].transpose(-1, -2))
-                            if self.cores[-1].shape[2] < ranks_cp:  # Complete with random entries
-                                self.cores[-1] = torch.cat(
-                                    (
-                                        self.cores[-1],
-                                        torch.randn(
-                                            self.cores[-1].shape[0],
-                                            self.cores[-1].shape[1],
-                                            ranks_cp-self.cores[-1].shape[2],
-                                            device=device
-                                        )
-                                    ),
-                                    dim=2
-                                )
-                        else:
-                            reverse = torch.arange(len(eigvals)-1, -1, -1)
-                            idx = torch.argsort(eigvals)[reverse[:ranks_cp]]
-                            self.cores.append(eigvecs[:, idx])
-                            if self.cores[-1].shape[1] < ranks_cp:  # Complete with random entries
-                                self.cores[-1] = torch.cat((self.cores[-1], torch.randn(self.cores[-1].shape[0], ranks_cp-self.cores[-1].shape[1], device=device)), dim=1)
 
                 if verbose:
                     print(' -- initialization time =', time.time() - start)
 
-                grams = [None] + [self.cores[n].transpose(-1, -2).matmul(self.cores[n]) for n in range(1, self.dim())]
+                grams = [None] + [self.cores[n].transpose(-1, -2) @ self.cores[n] for n in range(1, self.dim())]
 
                 if batch:
-                    assert all([len(self.cores[i]) == len(self.cores[i + 1]) for i in range(len(self.cores) - 1)])
+                    assert all([len(self.cores[i]) == len(self.cores[i + 1]) for i in range(self.dim() - 1)])
                     batch_size = len(self.cores[0])
 
                 errors = []
@@ -252,10 +250,9 @@ class Tensor(object):
 
                         unfolding = tn.unfolding(data, n, batch)
 
-                        unf_khatri_t = unfolding.matmul(khatri).transpose(-1, -2)
+                        unf_khatri_t = (unfolding @ khatri).transpose(-1, -2)
                         self.cores[n] = lstsq(unf_khatri_t, prod, lstsq_algorithm)
-
-                        grams[n] = self.cores[n].transpose(-1, -2).matmul(self.cores[n])
+                        grams[n] = self.cores[n].transpose(-1, -2) @ self.cores[n]
 
                     if batch:
                         err = data - tn.Tensor(self.cores, batch=self.batch).torch()
@@ -278,7 +275,7 @@ class Tensor(object):
                         break
             else:
                 self.cores = _full_rank_tt(data, batch)
-                self.Us = [None] * (len(self.cores))
+                self.Us = [None] * self.dim()
 
                 if ranks_tucker is not None:
                     self.round_tucker(rmax=ranks_tucker, algorithm=algorithm)
@@ -1116,7 +1113,6 @@ class Tensor(object):
 
                 add_core[..., key[i], :] += value.cores[i]
             add_cores.append(add_core)
-        # print(tn.Tensor(subtract_cores), tn.Tensor(add_cores))
         result = self - tn.Tensor(subtract_cores, batch=self.batch) + tn.Tensor(add_cores, batch=self.batch)
         self.__init__(result.cores, result.Us, self.idxs)
 
@@ -1236,7 +1232,7 @@ class Tensor(object):
         :return: a tntorch tensor
         """
 
-        for i in range(len(self.cores)):
+        for i in range(self.dim()):
             self.cores[i] = self.cores[i].to(device)
 
         for i in range(len(self.Us)):
@@ -1345,9 +1341,9 @@ class Tensor(object):
         rightcoreR = tn.right_unfolding(self.cores[mu+1], batch=self.batch)
 
         if self.batch:
-            self.cores[mu+1] = torch.reshape(torch.matmul(R, rightcoreR), (R.shape[0], R.shape[1]) + self.cores[mu+1].shape[2:])
+            self.cores[mu+1] = (R @ rightcoreR).reshape((R.shape[0], R.shape[1]) + self.cores[mu+1].shape[2:])
         else:
-            self.cores[mu+1] = torch.reshape(torch.mm(R, rightcoreR), (R.shape[0], ) + self.cores[mu+1].shape[1:])
+            self.cores[mu+1] = (R @ rightcoreR).reshape((R.shape[0], ) + self.cores[mu+1].shape[1:])
         return R
 
     def right_orthogonalize(self, mu):
@@ -1383,9 +1379,9 @@ class Tensor(object):
 
         leftcoreL = tn.left_unfolding(self.cores[mu-1], batch=self.batch)
         if self.batch:
-            self.cores[mu-1] = torch.reshape(torch.matmul(leftcoreL, L), self.cores[mu-1].shape[:-1] + (L.shape[2], ))
+            self.cores[mu-1] = (leftcoreL @ L).reshape(self.cores[mu-1].shape[:-1] + (L.shape[2], ))
         else:
-            self.cores[mu-1] = torch.reshape(torch.mm(leftcoreL, L), self.cores[mu-1].shape[:-1] + (L.shape[1], ))
+            self.cores[mu-1] = (leftcoreL @ L).reshape(self.cores[mu-1].shape[:-1] + (L.shape[1], ))
         return L
 
     def orthogonalize(self, mu):
@@ -1467,7 +1463,7 @@ class Tensor(object):
                 Q, R = torch.linalg.qr(torch.reshape(self.cores[mu].permute(0, 2, 1), [-1, self.cores[mu].shape[1]]))
                 self.cores[mu] = torch.reshape(Q, [self.cores[mu].shape[0], self.cores[mu].shape[2], -1]).permute(0, 2, 1)
 
-            self.Us[mu] = torch.matmul(self.Us[mu], R.transpose(-1, -2))
+            self.Us[mu] = self.Us[mu] @ R.transpose(-1, -2)
 
             # Split factor according to error budget
             left, right = tn.truncated_svd(self.Us[mu], eps=eps/np.sqrt(len(dim)), rmax=rmax[mu],
