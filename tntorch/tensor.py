@@ -462,6 +462,20 @@ class Tensor(object):
             result = self.clone()
             result.cores[0].data *= other
             return result
+
+        if self.batch:
+            m = 3
+            d = 1
+            idx1 = 'gijk,gabc->giajbkc'
+            idx2 = 'bij,bik->bijk'
+            idx3 = 'bijk,baj->biak'
+        else:
+            idx1 = 'ijk,abc->iajbkc'
+            idx2 = 'ij,ik->ijk'
+            idx3 = 'ijk,aj->iak'
+            m = 2
+            d = 0
+
         this, other = _broadcast(self, other)
         cores = []
         Us = []
@@ -469,39 +483,35 @@ class Tensor(object):
             core1 = this.cores[n]
             core2 = other.cores[n]
             # CP + CP -> CP, other combinations -> TT
-            if (core1.dim() == 2 and core2.dim() == 2 and not self.batch) or (core1.dim() == 3 and core2.dim() == 3 and self.batch):
-                core1 = core1[None, ...]
-                core2 = core2[None, ...]
+            if core1.dim() == m and core2.dim() == m:
+                if self.batch:
+                    core1 = core1[:, None]
+                    core2 = core2[:, None]
+                else:
+                    core1 = core1[None]
+                    core2 = core2[None]
             else:
                 core1 = this._cp_to_tt(core1)
                 core2 = this._cp_to_tt(core2)
 
             # We do the product core along 3 axes, unless it would blow up
             if self.batch:
-                d1 = this.cores[n].shape[2]*other.cores[n].shape[2]
-                d2 = 3
-                idx1 = 'gijk,gabc->giajbkc'
-                idx2 = 'bij,bik->bijk'
-                idx3 = 'bijk,baj->biak'
+                d1 = this.cores[n].shape[2] * other.cores[n].shape[2]
+                
                 shape1 = (
-                    core1.shape[0]*core2.shape[0],
-                    core1.shape[1]*core2.shape[1],
-                    core1.shape[2]*core2.shape[2],
-                    core1.shape[3]*core2.shape[3]
-                )
+                    core1.shape[0],
+                    core1.shape[1] * core2.shape[1],
+                    core1.shape[2] * core2.shape[2],
+                    core1.shape[3] * core2.shape[3])
                 if this.Us[n] is not None:
                     shape2 = (this.Us[n].shape[0], this.Us[n].shape[1], -1)
             else:
-                d1 = this.cores[n].shape[1]*other.cores[n].shape[1]
-                d2 = 2
-                idx1 = 'ijk,abc->iajbkc'
-                idx2 = 'ij,ik->ijk'
-                idx3 = 'ijk,aj->iak'
+                d1 = this.cores[n].shape[1] * other.cores[n].shape[1]
+                
                 shape1 = (
-                    core1.shape[0]*core2.shape[0],
-                    core1.shape[1]*core2.shape[1],
-                    core1.shape[2]*core2.shape[2]
-                )
+                    core1.shape[0] * core2.shape[0],
+                    core1.shape[1] * core2.shape[1],
+                    core1.shape[2] * core2.shape[2])
                 if this.Us[n] is not None:
                     shape2 = (this.Us[n].shape[0], -1)
 
@@ -516,11 +526,11 @@ class Tensor(object):
                 cores.append(_core_kron(core1, core2, self.batch))
                 Us.append(None)
 
-            if this.cores[n].dim() == d2 and other.cores[n].dim() == d2:
+            if this.cores[n].dim() == m and other.cores[n].dim() == m:
                 if self.batch:
-                    cores[-1] = cores[-1][:, 0, :, :]
+                    cores[-1] = cores[-1][:, 0]
                 else:
-                    cores[-1] = cores[-1][0, :, :]
+                    cores[-1] = cores[-1][0]
         return tn.Tensor(cores, Us=Us, batch=self.batch)
 
     def __truediv__(self, other):

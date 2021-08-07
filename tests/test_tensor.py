@@ -182,3 +182,64 @@ def test_sum():
     b = tn.rand((10, 5, 6), ranks_tucker=3, batch=True)
 
     assert torch.allclose((a + b).torch(), a.torch() + b.torch())
+
+
+def test_mul():
+    a = tn.rand((10, 5, 6), ranks_tt=3)
+    b = tn.rand((10, 5, 6), ranks_tt=3)
+
+    assert torch.allclose((a * b).torch(), a.torch() * b.torch())
+
+    a = tn.rand((10, 5, 6), ranks_cp=3)
+    b = tn.rand((10, 5, 6), ranks_cp=3)
+
+    assert torch.allclose((a * b).torch(), a.torch() * b.torch())
+
+    a = tn.rand((10, 5, 6), ranks_tucker=3)
+    b = tn.rand((10, 5, 6), ranks_tucker=3)
+
+    assert torch.allclose((a * b).torch(), a.torch() * b.torch())
+
+    a = tn.rand((10, 5, 6), ranks_tucker=3, ranks_cp=3)
+    b = tn.rand((10, 5, 6), ranks_tucker=3, ranks_cp=3)
+
+    assert torch.allclose((a * b).torch(), a.torch() * b.torch())
+
+    a = tn.rand((10, 5, 6), ranks_tucker=3, ranks_tt=3)
+    b = tn.rand((10, 5, 6), ranks_tucker=3, ranks_tt=3)
+
+    assert torch.allclose((a * b).torch(), a.torch() * b.torch())
+
+    a = tn.rand((10, 5, 6), ranks_tt=3)
+    b = tn.rand((10, 5, 6), ranks_tucker=3)
+
+    assert torch.allclose((a * b).torch(), a.torch() * b.torch())
+
+    a = tn.rand((10, 5, 6), ranks_tt=3)
+    b = tn.rand((10, 5, 6), ranks_cp=3)
+
+    assert torch.allclose((a * b).torch(), a.torch() * b.torch())
+
+    a = tn.rand((10, 5, 6), ranks_tucker=3)
+    b = tn.rand((10, 5, 6), ranks_cp=3)
+
+    assert torch.allclose((a * b).torch(), a.torch() * b.torch())
+
+    with pytest.raises(ValueError) as exc_info:
+        a = tn.rand((10, 5, 6), ranks_cp=3, ranks_tt=3)
+    assert exc_info.value.args[0] == 'The ranks_tt and ranks_cp provided are incompatible'
+
+    a = tn.rand((10, 5, 6), ranks_tt=3, batch=True)
+    b = tn.rand((10, 5, 6), ranks_tt=3, batch=True)
+
+    assert torch.allclose((a * b).torch(), a.torch() * b.torch())
+
+    a = tn.rand((10, 5, 6), ranks_cp=3, batch=True)
+    b = tn.rand((10, 5, 6), ranks_cp=3, batch=True)
+
+    assert torch.allclose((a * b).torch(), a.torch() * b.torch())
+    
+    a = tn.rand((10, 5, 6), ranks_tucker=3, batch=True)
+    b = tn.rand((10, 5, 6), ranks_tucker=3, batch=True)
+
+    assert torch.allclose((a * b).torch(), a.torch() * b.torch())
