@@ -1,4 +1,5 @@
 import tntorch as tn
+import pytest
 import torch
 from tntorch.tensor import lstsq
 torch.set_default_dtype(torch.float64)
@@ -6,21 +7,21 @@ torch.set_default_dtype(torch.float64)
 torch.manual_seed(1)
 
 def test_lstsq():
-    A = torch.rand((5, 6))
+    a = torch.rand((5, 6))
     b = torch.rand((5, 6))
 
-    assert torch.allclose(lstsq(b, A, 'lstsq'), lstsq(b, A, 'qr'))
-    assert torch.norm(lstsq(b, A, 'qr') - lstsq(b, A, 'cvxpylayers', lam=0, eps=1e-8)) < 1e-3
+    assert torch.allclose(lstsq(b, a, 'lstsq'), lstsq(b, a, 'qr'))
+    assert torch.norm(lstsq(b, a, 'qr') - lstsq(b, a, 'cvxpylayers', lam=0, eps=1e-8)) < 1e-3
 
-    A = torch.rand((10, 5, 6))
+    a = torch.rand((10, 5, 6))
     b = torch.rand((10, 5, 6))
 
-    assert torch.allclose(lstsq(b, A, 'lstsq'), lstsq(b, A, 'qr'))
+    assert torch.allclose(lstsq(b, a, 'lstsq'), lstsq(b, a, 'qr'))
 
-    A = torch.rand((10, 5, 6))
+    a = torch.rand((10, 5, 6))
     b = torch.rand((10, 5, 7))
 
-    assert torch.allclose(lstsq(b, A, 'lstsq'), lstsq(b, A, 'qr'))
+    assert torch.allclose(lstsq(b, a, 'lstsq'), lstsq(b, a, 'qr'))
 
 def test_tensor():
     a = torch.rand(10, 5, 5, 5, 5)
@@ -67,9 +68,10 @@ def test_cp_tensor():
         c = tn.Tensor(a[i], ranks_cp=3, batch=False)
 
         for j, core in enumerate(c.cores):
-            assert torch.norm(core - b.cores[j][i, ...]) < 1e1  # It seems that the problem is accumulating error via lstsq
+            assert torch.norm(core - b.cores[j][i, ...]) < 1e1
 
-        assert torch.norm(c.torch() - b.torch()[i]) < 1e1  # It seems that the problem is accumulating error via lstsq
+        print(torch.norm(c.torch() - b.torch()[i]))
+        assert torch.norm(c.torch() - b.torch()[i]) < 1e1
 
 
 def test_tucker_tensor():
@@ -92,9 +94,6 @@ def test_tucker_cp_tensor():
     for i in range(len(a)):
         c = tn.Tensor(a[i], ranks_tucker=3, ranks_cp=4, batch=False)
 
-        for j, core in enumerate(c.cores):
-            assert torch.norm(core - b.cores[j][i, ...]) < 1e1
-
         assert torch.norm(c.torch() - b.torch()[i]) < 1e1
 
 
@@ -105,7 +104,81 @@ def test_tt_tensor_eig():
     for i in range(len(a)):
         c = tn.Tensor(a[i], ranks_tucker=3, batch=False, algorithm='eig')
 
-        for j, core in enumerate(c.cores):
-            assert torch.norm(core - b.cores[j][i, ...])  < 1e-6
+        assert torch.allclose(c.torch(), b.torch()[i])
 
-        assert torch.norm(c.torch() - b.torch()[i]) < 1e-6
+    a = torch.rand(10, 5, 5, 5, 5)
+    b = tn.Tensor(a, ranks_tt=3, batch=True, algorithm='eig')
+
+    for i in range(len(a)):
+        c = tn.Tensor(a[i], ranks_tt=3, batch=False, algorithm='eig')
+
+        assert torch.allclose(c.torch(), b.torch()[i])
+
+    a = torch.rand(10, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2)
+    b = tn.Tensor(a, ranks_tt=3, batch=True)
+
+    for i in range(len(a)):
+        c = tn.Tensor(a[i], ranks_tt=3, batch=False, algorithm='eig')
+
+        assert torch.allclose(c.torch(), b.torch()[i])
+
+
+def test_sum():
+    a = tn.rand((10, 5, 6), ranks_tt=3)
+    b = tn.rand((10, 5, 6), ranks_tt=3)
+
+    assert torch.allclose((a + b).torch(), a.torch() + b.torch())
+
+    a = tn.rand((10, 5, 6), ranks_cp=3)
+    b = tn.rand((10, 5, 6), ranks_cp=3)
+
+    assert torch.allclose((a + b).torch(), a.torch() + b.torch())
+
+    a = tn.rand((10, 5, 6), ranks_tucker=3)
+    b = tn.rand((10, 5, 6), ranks_tucker=3)
+
+    assert torch.allclose((a + b).torch(), a.torch() + b.torch())
+
+    a = tn.rand((10, 5, 6), ranks_tucker=3, ranks_cp=3)
+    b = tn.rand((10, 5, 6), ranks_tucker=3, ranks_cp=3)
+
+    assert torch.allclose((a + b).torch(), a.torch() + b.torch())
+
+    a = tn.rand((10, 5, 6), ranks_tucker=3, ranks_tt=3)
+    b = tn.rand((10, 5, 6), ranks_tucker=3, ranks_tt=3)
+
+    assert torch.allclose((a + b).torch(), a.torch() + b.torch())
+
+    a = tn.rand((10, 5, 6), ranks_tt=3)
+    b = tn.rand((10, 5, 6), ranks_tucker=3)
+
+    assert torch.allclose((a + b).torch(), a.torch() + b.torch())
+
+    a = tn.rand((10, 5, 6), ranks_tt=3)
+    b = tn.rand((10, 5, 6), ranks_cp=3)
+
+    assert torch.allclose((a + b).torch(), a.torch() + b.torch())
+
+    a = tn.rand((10, 5, 6), ranks_tucker=3)
+    b = tn.rand((10, 5, 6), ranks_cp=3)
+
+    assert torch.allclose((a + b).torch(), a.torch() + b.torch())
+
+    with pytest.raises(ValueError) as exc_info:
+        a = tn.rand((10, 5, 6), ranks_cp=3, ranks_tt=3)
+    assert exc_info.value.args[0] == 'The ranks_tt and ranks_cp provided are incompatible'
+
+    a = tn.rand((10, 5, 6), ranks_tt=3, batch=True)
+    b = tn.rand((10, 5, 6), ranks_tt=3, batch=True)
+
+    assert torch.allclose((a + b).torch(), a.torch() + b.torch())
+
+    a = tn.rand((10, 5, 6), ranks_cp=3, batch=True)
+    b = tn.rand((10, 5, 6), ranks_cp=3, batch=True)
+
+    assert torch.allclose((a + b).torch(), a.torch() + b.torch())
+    
+    a = tn.rand((10, 5, 6), ranks_tucker=3, batch=True)
+    b = tn.rand((10, 5, 6), ranks_tucker=3, batch=True)
+
+    assert torch.allclose((a + b).torch(), a.torch() + b.torch())

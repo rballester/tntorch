@@ -2,10 +2,17 @@ import numpy as np
 import torch
 import tntorch as tn
 import time
+from typing import Any, Iterable, Optional, Union
 
 # The derivative of lstsq() is not implemented as of PyTorch 1.9.0,
 # so we use cvxpylayer solver
-def lstsq(b, A, method='qr', lam=1e-3, eps=1e-3):
+def lstsq(
+    b: torch.Tensor,
+    A: torch.Tensor,
+    method: Optional[str] = 'lstsq',
+    lam: Optional[float] = 1e-3,
+    eps: Optional[float] = 1e-3):
+
     if method == 'qr':
         Q, R = torch.linalg.qr(A.transpose(-1, -2))
         X = b.transpose(-1, -2) @ torch.linalg.pinv(R) @ Q.transpose(-1, -2)
@@ -37,7 +44,10 @@ def lstsq(b, A, method='qr', lam=1e-3, eps=1e-3):
         raise ValueError('Wrong value of method parameter, only qr and cvxpylayers are supported')
 
 
-def _full_rank_tt(data, batch=False): # Naive TT formatting, don't even attempt to compress
+def _full_rank_tt(
+    data: Union[torch.Tensor, Any],
+    batch: Optional[bool] = False): # Naive TT formatting, don't even attempt to compress
+
     data = data.to(torch.get_default_dtype())
     shape = data.shape
     result = []
@@ -96,10 +106,23 @@ class Tensor(object):
     - Size :math:`S_n \\times R_n` (CP-Tucker core), accompanied by an :math:`I_n \\times S_n` factor matrix
     """
 
-    def __init__(self, data, Us=None, idxs=None, device=None, requires_grad=None,
-                 ranks_cp=None, ranks_tucker=None, ranks_tt=None, eps=None,
-                 max_iter=25, tol=1e-4, verbose=False, batch=False,
-                 algorithm='svd', lstsq_algorithm='qr'):
+    def __init__(
+        self,
+        data: Union[torch.Tensor, Iterable[torch.Tensor]],
+        Us: Optional[Union[torch.Tensor, Any]] = None,
+        idxs: Optional[Any] = None,
+        device: Optional[Any] = None,
+        requires_grad: Optional[bool] = None,
+        ranks_cp: Optional[Iterable[int]] = None,
+        ranks_tucker: Optional[Iterable[int]] = None,
+        ranks_tt: Optional[Iterable[int]] = None,
+        eps: Optional[float] = None,
+        max_iter: Optional[int] = 25,
+        tol: Optional[float] = 1e-4,
+        verbose: Optional[bool] = False,
+        batch: Optional[bool] = False,
+        algorithm: Optional[str] = 'svd',
+        lstsq_algorithm: Optional[str] = 'qr'):
 
         """
         The constructor can either:
@@ -317,7 +340,16 @@ class Tensor(object):
     Arithmetic operations
     """
 
-    def __add__(self, other):
+    def __add__(
+        self,
+        other: Union[Any, torch.Tensor]):
+
+        if self.batch:
+            assert self.shape[0] == other.shape[0], f'Batch dim must match, got {self.shape[0]} and {other.shape[0]}'
+        
+        if self.batch != other.batch:
+            raise ValueError('Tensors with the same batch mode are supported')
+
         if not isinstance(other, Tensor):
             factor = other
 
@@ -327,13 +359,18 @@ class Tensor(object):
                 other = Tensor([torch.ones([1, self.shape[n], 1]) for n in range(self.dim())])
 
             other.cores[0].data *= factor
+
         if self.dim() == 1: # Special case
             return Tensor([self.decompress_tucker_factors().cores[0] + other.decompress_tucker_factors().cores[0]])
 
         if self.batch:
             idxs = 'bijk,baj->biak'
+            m = 3
+            d = 1
         else:
             idxs = 'ijk,aj->iak'
+            m = 2
+            d = 0
 
         this, other = _broadcast(self, other)
         cores = []
@@ -343,9 +380,13 @@ class Tensor(object):
             core2 = other.cores[n]
 
             # CP + CP -> CP, other combinations -> TT
-            if (core1.dim() == 3 and core2.dim() == 4 and self.batch) or (core1.dim() == 2 and core2.dim() == 2 and not self.batch):
-                core1 = core1[None, ...]
-                core2 = core2[None, ...]
+            if core1.dim() == m and core2.dim() == m:
+                if self.batch:
+                    core1 = core1[:, None]
+                    core2 = core2[:, None]
+                else:
+                    core1 = core1[None]
+                    core2 = core2[None]
             else:
                 core1 = self._cp_to_tt(core1)
                 core2 = self._cp_to_tt(core2)
@@ -353,14 +394,14 @@ class Tensor(object):
             if this.Us[n] is not None and other.Us[n] is not None:
                 if self.batch:
                     slice1 = torch.cat([core1, torch.zeros(core2.shape[0], core1.shape[1], core1.shape[2], core1.shape[3])], dim=1)
-                    slice1 = torch.cat([slice1, torch.zeros(core1.shape[0], core1.shape[1]+core2.shape[1], core1.shape[2], core2.shape[3])], dim=3)
+                    slice1 = torch.cat([slice1, torch.zeros(core1.shape[0], core1.shape[1] + core2.shape[1], core1.shape[2], core2.shape[3])], dim=3)
                     slice2 = torch.cat([torch.zeros(core1.shape[0], core1.shape[1], core2.shape[2], core2.shape[3]), core2], dim=1)
                     slice2 = torch.cat([torch.zeros(core1.shape[0], core1.shape[1]+core2.shape[1], core2.shape[2], core1.shape[3]), slice2], dim=3)
                     c = torch.cat([slice1, slice2], dim=2)
                     Us.append(torch.cat((self.Us[n], other.Us[n]), dim=2))
                 else:
                     slice1 = torch.cat([core1, torch.zeros([core2.shape[0], core1.shape[1], core1.shape[2]])], dim=0)
-                    slice1 = torch.cat([slice1, torch.zeros(core1.shape[0]+core2.shape[0], core1.shape[1], core2.shape[2])], dim=2)
+                    slice1 = torch.cat([slice1, torch.zeros(core1.shape[0] + core2.shape[0], core1.shape[1], core2.shape[2])], dim=2)
                     slice2 = torch.cat([torch.zeros([core1.shape[0], core2.shape[1], core2.shape[2]]), core2], dim=0)
                     slice2 = torch.cat([torch.zeros(core1.shape[0]+core2.shape[0], core2.shape[1], core1.shape[2]), slice2], dim=2)
                     c = torch.cat([slice1, slice2], dim=1)
@@ -368,46 +409,39 @@ class Tensor(object):
 
                 cores.append(c)
                 continue
+
             if this.Us[n] is not None:
                 core1 = torch.einsum(idxs, (core1, self.Us[n]))
             if other.Us[n] is not None:
                 core2 = torch.einsum(idxs, (core2, other.Us[n]))
 
             if self.batch:
-                column1 = torch.cat([core1, torch.zeros([core2.shape[0], core2.shape[1], this.shape[n], core1.shape[3]], device=core1.device)], dim=1)
-                column2 = torch.cat([torch.zeros([core1.shape[0], core1.shape[1], this.shape[n], core2.shape[3]], device=core2.device), core2], dim=1)
-                c = torch.cat([column1, column2], dim=3)
+                c1_st = torch.zeros([core2.shape[0], core2.shape[1], this.shape[n + 1], core1.shape[3]], device=core1.device)
+                c2_st = torch.zeros([core1.shape[0], core1.shape[1], this.shape[n + 1], core2.shape[3]], device=core2.device)
             else:
-                column1 = torch.cat([core1, torch.zeros([core2.shape[0], this.shape[n], core1.shape[2]], device=core1.device)], dim=0)
-                column2 = torch.cat([torch.zeros([core1.shape[0], this.shape[n], core2.shape[2]], device=core2.device), core2], dim=0)
-                c = torch.cat([column1, column2], dim=2)
+                c1_st = torch.zeros([core2.shape[0], this.shape[n], core1.shape[2]], device=core1.device)
+                c2_st = torch.zeros([core1.shape[0], this.shape[n], core2.shape[2]], device=core2.device)
+
+
+            column1 = torch.cat([core1, c1_st], dim=d)
+            column2 = torch.cat([c2_st, core2], dim=d)
+            c = torch.cat([column1, column2], dim=m)
             cores.append(c)
             Us.append(None)
 
         # First core should have first size 1 (if it's TT)
-        if self.batch:
-            if not (this.cores[0].dim() == 3 and other.cores[0].dim() == 3):
-                cores[0] = torch.sum(cores[0], dim=1, keepdim=True)
-            # Similarly for the last core and last size
-            if not (this.cores[-1].dim() == 3 and other.cores[-1].dim() == 3):
-                cores[-1] = torch.sum(cores[-1], dim=3, keepdim=True)
-        else:
-            if not (this.cores[0].dim() == 2 and other.cores[0].dim() == 2):
-                cores[0] = torch.sum(cores[0], dim=0, keepdim=True)
-            # Similarly for the last core and last size
-            if not (this.cores[-1].dim() == 2 and other.cores[-1].dim() == 2):
-                cores[-1] = torch.sum(cores[-1], dim=2, keepdim=True)
+        if not (this.cores[0].dim() == m and other.cores[0].dim() == m):
+            cores[0] = cores[0].sum(dim=d, keepdim=True)
+        # Similarly for the last core and last size
+        if not (this.cores[-1].dim() == m and other.cores[-1].dim() == m):
+            cores[-1] = cores[-1].sum(dim=m, keepdim=True)
 
         # Set up cores that should be CP cores
         for n in range(0, this.dim()):
-            if self.batch:
-                if this.cores[n].dim() == 3 and other.cores[n].dim() == 3:
-                    cores[n] = torch.sum(cores[n], dim=1, keepdim=False)
-            else:
-                if this.cores[n].dim() == 2 and other.cores[n].dim() == 2:
-                    cores[n] = torch.sum(cores[n], dim=0, keepdim=False)
+            if this.cores[n].dim() == m and other.cores[n].dim() == m:
+                cores[n] = cores[n].sum(dim=d, keepdim=False)
 
-        return Tensor(cores, Us=Us)
+        return Tensor(cores, Us=Us, batch=self.batch)
 
     def __radd__(self, other):
         if other is None:
@@ -415,13 +449,13 @@ class Tensor(object):
         return self + other
 
     def __sub__(self, other):
-        return self + -1*other
+        return self + -1 * other
 
     def __rsub__(self, other):
-        return -1*self + other
+        return -1 * self + other
 
     def __neg__(self):
-        return -1*self
+        return -1 * self
 
     def __mul__(self, other):
         if not isinstance(other, Tensor):  # A scalar
