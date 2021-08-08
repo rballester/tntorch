@@ -183,6 +183,10 @@ def test_sum():
 
     assert torch.allclose((a + b).torch(), a.torch() + b.torch())
 
+    a = tn.rand((10, 5, 6), ranks_tt=3)
+    b = 5
+    assert torch.allclose((a + b).torch(), a.torch() + b)
+
 
 def test_mul():
     a = tn.rand((10, 5, 6), ranks_tt=3)
@@ -243,3 +247,156 @@ def test_mul():
     b = tn.rand((10, 5, 6), ranks_tucker=3, batch=True)
 
     assert torch.allclose((a * b).torch(), a.torch() * b.torch())
+
+    a = tn.rand((10, 5, 6), ranks_tt=3, batch=True)
+    b = 5
+    assert torch.allclose((a + b).torch(), a.torch() + b)
+
+
+def test_indexing():
+    a = tn.rand((10, 5, 6), ranks_tt=3)
+    b = a.torch()
+
+    assert torch.allclose(a[None].torch(), b[None])
+    assert torch.allclose(a[None, ..., None].torch(), b[None, ..., None])
+    assert torch.allclose(a[0, ..., 1].torch(), b[0, ..., 1])
+    assert torch.allclose(a[None, ..., 1].torch(), b[None, ..., 1])
+    assert torch.allclose(a[None, ..., -1].torch(), b[None, ..., -1])
+    assert torch.allclose(a[None, ..., -1].torch(), b[None, ..., -1])
+
+    a = tn.rand((10, 5, 6), ranks_cp=3)
+    b = a.torch()
+
+    assert torch.allclose(a[None].torch(), b[None])
+    assert torch.allclose(a[None, ..., None].torch(), b[None, ..., None])
+    assert torch.allclose(a[0, ..., 1].torch(), b[0, ..., 1])
+    assert torch.allclose(a[None, ..., 1].torch(), b[None, ..., 1])
+    assert torch.allclose(a[None, ..., -1].torch(), b[None, ..., -1])
+    assert torch.allclose(a[None, ..., -1].torch(), b[None, ..., -1])
+
+    a = tn.rand((10, 5, 6), ranks_tucker=3)
+    b = a.torch()
+
+    assert torch.allclose(a[None].torch(), b[None])
+    assert torch.allclose(a[None, ..., None].torch(), b[None, ..., None])
+    assert torch.allclose(a[0, ..., 1].torch(), b[0, ..., 1])
+    assert torch.allclose(a[None, ..., 1].torch(), b[None, ..., 1])
+    assert torch.allclose(a[None, ..., -1].torch(), b[None, ..., -1])
+    assert torch.allclose(a[None, ..., -1].torch(), b[None, ..., -1])
+
+    a = tn.rand((10, 5, 6), ranks_tt=3, ranks_tucker=3)
+    b = a.torch()
+
+    assert torch.allclose(a[None].torch(), b[None])
+    assert torch.allclose(a[None, ..., None].torch(), b[None, ..., None])
+    assert torch.allclose(a[0, ..., 1].torch(), b[0, ..., 1])
+    assert torch.allclose(a[None, ..., 1].torch(), b[None, ..., 1])
+    assert torch.allclose(a[None, ..., -1].torch(), b[None, ..., -1])
+    assert torch.allclose(a[None, ..., -1].torch(), b[None, ..., -1])
+
+    a = tn.rand((10, 5, 6), ranks_cp=3, ranks_tucker=3)
+    b = a.torch()
+
+    assert torch.allclose(a[None].torch(), b[None])
+    assert torch.allclose(a[None, ..., None].torch(), b[None, ..., None])
+    assert torch.allclose(a[0, ..., 1].torch(), b[0, ..., 1])
+    assert torch.allclose(a[None, ..., 1].torch(), b[None, ..., 1])
+    assert torch.allclose(a[None, ..., -1].torch(), b[None, ..., -1])
+    assert torch.allclose(a[None, ..., -1].torch(), b[None, ..., -1])
+
+    a = tn.rand((10, 5, 6), ranks_tt=3, batch=True)
+    b = a.torch()
+
+    with pytest.raises(ValueError) as exc_info:
+        a[None].torch(), b[None]
+    assert exc_info.value.args[0] == 'Cannot change batch dimension'
+
+    assert torch.allclose(a[..., None].torch(), b[..., None])
+    assert torch.allclose(a[0, ..., 1].torch(), b[0, ..., 1])
+    assert torch.allclose(a[..., 1].torch(), b[..., 1])
+    assert torch.allclose(a[..., -1].torch(), b[..., -1])
+    assert torch.allclose(a[..., -1].torch(), b[..., -1])
+
+    a = tn.rand((10, 5, 6), ranks_tucker=3, batch=True)
+    b = a.torch()
+
+    with pytest.raises(ValueError) as exc_info:
+        a[None].torch(), b[None]
+    assert exc_info.value.args[0] == 'Cannot change batch dimension'
+
+    assert torch.allclose(a[..., None].torch(), b[..., None])
+    assert torch.allclose(a[0, ..., 1].torch(), b[0, ..., 1])
+    assert torch.allclose(a[..., 1].torch(), b[..., 1])
+    assert torch.allclose(a[..., -1].torch(), b[..., -1])
+    assert torch.allclose(a[..., -1].torch(), b[..., -1])
+
+    a = tn.rand((10, 5, 6), ranks_cp=3, batch=True)
+    b = a.torch()
+
+    with pytest.raises(ValueError) as exc_info:
+        a[None].torch(), b[None]
+    assert exc_info.value.args[0] == 'Cannot change batch dimension'
+
+    assert torch.allclose(a[..., None].torch(), b[..., None])
+    assert torch.allclose(a[0, ..., 1].torch(), b[0, ..., 1])
+    assert torch.allclose(a[..., 1].torch(), b[..., 1])
+    assert torch.allclose(a[..., -1].torch(), b[..., -1])
+    assert torch.allclose(a[..., -1].torch(), b[..., -1])
+
+    a = tn.rand((10, 5, 6), ranks_cp=3, ranks_tucker=3, batch=True)
+    b = a.torch()
+
+    with pytest.raises(ValueError) as exc_info:
+        a[None].torch(), b[None]
+    assert exc_info.value.args[0] == 'Cannot change batch dimension'
+
+    assert torch.allclose(a[..., None].torch(), b[..., None])
+    assert torch.allclose(a[0, ..., 1].torch(), b[0, ..., 1])
+    assert torch.allclose(a[..., 1].torch(), b[..., 1])
+    assert torch.allclose(a[..., -1].torch(), b[..., -1])
+    assert torch.allclose(a[..., -1].torch(), b[..., -1])
+
+    a = tn.rand((10, 5, 6), ranks_tt=3, ranks_tucker=3, batch=True)
+    b = a.torch()
+
+    with pytest.raises(ValueError) as exc_info:
+        a[None].torch(), b[None]
+    assert exc_info.value.args[0] == 'Cannot change batch dimension'
+
+    assert torch.allclose(a[..., None].torch(), b[..., None])
+    assert torch.allclose(a[0, ..., 1].torch(), b[0, ..., 1])
+    assert torch.allclose(a[..., 1].torch(), b[..., 1])
+    assert torch.allclose(a[..., -1].torch(), b[..., -1])
+    assert torch.allclose(a[..., -1].torch(), b[..., -1])
+    
+def test_round_tucker():
+    a = tn.rand((10, 5, 6), ranks_tucker=3)
+    b = a.clone()
+    a.round_tucker(eps=1e-8)
+    assert torch.norm(b.torch() - a.torch()) < 1e-8
+
+    a = tn.rand((10, 5, 6), ranks_tucker=3, batch=True)
+    b = a.clone()
+    a.round_tucker(eps=1e-8)
+    assert torch.norm(b.torch() - a.torch()) < 1e-8
+
+def test_round_tt():
+    a = tn.rand((10, 5, 6), ranks_tt=3)
+    b = a.clone()
+    a.round_tt(eps=1e-8)
+    assert torch.norm(b.torch() - a.torch()) < 1e-8
+
+    a = tn.rand((10, 5, 6), ranks_tt=3, batch=True)
+    b = a.clone()
+    a.round_tt(eps=1e-8)
+    assert torch.norm(b.torch() - a.torch()) < 1e-8
+
+    a = tn.rand((10, 5, 6), ranks_cp=3)
+    b = a.clone()
+    a.round_tt(eps=1e-8)
+    assert torch.norm(b.torch() - a.torch()) < 1e-8
+
+    a = tn.rand((10, 5, 6), ranks_cp=3, batch=True)
+    b = a.clone()
+    a.round_tt(eps=1e-8)
+    assert torch.norm(b.torch() - a.torch()) < 1e-8

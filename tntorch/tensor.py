@@ -108,7 +108,7 @@ class Tensor(object):
 
     def __init__(
         self,
-        data: Union[torch.Tensor, Iterable[torch.Tensor]],
+        data: Union[torch.Tensor, np.ndarray, Iterable[torch.Tensor]],
         Us: Optional[Union[torch.Tensor, Any]] = None,
         idxs: Optional[Any] = None,
         device: Optional[Any] = None,
@@ -222,8 +222,7 @@ class Tensor(object):
                                         self.cores[-1].shape[0],
                                         self.cores[-1].shape[1],
                                         ranks_cp-self.cores[-1].shape[2],
-                                        device=device
-                                    )), dim=2)
+                                        device=device)), dim=2)
                         else:
                             reverse = torch.arange(len(eigvals)-1, -1, -1)
                             idx = torch.argsort(eigvals)[reverse[:ranks_cp]]
@@ -342,23 +341,23 @@ class Tensor(object):
 
     def __add__(
         self,
-        other: Union[Any, torch.Tensor]):
+        other: Union[Any, int, float]):
 
-        if self.batch:
-            assert self.shape[0] == other.shape[0], f'Batch dim must match, got {self.shape[0]} and {other.shape[0]}'
-        
-        if self.batch != other.batch:
-            raise ValueError('Tensors with the same batch mode are supported')
-
-        if not isinstance(other, Tensor):
+        if not isinstance(other, Tensor): # A scalar
             factor = other
 
             if self.batch:
-                other = Tensor([torch.ones([self.shape[0], 1, self.shape[n + 1], 1]) for n in range(self.dim())])
+                other = Tensor([torch.ones([self.shape[0], 1, self.shape[n + 1], 1]) for n in range(self.dim())], batch=True)
             else:
                 other = Tensor([torch.ones([1, self.shape[n], 1]) for n in range(self.dim())])
 
             other.cores[0].data *= factor
+            other.to(self.cores[0].device)
+        
+        if self.batch != other.batch:
+            raise ValueError('Tensors with the same batch mode are supported')
+        if self.batch:
+            assert self.shape[0] == other.shape[0], f'Batch dim must match, got {self.shape[0]} and {other.shape[0]}'
 
         if self.dim() == 1: # Special case
             return Tensor([self.decompress_tucker_factors().cores[0] + other.decompress_tucker_factors().cores[0]])
@@ -443,21 +442,33 @@ class Tensor(object):
 
         return Tensor(cores, Us=Us, batch=self.batch)
 
-    def __radd__(self, other):
+    def __radd__(
+        self,
+        other: Union[Any, torch.Tensor]):
+
         if other is None:
             return self
         return self + other
 
-    def __sub__(self, other):
+    def __sub__(
+        self,
+        other: Union[Any, torch.Tensor]):
+
         return self + -1 * other
 
-    def __rsub__(self, other):
+    def __rsub__(
+        self,
+        other: Union[Any, torch.Tensor]):
+
         return -1 * self + other
 
     def __neg__(self):
         return -1 * self
 
-    def __mul__(self, other):
+    def __mul__(
+        self,
+        other: Union[Any, int, float]):
+
         if not isinstance(other, Tensor):  # A scalar
             result = self.clone()
             result.cores[0].data *= other
@@ -465,7 +476,6 @@ class Tensor(object):
 
         if self.batch:
             m = 3
-            d = 1
             idx1 = 'gijk,gabc->giajbkc'
             idx2 = 'bij,bik->bijk'
             idx3 = 'bijk,baj->biak'
@@ -474,7 +484,6 @@ class Tensor(object):
             idx2 = 'ij,ik->ijk'
             idx3 = 'ijk,aj->iak'
             m = 2
-            d = 0
 
         this, other = _broadcast(self, other)
         cores = []
@@ -533,19 +542,34 @@ class Tensor(object):
                     cores[-1] = cores[-1][0]
         return tn.Tensor(cores, Us=Us, batch=self.batch)
 
-    def __truediv__(self, other):
+    def __truediv__(
+        self,
+        other: Union[Any, torch.Tensor]):
+
         return tn.cross(function=lambda x, y: x / y, tensors=[self, other], verbose=False)
 
-    def __rtruediv__(self, other):
+    def __rtruediv__(
+        self,
+        other: Union[Any, torch.Tensor]):
+
         return tn.cross(function=lambda x, y: x / y, tensors=[tn.full_like(self, fill_value=other), self], verbose=False)
 
-    def __pow__(self, power):
+    def __pow__(
+        self,
+        other: Union[Any, torch.Tensor]):
+
         return tn.cross(function=lambda x, y: x**y, tensors=[self, tn.full_like(self, fill_value=power)], verbose=False)
 
-    def __rmul__(self, other):
+    def __rmul__(
+        self,
+        other: Union[Any, torch.Tensor]):
+
         return self * other
 
-    def __truediv__(self, other):
+    def __truediv__(
+        self,
+        other: Union[Any, torch.Tensor]):
+
         return self * (1./other)
 
     """
@@ -555,19 +579,34 @@ class Tensor(object):
     def __invert__(self):
         return 1 - self
 
-    def __and__(self, other):
-        return self*other
+    def __and__(
+        self,
+        other: Union[Any, torch.Tensor]):
 
-    def __or__(self, other):
-        return self+other - self*other
+        return self * other
 
-    def __xor__(self, other):
-        return self+other - 2*self*other
+    def __or__(
+        self,
+        other: Union[Any, torch.Tensor]):
 
-    def __eq__(self, other):
+        return self + other - self * other
+
+    def __xor__(
+        self,
+        other: Union[Any, torch.Tensor]):
+
+        return self + other - 2 * self * other
+
+    def __eq__(
+        self,
+        other: Union[Any, torch.Tensor]):
+
         return tn.dist(self, other) <= 1e-14
 
-    def __ne__(self, other):
+    def __ne__(
+        self,
+        other: Union[Any, torch.Tensor]):
+
         return not self == other
 
     """
@@ -615,10 +654,14 @@ class Tensor(object):
             first = self.cores[0].shape[d2]
         else:
             first = self.cores[0].shape[d3]
-        return np.array([first] + [c.shape[-1] for c in self.cores])
+
+        return torch.tensor([first] + [c.shape[-1] for c in self.cores])
 
     @ranks_tt.setter
-    def ranks_tt(self, value):
+    def ranks_tt(
+        self,
+        value: int):
+
         self.round_tt(rmax=value)
 
     @property
@@ -629,10 +672,13 @@ class Tensor(object):
         :return: a vector of integers
         """
 
-        return np.array([c.shape[-2] for c in self.cores])
+        return torch.tensor([c.shape[-2] for c in self.cores])
 
     @ranks_tucker.setter
-    def ranks_tucker(self, value):
+    def ranks_tucker(
+        self,
+        value: int):
+
         self.round_tucker(rmax=value)
 
     def dim(self):
@@ -676,40 +722,40 @@ class Tensor(object):
                 if self.Us[n] is None:
                     continue
                 lenn = len('{}'.format(shape[n]))
-                row[n*4-lenn//2+2:n*4-lenn//2+lenn+2] = '{}'.format(shape[n])
+                row[n * 4-lenn // 2 + 2:n * 4 - lenn // 2 + lenn + 2] = '{}'.format(shape[n])
             s += ''.join(row)
             s += '\n'
 
         # Tucker ranks
-        row = [' ']*(4*self.dim()-1)
+        row = [' '] * (4 * self.dim() - 1)
         for n in range(self.dim()):
             if self.Us[n] is None:
                 lenr = len('{}'.format(tuckerr[n]))
-                row[n*4-lenr//2+2:n*4-lenr//2+lenr+2] = '{}'.format(tuckerr[n])
+                row[n * 4 - lenr // 2 + 2:n * 4 - lenr // 2 + lenr + 2] = '{}'.format(tuckerr[n])
             else:
-                row[n*4+2:n*4+3] = '|'
+                row[n * 4 + 2:n * 4 + 3] = '|'
         s += ''.join(row)
         s += '\n'
 
-        row = [' ']*(4*self.dim()-1)
+        row = [' '] * (4 * self.dim() - 1)
         for n in range(self.dim()):
             if self.Us[n] is None:
-                row[n*4+2:n*4+3] = '|'
+                row[n * 4 + 2:n * 4 + 3] = '|'
             else:
                 lenr = len('{}'.format(tuckerr[n]))
-                row[n*4-lenr//2+2:n*4-lenr//2+lenr+2] = '{}'.format(tuckerr[n])
+                row[n * 4 - lenr // 2 + 2:n * 4 - lenr // 2 + lenr + 2] = '{}'.format(tuckerr[n])
         s += ''.join(row)
         s += '\n'
 
         # Nodes
-        row = [' ']*(4*self.dim()-1)
+        row = [' '] * (4 * self.dim() - 1)
         for n in range(self.dim()):
             if self.cores[n].dim() == 2:
                 nodestr = '<{}>'.format(n)
             else:
                 nodestr = '({})'.format(n)
             lenn = len(nodestr)
-            row[(n+1)*4-(lenn-1)//2:(n+1)*4-(lenn-1)//2+lenn] = nodestr
+            row[(n + 1) * 4 - (lenn - 1) // 2:(n + 1) * 4 - (lenn - 1) // 2 + lenn] = nodestr
         s += ''.join(row[2:])
         s += '\n'
 
@@ -718,10 +764,10 @@ class Tensor(object):
         s += '\n'
 
         # Bottom: TT/CP ranks
-        row = [' ']*(4*self.dim())
-        for n in range(self.dim()+1):
+        row = [' '] * (4 * self.dim())
+        for n in range(self.dim() + 1):
             lenr = len('{}'.format(ttr[n]))
-            row[n*4:n*4+lenr] = '{}'.format(ttr[n])
+            row[n * 4:n * 4 + lenr] = '{}'.format(ttr[n])
         s += ''.join(row)
         s += '\n'
 
@@ -731,7 +777,9 @@ class Tensor(object):
     Decompression
     """
 
-    def _process_key(self, key):
+    def _process_key(
+        self,
+        key: Union[Iterable[int], torch.Tensor, int, Any]):
         if not hasattr(key, '__len__'):
             key = (key,)
         fancy = False
@@ -760,7 +808,9 @@ class Tensor(object):
         key = key + [slice(None)] * (len(self.shape) - (len(key) - nonecount))
         return key
 
-    def __getitem__(self, key):
+    def __getitem__(
+        self,
+        key: Union[Iterable[int], torch.Tensor, int, Any]):
         """
         NumPy-style indexing for compressed tensors. There are 5 accessors supported: slices, index arrays, integers,
         None, or another Tensor (selection via binary indexing)
@@ -773,15 +823,15 @@ class Tensor(object):
 
         # Preprocessing
         if isinstance(key, Tensor):
-            if torch.abs(tn.sum(key)-1) > 1e-8:
-                raise ValueError("When indexing via a mask tensor, that mask should have exactly 1 accepting string")
+            if torch.abs(tn.sum(key) - 1) > 1e-8:
+                raise ValueError('When indexing via a mask tensor, that mask should have exactly 1 accepting string')
             s = tn.accepted_inputs(key)[0]
             slicing = []
             for n in range(len(self.shape)):
                 idx = self.idxs[n].long()
                 idx[idx > 1] = 1
-                idx = np.where(idx == s[n])[0]
-                sl = slice(idx[0], idx[-1]+1)
+                idx = torch.where(idx == s[n])[0]
+                sl = slice(idx[0], idx[-1] + 1)
                 lenidx = len(idx)
                 if lenidx == 1:
                     sl = idx.item()
@@ -789,8 +839,8 @@ class Tensor(object):
             return self[slicing]
 
         if isinstance(key, torch.Tensor):
-            key = np.array(key.cpu(), dtype=int)
-        if isinstance(key, np.ndarray) and key.ndim == 2:
+            key = torch.tensor(key.cpu(), dtype=int)
+        if isinstance(key, np.ndarray) or isinstance(key, torch.Tensor) and key.ndim == 2:
             key = [key[:, col] for col in range(key.shape[1])]
 
         device = self.cores[0].device
@@ -888,7 +938,9 @@ class Tensor(object):
                         cores.append(nCore)
                         Us.append(nU)
 
-        def get_key(counter, key):
+        def get_key(
+            counter: int,
+            key: Union[Iterable[int], torch.Tensor, int, Any]):
             if self.Us[counter] is None:
                 if self.batch:
                     nCore = self.cores[counter][..., key, :][batch_dim_idx]
@@ -1107,7 +1159,6 @@ class Tensor(object):
             if value.dim() == 0:
                 value = value.item()
                 scalar = True
-                # value = value*torch.ones(self.shape)
             else:
                 value = tn.Tensor(value, batch=self.batch)
         elif isinstance(value, tn.Tensor):
@@ -1119,7 +1170,7 @@ class Tensor(object):
         add_cores = []
         for i in range(len(key)):
             if not isinstance(key[i], slice) and not hasattr(key[i], '__len__'):
-                key[i] = slice(key[i], key[i]+1)
+                key[i] = slice(key[i], key[i] + 1)
             chunk = self.cores[i][..., key[i], :]
             subtract_core = torch.zeros_like(self.cores[i])
             subtract_core[..., key[i], :] += chunk
@@ -1146,7 +1197,7 @@ class Tensor(object):
                     if self.cores[i].dim() == 4:
                         add_core = torch.zeros(value.cores[i].shape[0], value.cores[i].shape[1], self.shape[i], value.cores[i].shape[3])
                     else:
-                        add_core = torch.zeros( value.cores[i].shape[0], self.shape[i], value.cores[i].shape[2])
+                        add_core = torch.zeros(value.cores[i].shape[0], self.shape[i], value.cores[i].shape[2])
                 else:
                     if chunk.shape[1] != value.shape[i]:
                         raise ValueError('{}-th dimension mismatch in tensor assignment: {} (lhs) != {} (rhs)'.format(i, chunk.shape[1], value.shape[i]))
@@ -1171,7 +1222,11 @@ class Tensor(object):
 
         return tn.Tensor(self.cores, batch=self.batch).torch()
 
-    def decompress_tucker_factors(self, dim='all', _clone=True):
+    def decompress_tucker_factors(
+        self,
+        dim: Optional[Union[str, Any]] = 'all',
+        _clone: Optional[bool] = True):
+
         """
         Decompresses this tensor along the Tucker factors only.
 
@@ -1183,7 +1238,7 @@ class Tensor(object):
         if dim == 'all':
             dim = range(self.dim())
         if not hasattr(dim, '__len__'):
-            dim = [dim]*self.dim()
+            dim = [dim] * self.dim()
 
         cores = []
         Us = []
@@ -1235,41 +1290,48 @@ class Tensor(object):
 
         device = t.cores[0].device
         if self.batch:
+            m = 3
+            idx1 = 'gai,gbi->gabi'
+            idx2 = 'gai,gbi->gab'
+            idx3 = 'gai,gibj->gabj'
             batch_size = self.cores[0].shape[0]
             shape = [batch_size]
             factor = torch.ones(batch_size, 1, self.ranks_tt[0]).to(device)
         else:
+            m = 2
+            idx1 = 'ai,bi->abi'
+            idx2 = 'ai,bi->ab'
+            idx3 = 'ai,ibj->abj'
             factor = torch.ones(1, self.ranks_tt[0]).to(device)
             shape = []
 
         for n in range(t.dim()):
             shape.append(t.cores[n].shape[-2])
+
+            if t.cores[n].dim() == m:  # CP core
+                if n < t.dim() - 1:
+                    factor = torch.einsum(idx1, (factor, t.cores[n]))
+                else:
+                    factor = torch.einsum(idx2, (factor, t.cores[n]))[..., None]
+            else:  # TT core
+                factor = torch.einsum(idx3, (factor, t.cores[n]))
+
             if self.batch:
-                if t.cores[n].dim() == 3:  # CP core
-                    if n < t.dim() - 1:
-                        factor = torch.einsum('gai,gbi->gabi', (factor, t.cores[n]))
-                    else:
-                        factor = torch.einsum('gai,gbi->gab', (factor, t.cores[n]))[..., None]
-                else:  # TT core
-                    factor = torch.einsum('gai,gibj->gabj', (factor, t.cores[n]))
                 factor = factor.reshape([batch_size, -1, factor.shape[-1]])
             else:
-                if t.cores[n].dim() == 2:  # CP core
-                    if n < t.dim() - 1:
-                        factor = torch.einsum('ai,bi->abi', (factor, t.cores[n]))
-                    else:
-                        factor = torch.einsum('ai,bi->ab', (factor, t.cores[n]))[..., None]
-                else:  # TT core
-                    factor = torch.einsum('ai,ibj->abj', (factor, t.cores[n]))
                 factor = factor.reshape([-1, factor.shape[-1]])
+
         if factor.shape[-1] > 1:
-            factor = torch.sum(factor, dim=-1)
+            factor = factor.sum(dim=-1)
         else:
             factor = factor[..., 0]
         factor = factor.reshape(shape)
         return factor
 
-    def to(self, device):
+    def to(
+        self,
+        device: Any):
+
         """
         Moves tensor to device.
 
@@ -1297,24 +1359,33 @@ class Tensor(object):
 
         return self.torch().detach().cpu().numpy()
 
-    def _cp_to_tt(self, factor=None):
+    def _cp_to_tt(
+        self,
+        factor: Optional[Union[None, Any]] = None):
         """
         Turn a CP factor into a TT core (each slice is a diagonal matrix)
         :param factor: CP factor. If None, all cores in this tensor will be converted
 
         """
+        if self.batch:
+            m = 3
+        else:
+            m = 2
 
         if factor is None:
-            if (self.cores[0].dim() == 3 and self.batch) or (self.cores[0].dim() == 2 and not self.batch):
-                self.cores[0] = self.cores[0][None, ...]
-            for mu in range(1, self.dim()-1):
+            if self.cores[0].dim() == m:
+                if self.batch:
+                    self.cores[0] = self.cores[0][:, None, ...]
+                else:
+                    self.cores[0] = self.cores[0][None, ...]
+            for mu in range(1, self.dim() - 1):
                 self.cores[mu] = self._cp_to_tt(self.cores[mu])
 
-            if (self.cores[-1].dim() == 3 and self.batch) or (self.cores[-1].dim() == 2 and not self.batch):
+            if self.cores[-1].dim() == m:
                 self.cores[-1] = self.cores[-1].transpose(-1, -2)[..., None]
 
             return
-        if (factor.dim() == 3 and not self.batch) or (factor.dim() == 4 and self.batch):  # Already a TT core
+        if factor.dim() == m + 1:  # Already a TT core
             return factor
 
         if self.batch:
@@ -1334,7 +1405,10 @@ class Tensor(object):
     Rounding and orthogonalization
     """
 
-    def factor_orthogonalize(self, mu):
+    def factor_orthogonalize(
+        self,
+        mu: int):
+
         """
         Pushes the factor's non-orthogonal part to its corresponding core.
 
@@ -1345,21 +1419,28 @@ class Tensor(object):
 
         if self.Us[mu] is None:
             return
+
         Q, R = torch.linalg.qr(self.Us[mu])
         self.Us[mu] = Q
 
         if self.batch:
-            if self.cores[mu].dim() == 3:
-                self.cores[mu] = torch.einsum('bjk,baj->bak', (self.cores[mu], R))
-            else:
-                self.cores[mu] = torch.einsum('bijk,baj->biak', (self.cores[mu], R))
+            m = 3
+            idx1 = 'bjk,baj->bak'
+            idx2 = 'bijk,baj->biak'
         else:
-            if self.cores[mu].dim() == 2:
-                self.cores[mu] = torch.einsum('jk,aj->ak', (self.cores[mu], R))
-            else:
-                self.cores[mu] = torch.einsum('ijk,aj->iak', (self.cores[mu], R))
+            m = 2
+            idx1 = 'jk,aj->ak'
+            idx2 = 'ijk,aj->iak'
 
-    def left_orthogonalize(self, mu):
+        if self.cores[mu].dim() == m:
+            self.cores[mu] = torch.einsum(idx1, (self.cores[mu], R))
+        else:
+            self.cores[mu] = torch.einsum(idx2, (self.cores[mu], R))
+
+    def left_orthogonalize(
+        self,
+        mu: int):
+
         """
         Makes the mu-th core left-orthogonal and pushes the R factor to its right core. This may change the ranks
         of the cores.
@@ -1378,19 +1459,22 @@ class Tensor(object):
         Q, R = torch.linalg.qr(tn.left_unfolding(self.cores[mu], batch=self.batch))
 
         if self.batch:
-            self.cores[mu] = torch.reshape(Q, self.cores[mu].shape[:-1] + (Q.shape[2], ))
+            self.cores[mu] = Q.reshape(self.cores[mu].shape[:-1] + (Q.shape[2], ))
         else:
-            self.cores[mu] = torch.reshape(Q, self.cores[mu].shape[:-1] + (Q.shape[1], ))
+            self.cores[mu] = Q.reshape(self.cores[mu].shape[:-1] + (Q.shape[1], ))
 
-        rightcoreR = tn.right_unfolding(self.cores[mu+1], batch=self.batch)
+        rightcoreR = tn.right_unfolding(self.cores[mu + 1], batch=self.batch)
 
         if self.batch:
-            self.cores[mu+1] = (R @ rightcoreR).reshape((R.shape[0], R.shape[1]) + self.cores[mu+1].shape[2:])
+            self.cores[mu + 1] = (R @ rightcoreR).reshape((R.shape[0], R.shape[1]) + self.cores[mu + 1].shape[2:])
         else:
-            self.cores[mu+1] = (R @ rightcoreR).reshape((R.shape[0], ) + self.cores[mu+1].shape[1:])
+            self.cores[mu + 1] = (R @ rightcoreR).reshape((R.shape[0], ) + self.cores[mu + 1].shape[1:])
         return R
 
-    def right_orthogonalize(self, mu):
+    def right_orthogonalize(
+        self,
+        mu: int):
+
         """
         Makes the mu-th core right-orthogonal and pushes the L factor to its left core. Note: this may change the ranks
          of the tensor.
@@ -1417,18 +1501,21 @@ class Tensor(object):
             Q = Q.permute(1, 0)
 
         if self.batch:
-            self.cores[mu] = torch.reshape(Q, (Q.shape[:2]) + self.cores[mu].shape[2:])
+            self.cores[mu] = Q.reshape((Q.shape[:2]) + self.cores[mu].shape[2:])
         else:
-            self.cores[mu] = torch.reshape(Q, (Q.shape[0], ) + self.cores[mu].shape[1:])
+            self.cores[mu] = Q.reshape((Q.shape[0], ) + self.cores[mu].shape[1:])
 
         leftcoreL = tn.left_unfolding(self.cores[mu-1], batch=self.batch)
         if self.batch:
-            self.cores[mu-1] = (leftcoreL @ L).reshape(self.cores[mu-1].shape[:-1] + (L.shape[2], ))
+            self.cores[mu - 1] = (leftcoreL @ L).reshape(self.cores[mu-1].shape[:-1] + (L.shape[2], ))
         else:
-            self.cores[mu-1] = (leftcoreL @ L).reshape(self.cores[mu-1].shape[:-1] + (L.shape[1], ))
+            self.cores[mu - 1] = (leftcoreL @ L).reshape(self.cores[mu-1].shape[:-1] + (L.shape[1], ))
         return L
 
-    def orthogonalize(self, mu):
+    def orthogonalize(
+        self,
+        mu: int):
+
         """
         Apply all left and right orthogonalizations needed to make the tensor mu-orthogonal.
 
@@ -1454,11 +1541,17 @@ class Tensor(object):
             R = torch.ones(1, 1)
         for i in range(mu):
             R = self.left_orthogonalize(i)
-        for i in range(self.dim()-1, mu, -1):
+        for i in range(self.dim() - 1, mu, -1):
             L = self.right_orthogonalize(i)
         return R, L
 
-    def round_tucker(self, eps=1e-14, rmax=None, dim='all', algorithm='svd'):
+    def round_tucker(
+        self,
+        eps: float = 1e-14,
+        rmax: Optional[int] = None,
+        dim: Optional[Union[Iterable[int], str]] = 'all',
+        algorithm: Optional[str] = 'svd'):
+
         """
         Tries to recompress this tensor in place by reducing its Tucker ranks.
 
@@ -1466,19 +1559,19 @@ class Tensor(object):
 
         :param eps: this relative error will not be exceeded
         :param rmax: all ranks should be rmax at most (default: no limit)
+        :param dim: list of factors to set; default is 'all'
         :param algorithm: 'svd' (default) or 'eig'. The latter can be faster, but less accurate
-        :param verbose:
         """
 
         N = self.dim()
 
         if not hasattr(rmax, '__len__'):
-            rmax = [rmax]*N
+            rmax = [rmax] * N
         assert len(rmax) == N
         if dim == 'all':
             dim = range(N)
         if not hasattr(dim, '__len__'):
-            dim = [dim]*N
+            dim = [dim] * N
 
         if self.batch:
             batch_size = self.cores[0].shape[0]
@@ -1486,32 +1579,33 @@ class Tensor(object):
         for m in dim:
             self.cores[m] = self._cp_to_tt(self.cores[m])
         self.orthogonalize(-1)
-        for mu in range(N-1, -1, -1):
+        for mu in range(N - 1, -1, -1):
             if self.Us[mu] is None:
                 device = self.cores[mu].device
 
                 if self.batch:
-                    self.Us[mu] = torch.cat(
-                        [
-                            torch.eye(self.shape[mu + 1])[None, ...].to(device) for _ in range(batch_size)
-                        ]
-                    )
+                    self.Us[mu] = torch.eye(self.shape[mu + 1]).repeat(batch_size, 1, 1).to(device)
                 else:
                     self.Us[mu] = torch.eye(self.shape[mu]).to(device)
 
             # Send non-orthogonality to factor
             if self.batch:
                 Q, R = torch.linalg.qr(torch.reshape(self.cores[mu].permute(0, 1, 3, 2), [self.cores[mu].shape[0], -1, self.cores[mu].shape[2]]))
-                self.cores[mu] = torch.reshape(Q, [self.cores[mu].shape[0], self.cores[mu].shape[1], self.cores[mu].shape[3], -1]).permute(0, 1, 3, 2)
+                self.cores[mu] = Q.reshape([self.cores[mu].shape[0], self.cores[mu].shape[1], self.cores[mu].shape[3], -1]).permute(0, 1, 3, 2)
             else:
                 Q, R = torch.linalg.qr(torch.reshape(self.cores[mu].permute(0, 2, 1), [-1, self.cores[mu].shape[1]]))
-                self.cores[mu] = torch.reshape(Q, [self.cores[mu].shape[0], self.cores[mu].shape[2], -1]).permute(0, 2, 1)
+                self.cores[mu] = Q.reshape([self.cores[mu].shape[0], self.cores[mu].shape[2], -1]).permute(0, 2, 1)
 
             self.Us[mu] = self.Us[mu] @ R.transpose(-1, -2)
 
             # Split factor according to error budget
-            left, right = tn.truncated_svd(self.Us[mu], eps=eps/np.sqrt(len(dim)), rmax=rmax[mu],
-                                           left_ortho=True, algorithm=algorithm, batch=self.batch)
+            left, right = tn.truncated_svd(
+                self.Us[mu],
+                eps=eps / np.sqrt(len(dim)),
+                rmax=rmax[mu],
+                left_ortho=True,
+                algorithm=algorithm,
+                batch=self.batch)
             self.Us[mu] = left
 
             # Push the (non-orthogonal) remainder to the core
@@ -1524,7 +1618,13 @@ class Tensor(object):
             if mu > 0:
                 self.right_orthogonalize(mu)
 
-    def round_tt(self, eps=1e-14, rmax=None, algorithm='svd', verbose=False):
+    def round_tt(
+        self,
+        eps: float = 1e-14,
+        rmax: Optional[int] = None,
+        algorithm: Optional[str] = 'svd',
+        verbose: Optional[bool] = False):
+
         """
         Tries to recompress this tensor in place by reducing its TT ranks.
 
@@ -1538,32 +1638,36 @@ class Tensor(object):
 
         N = self.dim()
         if not hasattr(rmax, '__len__'):
-            rmax = [rmax]*(N-1)
+            rmax = [rmax] * (N-1)
         assert len(rmax) == N-1
 
         self._cp_to_tt()
         start = time.time()
-        self.orthogonalize(N-1)  # Make everything left-orthogonal
+        self.orthogonalize(N - 1)  # Make everything left-orthogonal
         if verbose:
             print('Orthogonalization time:', time.time() - start)
         if self.batch:
             delta = None
         else:
-            delta = eps/max(1, torch.sqrt(torch.tensor([N-1], dtype=torch.float64, device=self.cores[-1].device)))*torch.norm(self.cores[-1])
+            delta = eps / max(1, torch.sqrt(torch.tensor([N - 1], dtype=torch.float64, device=self.cores[-1].device))) * torch.norm(self.cores[-1])
             delta = delta.item()
 
         for mu in range(N - 1, 0, -1):
             M = tn.right_unfolding(self.cores[mu], batch=self.batch)
-            left, right = tn.truncated_svd(M, delta=delta, rmax=rmax[mu-1], left_ortho=False, algorithm=algorithm, verbose=verbose, batch=self.batch)
+            left, right = tn.truncated_svd(M, delta=delta, rmax=rmax[mu - 1], left_ortho=False, algorithm=algorithm, verbose=verbose, batch=self.batch)
 
             if self.batch:
-                self.cores[mu] = torch.reshape(right, [self.cores[mu].shape[0], -1, self.cores[mu].shape[2], self.cores[mu].shape[3]])
-                self.cores[mu-1] = torch.einsum('bijk,bkl->bijl', (self.cores[mu-1], left))  # Pass factor to the left
+                self.cores[mu] = right.reshape([self.cores[mu].shape[0], -1, self.cores[mu].shape[2], self.cores[mu].shape[3]])
+                self.cores[mu - 1] = torch.einsum('bijk,bkl->bijl', (self.cores[mu - 1], left))  # Pass factor to the left
             else:
-                self.cores[mu] = torch.reshape(right, [-1, self.cores[mu].shape[1], self.cores[mu].shape[2]])
-                self.cores[mu-1] = torch.einsum('ijk,kl', (self.cores[mu-1], left))  # Pass factor to the left
+                self.cores[mu] = right.reshape([-1, self.cores[mu].shape[1], self.cores[mu].shape[2]])
+                self.cores[mu - 1] = torch.einsum('ijk,kl', (self.cores[mu - 1], left))  # Pass factor to the left
 
-    def round(self, eps=1e-14, **kwargs):
+    def round(
+        self,
+        eps: float = 1e-14,
+        **kwargs):
+
         """
         General recompression. Attempts to reduce TT ranks first; then does Tucker rounding with the remaining error
         budget.
@@ -1576,7 +1680,7 @@ class Tensor(object):
         self.round_tt(eps, **kwargs)
         reached = tn.relative_error(copy, self)
         if reached < eps:
-            self.round_tucker((1+eps) / (1+reached) - 1, **kwargs)
+            self.round_tucker((1 + eps) / (1 + reached) - 1, **kwargs)
 
     """
     Convenience "methods"
@@ -1635,7 +1739,11 @@ class Tensor(object):
     Miscellaneous
     """
 
-    def set_factors(self, name, dim='all', requires_grad=False):
+    def set_factors(
+        self,
+        name: str,
+        dim: Optional[Union[Iterable[int], str]] = 'all',
+        requires_grad: Optional[bool] = False):
         """
         Sets factors Us of this tensor to be of a certain family.
 
@@ -1650,12 +1758,12 @@ class Tensor(object):
         for m in dim:
             if self.Us[m] is None:
                 if self.batch:
-                    self.Us[m] = torch.cat([tn.generate_basis(name, (self.shape[m], self.shape[m]))[None, ...] for _ in range(self.shape[0])])
+                    self.Us[m] = tn.generate_basis(name, (self.shape[m], self.shape[m])).repeat(self.shape[0], 1, 1)
                 else:
                     self.Us[m] = tn.generate_basis(name, (self.shape[m], self.shape[m]))
             else:
                 if self.batch:
-                    torch.cat([tn.generate_basis(name, self.Us[m].shape)[None, ...] for _ in range(self.shape[0])])
+                    tn.generate_basis(name, self.Us[m].shape).repeat(self.shape[0], 1, 1)
                 else:
                     self.Us[m] = tn.generate_basis(name, self.Us[m].shape)
             self.Us[m].requires_grad = requires_grad
@@ -1723,7 +1831,10 @@ class Tensor(object):
                 result += self.Us[n].numel()
         return result
 
-    def repeat(self, *rep):
+    def repeat(
+        self,
+        *rep: Iterable[int]):
+
         """
         Returns another tensor repeated along one or more axes; works like PyTorch's `repeat()`.
 
@@ -1757,7 +1868,10 @@ class Tensor(object):
         return t
 
 
-def _broadcast(a, b):
+def _broadcast(
+    a: Any,
+    b: Any):
+
     if a.shape == b.shape:
         return a, b
     elif a.dim() != b.dim():
@@ -1767,7 +1881,11 @@ def _broadcast(a, b):
     return result1, result2
 
 
-def _core_kron(a, b, batch=False):
+def _core_kron(
+    a: Any,
+    b: Any,
+    batch: Optional[bool] = False):
+
     if batch:
         assert a.shape[0] == b.shape[0]
         c = a[:, :, None, :, :, None] * b[:, None, :, :, None, :]
