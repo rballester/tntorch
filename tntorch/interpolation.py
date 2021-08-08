@@ -71,8 +71,8 @@ def als_completion(X, y, ranks_tt, shape=None, ws=None, x0=None, niter=10, verbo
             rhs = leftside[:, None, :]
             A = torch.reshape(lhs*rhs, [len(idx), -1])*ws[idx, None]
             b = y[idx] * ws[idx]
-            sol = torch.lstsq(b, A)[0][:A.shape[1], :]
-            residuals = torch.norm(A.matmul(sol)[:, 0] - b) ** 2
+            sol = torch.linalg.lstsq(A, b).solution[:A.shape[1]]
+            residuals = torch.norm(A.matmul(sol)[0] - b) ** 2
             cores[mu][:, index, :] = torch.reshape(sol, cores[mu][:, index, :].shape)#.t()
             sse += residuals
         # Update product chains for next core
@@ -140,7 +140,7 @@ def sparse_tt_svd(X, y, eps, shape=None, rmax=None):
 
         cov = sparse_covariance(Xs, ys, nrows)
 
-        w, v = torch.symeig(cov, eigenvectors=True)
+        w, v = torch.linalg.eigh(cov)
         w[w < 0] = 0
         w = torch.sqrt(w)
         svd = [v, w]

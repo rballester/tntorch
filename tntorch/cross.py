@@ -171,7 +171,7 @@ def cross(function=lambda x: x, domain=None, tensors=None, function_arg='vectors
 
     # Prepare left and right sets
     lsets = [np.array([[0]])] + [None]*(N-1)
-    randint = np.hstack([np.random.randint(0, Is[n+1], [max(Rs), 1]) for n in range(N-1)] + [np.zeros([max(Rs), 1], dtype=np.int)])
+    randint = np.hstack([np.random.randint(0, Is[n+1], [max(Rs), 1]) for n in range(N-1)] + [np.zeros([max(Rs), 1], dtype=int)])
     rsets = [randint[:Rs[n+1], n:] for n in range(N-1)] + [np.array([[0]])]
 
     # Initialize left and right interfaces for `tensors`
@@ -275,12 +275,12 @@ def cross(function=lambda x: x, domain=None, tensors=None, function_arg='vectors
 
             # QR + maxvol towards the right
             V = torch.reshape(V, [-1, V.shape[2]])  # Left unfolding
-            Q, R = torch.qr(V)
+            Q, R = torch.linalg.qr(V)
             if _minimize:
                 local, _ = maxvolpy.maxvol.rect_maxvol(Q.detach().cpu().numpy(), maxK=Q.shape[1])
             else:
                 local, _ = maxvolpy.maxvol.maxvol(Q.detach().cpu().numpy())
-            V = torch.lstsq(Q.t(), Q[local, :].t())[0].t()
+            V = torch.linalg.lstsq(Q[local, :].t(), Q.t()).solution.t()
             cores[j] = torch.reshape(V, [Rs[j], Is[j], Rs[j+1]])
             left_locals.append(local)
 
@@ -301,12 +301,12 @@ def cross(function=lambda x: x, domain=None, tensors=None, function_arg='vectors
 
             # QR + maxvol towards the left
             V = torch.reshape(V, [Rs[j], -1])  # Right unfolding
-            Q, R = torch.qr(V.t())
+            Q, R = torch.linalg.qr(V.t())
             if _minimize:
                 local, _ = maxvolpy.maxvol.rect_maxvol(Q.detach().cpu().numpy(), maxK=Q.shape[1])
             else:
                 local, _ = maxvolpy.maxvol.maxvol(Q.detach().cpu().numpy())
-            V = torch.lstsq(Q.t(), Q[local, :].t())[0]
+            V = torch.linalg.lstsq(Q[local, :].t(), Q.t()).solution
             cores[j] = torch.reshape(torch.as_tensor(V), [Rs[j], Is[j], Rs[j+1]])
 
             # Map local indices to global ones
@@ -347,7 +347,7 @@ def cross(function=lambda x: x, domain=None, tensors=None, function_arg='vectors
             newRs[1:-1] = np.minimum(rmax, newRs[1:-1]+kickrank)
             for n in list(range(1, N)) + list(range(N-1, 0, -1)):
                 newRs[n] = min(newRs[n-1]*Is[n-1], newRs[n], Is[n]*newRs[n+1])
-            extra = np.hstack([np.random.randint(0, Is[n+1], [max(newRs), 1]) for n in range(N-1)] + [np.zeros([max(newRs), 1], dtype=np.int)])
+            extra = np.hstack([np.random.randint(0, Is[n+1], [max(newRs), 1]) for n in range(N-1)] + [np.zeros([max(newRs), 1], dtype=int)])
             for n in range(N-1):
                 if newRs[n+1] > Rs[n+1]:
                     rsets[n] = np.vstack([rsets[n], extra[:newRs[n+1]-Rs[n+1], n:]])
