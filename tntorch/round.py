@@ -78,7 +78,6 @@ def truncated_svd(M, delta=None, eps=None, rmax=None, left_ortho=True, algorithm
 
     if batch:
         batch_size = M.shape[0]
-        device = M.device
 
     if algorithm == 'svd':
         start = time.time()
@@ -105,7 +104,7 @@ def truncated_svd(M, delta=None, eps=None, rmax=None, left_ortho=True, algorithm
         if verbose:
             print('Time (gram):', time.time() - start)
         start = time.time()
-        w, v = torch.symeig(gram, eigenvectors=True)
+        w, v = torch.linalg.eigh(gram)
         if verbose:
             print('Time (symmetric EIG):', time.time() - start)
         w = torch.where(w < 0, torch.zeros_like(w) + 1e-8, w)

@@ -1,6 +1,7 @@
 import tntorch as tn
 import torch
 import numpy as np
+from typing import Any, Callable, Iterable, Optional, Union
 
 
 def eye(n, m=None, device=None, requires_grad=None):
@@ -202,7 +203,16 @@ def gaussian_like(tensor, **kwargs):
     return gaussian(tensor.shape, **kwargs)
 
 
-def _create(function, *shape, ranks_tt=None, ranks_cp=None, ranks_tucker=None, requires_grad=False, device=None, batch=False):
+def _create(
+    function: Callable,
+    *shape: Iterable,
+    ranks_tt: Optional[Iterable[int]] = None,
+    ranks_cp: Optional[Iterable[int]] = None,
+    ranks_tucker: Optional[Iterable[int]] = None,
+    requires_grad: Optional[bool] = False,
+    device: Optional[Any] = None,
+    batch: Optional[bool] = False):
+
     if hasattr(shape[0], '__len__'):
         shape = shape[0]
 
@@ -210,8 +220,10 @@ def _create(function, *shape, ranks_tt=None, ranks_cp=None, ranks_tucker=None, r
         N = len(shape) - 1
     else:
         N = len(shape)
-    if not hasattr(ranks_tucker, "__len__"):
-        ranks_tucker = [ranks_tucker for n in range(N)]
+
+    if not hasattr(ranks_tucker, '__len__'):
+        ranks_tucker = [ranks_tucker] * N
+
     corespatials = []
     if batch:
         corespatials.append(shape[0])
@@ -242,19 +254,26 @@ def _create(function, *shape, ranks_tt=None, ranks_cp=None, ranks_tucker=None, r
             else:
                 ranks_tt.append(min(datashape))
                 datashape = [datashape[0] * corespatials[n], datashape[1] // corespatials[n]]
-    if not hasattr(ranks_tt, "__len__"):
-        ranks_tt = [ranks_tt]*(N-1)
+
+    if not hasattr(ranks_tt, '__len__'):
+        ranks_tt = [ranks_tt] * (N - 1)
+
     ranks_tt = [None] + list(ranks_tt) + [None]
+
     if not hasattr(ranks_cp, '__len__'):
-        ranks_cp = [ranks_cp]*N
+        ranks_cp = [ranks_cp] * N
+
     coreranks = [r for r in ranks_tt]
+
     for n in range(N):
         if ranks_cp[n] is not None:
             if ranks_tt[n] is not None or ranks_tt[n+1] is not None:
                 raise ValueError('The ranks_tt and ranks_cp provided are incompatible')
+
             coreranks[n] = ranks_cp[n]
-            coreranks[n+1] = ranks_cp[n]
-    assert len(coreranks) == N+1
+            coreranks[n + 1] = ranks_cp[n]
+    assert len(coreranks) == N + 1
+
     if coreranks[0] is None:
         coreranks[0] = 1
     if coreranks[-1] is None:

@@ -4,6 +4,11 @@ import torch
 torch.set_default_dtype(torch.float64)
 
 
+def test_unfolding():
+    t = torch.rand((30, 10, 20, 10))
+    assert torch.allclose(tn.unfolding(t, 2, batch=False), t.permute(2, 0, 1, 3).reshape(20, -1))
+    assert torch.allclose(tn.unfolding(t, 2, batch=True), t.permute(0, 3, 1, 2).reshape(30, 10, -1))
+
 def test_cat():
 
     for i in range(100):
