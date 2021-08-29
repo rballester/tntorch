@@ -22,7 +22,10 @@ def cumsum(t, dim=None):
         if t.Us[n] is None:
             t.cores[n] = torch.cumsum(t.cores[n], dim=-2)
         else:
-            t.Us[n] = torch.cumsum(t.Us[n], dim=0)
+            if t.batch:
+                t.Us[n] = torch.cumsum(t.Us[n], dim=1)
+            else:
+                t.Us[n] = torch.cumsum(t.Us[n], dim=0)
     return t
 
 
@@ -315,7 +318,7 @@ def div(t1, t2):
     :return: a :class:`Tensor`
     """
 
-    return t1/t2
+    return t1 / t2
 
 
 def mul(t1, t2):

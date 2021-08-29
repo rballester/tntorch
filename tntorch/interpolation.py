@@ -58,8 +58,8 @@ def als_completion(X, y, ranks_tt, shape=None, ws=None, x0=None, niter=10, verbo
     # rights, however, needs to be initialized now
     rights = [None] * N
     rights[-1] = torch.ones(1, P, 1)
-    for dim in range(N-2, -1, -1):
-        rights[dim] = torch.einsum('ijk,kjl->ijl', (cores[dim+1][:, X[:, dim + 1], :], rights[dim + 1]))
+    for dim in range(N - 2, -1, -1):
+        rights[dim] = torch.einsum('ijk,kjl->ijl', (cores[dim + 1][:, X[:, dim + 1], :], rights[dim + 1]))
 
     def optimize_core(cores, mu, direction):
         sse = 0

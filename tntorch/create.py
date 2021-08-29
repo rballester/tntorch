@@ -1,7 +1,7 @@
 import tntorch as tn
 import torch
 import numpy as np
-from typing import Any, Callable, Iterable, Optional, Union
+from typing import Any, Callable, Iterable, Optional
 
 
 def eye(n, m=None, device=None, requires_grad=None):
@@ -102,7 +102,7 @@ def ones_like(t, **kwargs):
     :return: a :class:`Tensor`
     """
 
-    return ones(t.shape, **kwargs)
+    return tn.ones(t.shape, **kwargs)
 
 
 def full(shape, fill_value, **kwargs):
@@ -117,7 +117,7 @@ def full(shape, fill_value, **kwargs):
     :return: a TT :class:`Tensor` of rank 1
     """
 
-    return fill_value*tn.ones(*shape, **kwargs)
+    return fill_value * tn.ones(*shape, **kwargs)
 
 
 def full_like(t, fill_value, **kwargs):
@@ -157,7 +157,7 @@ def zeros_like(t, **kwargs):
     :return: a :class:`Tensor`
     """
 
-    return zeros(t.shape, **kwargs)
+    return tn.zeros(t.shape, **kwargs)
 
 
 def gaussian(*shape, sigma_factor=0.2):
@@ -174,7 +174,7 @@ def gaussian(*shape, sigma_factor=0.2):
         shape = shape[0]
     N = len(shape)
     if not hasattr(sigma_factor, '__len__'):
-        sigma_factor = [sigma_factor]*N
+        sigma_factor = [sigma_factor] * N
 
     cores = [torch.ones(1, 1, 1) for n in range(N)]
     Us = []
@@ -184,7 +184,7 @@ def gaussian(*shape, sigma_factor=0.2):
             x = torch.tensor([0])
         else:
             x = torch.linspace(-shape[n] / 2, shape[n] / 2, shape[n])
-        U = torch.exp(-x**2 / (2*sigma**2))
+        U = torch.exp(-x**2 / (2 * sigma**2))
         U = U[:, None] / torch.sum(U)
         Us.append(U)
     return tn.Tensor(cores, Us)
@@ -267,7 +267,7 @@ def _create(
 
     for n in range(N):
         if ranks_cp[n] is not None:
-            if ranks_tt[n] is not None or ranks_tt[n+1] is not None:
+            if ranks_tt[n] is not None or ranks_tt[n + 1] is not None:
                 raise ValueError('The ranks_tt and ranks_cp provided are incompatible')
 
             coreranks[n] = ranks_cp[n]
@@ -294,9 +294,9 @@ def _create(
                 Us.append(function([shape[n], ranks_tucker[n]], requires_grad=requires_grad, device=device))
         if ranks_cp[n] is None:
             if batch:
-                cores.append(function([shape[0], coreranks[n], corespatials[n + 1], coreranks[n+1]], requires_grad=requires_grad, device=device))
+                cores.append(function([shape[0], coreranks[n], corespatials[n + 1], coreranks[n + 1]], requires_grad=requires_grad, device=device))
             else:
-                cores.append(function([coreranks[n], corespatials[n], coreranks[n+1]], requires_grad=requires_grad, device=device))
+                cores.append(function([coreranks[n], corespatials[n], coreranks[n + 1]], requires_grad=requires_grad, device=device))
         else:
             if batch:
                 cores.append(function([shape[0], corespatials[n + 1], ranks_cp[n]], requires_grad=requires_grad, device=device))

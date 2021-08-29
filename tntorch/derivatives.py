@@ -24,8 +24,11 @@ def partialset(t, order=1, mask=None, bounds=None):
     :return: a :class:`Tensor`
     """
 
+    if t.batch:
+        raise ValueError('Batched tensors are not supproted.')
+
     if bounds is None:
-        bounds = [[0, sh-1] for sh in t.shape]
+        bounds = [[0, sh - 1] for sh in t.shape]
     if not hasattr(order, '__len__'):
         order = [order]
 
@@ -43,9 +46,9 @@ def partialset(t, order=1, mask=None, bounds=None):
         else:
             stack = [torch.einsum('ijk,aj->iak', (t.cores[n], t.Us[n]))]
         idx = torch.zeros([t.shape[n]])
-        for o in range(1, max_order+1):
+        for o in range(1, max_order + 1):
             stack.append(diff(stack[-1], n))
-            idx = torch.cat((idx, torch.ones(stack[-1].shape[-2])*o))
+            idx = torch.cat((idx, torch.ones(stack[-1].shape[-2]) * o))
             if o == max_order:
                 break
         cores.append(torch.cat(stack, dim=-2))
@@ -72,6 +75,9 @@ def partial(t, dim, order=1, bounds=None, periodic=False, pad='top'):
 
     :return: a :class:`Tensor`
     """
+
+    if t.batch:
+        raise ValueError('Batched tensors are not supproted.')
 
     if not hasattr(dim, '__len__'):
         dim = [dim]
@@ -126,6 +132,9 @@ def gradient(t, dim='all', bounds=None):
     :return: a :class:`Tensor` (or a list thereof)
     """
 
+    if t.batch:
+        raise ValueError('Batched tensors are not supproted.')
+
     if dim == 'all':
         dim = range(t.dim())
     if bounds is None:
@@ -134,9 +143,9 @@ def gradient(t, dim='all', bounds=None):
         bounds = [bounds]*len(dim)
 
     if not hasattr(dim, '__len__'):
-        return partial(t, dim, bounds)
+        return tn.partial(t, dim, bounds)
     else:
-        return [partial(t, d, order=1, bounds=b) for d, b in zip(dim, bounds)]
+        return [tn.partial(t, d, order=1, bounds=b) for d, b in zip(dim, bounds)]
 
 
 def active_subspace(t):
@@ -151,6 +160,9 @@ def active_subspace(t):
     :return: (eigvals, eigvecs): an array and a matrix, encoding the eigenpairs in descending order
     """
 
+    if t.batch:
+        raise ValueError('Batched tensors are not supproted.')
+
     grad = tn.gradient(t, dim='all')
 
     M = torch.zeros(t.dim(), t.dim())
@@ -160,7 +172,7 @@ def active_subspace(t):
             M[j, i] = M[i, j]
 
     w, v = torch.linalg.eigh(M)
-    idx = range(t.dim()-1, -1, -1)
+    idx = range(t.dim() - 1, -1, -1)
     w = w[idx]
     v = v[:, idx]
     return w, v

@@ -839,7 +839,7 @@ class Tensor(object):
             return self[slicing]
 
         if isinstance(key, torch.Tensor):
-            key = torch.tensor(key.cpu(), dtype=int)
+            key = key.clone().detach().cpu().long()
         if isinstance(key, np.ndarray) or isinstance(key, torch.Tensor) and key.ndim == 2:
             key = [key[:, col] for col in range(key.shape[1])]
 
