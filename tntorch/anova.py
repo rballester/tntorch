@@ -20,19 +20,31 @@ def anova_decomposition(t, marginals=None):
         marginals = [None] * t.dim()
     for n in range(t.dim()):
         if marginals[n] is None:
-            marginals[n] = torch.ones([t.shape[n]]) / float(t.shape[n])
+            if t.batch:
+                torch.ones([t.shape[0], t.shape[n + 1]]) / float(t.shape[n + 1])
+            else:
+                marginals[n] = torch.ones([t.shape[n]]) / float(t.shape[n])
     cores = [c.clone() for c in t.cores]
     Us = []
     idxs = []
     for n in range(t.dim()):
         if t.Us[n] is None:
-            U = torch.eye(t.shape[n])
+            if t.batch:
+                U = torch.eye(t.shape[n + 1]).repeat(t.shape[0], 1, 1)
+            else:
+                U = torch.eye(t.shape[n])
         else:
             U = t.Us[n]
-        expected = torch.sum(U * (marginals[n][:, None] / torch.sum(marginals[n])), dim=0, keepdim=True)
-        Us.append(torch.cat((expected, U-expected), dim=0))
-        idxs.append([0] + [1]*t.shape[n])
-    return tn.Tensor(cores, Us, idxs=idxs)
+
+        if t.batch:
+            expected = torch.sum(U * (marginals[n][:, :, None] / torch.sum(marginals[n], dim=1)), dim=1, keepdim=True)
+            Us.append(torch.cat((expected, U - expected), dim=1))
+            idxs.append([0] + [1] * t.shape[n])
+        else:
+            expected = torch.sum(U * (marginals[n][:, None] / torch.sum(marginals[n])), dim=0, keepdim=True)
+            Us.append(torch.cat((expected, U-expected), dim=0))
+            idxs.append([0] + [1] * t.shape[n])
+    return tn.Tensor(cores, Us, idxs=idxs, batch=t.batch)
 
 
 def undo_anova_decomposition(a):

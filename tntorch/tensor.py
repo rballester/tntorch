@@ -1134,7 +1134,7 @@ class Tensor(object):
                     elif cores[-1].dim() == 3 and factors['int'].dim() == 2:
                         cores[-1] = torch.einsum('iaj,jk->iak', (cores[-1], factors['int']))
             else:  # We return a scalar
-                if factors['int'].numel() > 1:
+                if not self.batch and factors['int'].numel() > 1:
                     return torch.sum(factors['int'])
                 return torch.squeeze(factors['int'])
 
@@ -1150,7 +1150,11 @@ class Tensor(object):
         else:
             return tn.Tensor(cores, Us=Us, batch=self.batch)
 
-    def __setitem__(self, key, value):  # TODO not fully working yet, check batch
+    def __setitem__(
+            self,
+            key: Union[Iterable[int], torch.Tensor, int, Any],
+            value: Any):
+
         key = self._process_key(key)
         scalar = False
         if isinstance(value, np.ndarray):
@@ -1160,6 +1164,12 @@ class Tensor(object):
                 value = value.item()
                 scalar = True
             else:
+                if self.batch:
+                    if isinstance(key[0], int):
+                        value = value[None]
+                    if len(value.shape) == 1:
+                        value = value[:, None]
+
                 value = tn.Tensor(value, batch=self.batch)
         elif isinstance(value, tn.Tensor):
             pass
@@ -1168,12 +1178,27 @@ class Tensor(object):
 
         subtract_cores = []
         add_cores = []
-        for i in range(len(key)):
+
+        key_length = len(key)
+        if self.batch:
+            key_length -= 1
+
+        for i in range(key_length):
             if not isinstance(key[i], slice) and not hasattr(key[i], '__len__'):
                 key[i] = slice(key[i], key[i] + 1)
-            chunk = self.cores[i][..., key[i], :]
+
             subtract_core = torch.zeros_like(self.cores[i])
-            subtract_core[..., key[i], :] += chunk
+            if self.batch:
+                chunk = self.cores[i][key[0], ..., key[i + 1], :]
+                subtract_core[key[0], ..., key[i + 1], :] += chunk
+                sh = chunk.shape[2]
+                k = i + 1
+            else:
+                chunk = self.cores[i][..., key[i], :]
+                subtract_core[..., key[i], :] += chunk
+                sh = chunk.shape[1]
+                k = i
+            
             subtract_cores.append(subtract_core)
             if scalar:
                 if self.batch:
@@ -1181,23 +1206,42 @@ class Tensor(object):
                         add_core = torch.zeros(self.shape[0], 1, self.shape[i + 1], 1)
                     else:
                         add_core = torch.zeros(self.shape[0], self.shape[i + 1], 1)
+                    
+                    add_core[key[0], ..., key[i + 1], :] += 1
+                    if i == 0:
+                        add_core *= value
                 else:
                     if self.cores[i].dim() == 3:
                         add_core = torch.zeros(1, self.shape[i], 1)
                     else:
                         add_core = torch.zeros(self.shape[i], 1)
 
-                add_core[..., key[i], :] += 1
-                if i == 0:
-                    add_core *= value
+                    add_core[..., key[i], :] += 1
+                    if i == 0:
+                        add_core *= value
             else:
-                if self.batch:
-                    if chunk.shape[2] != value.shape[i]:
-                        raise ValueError('{}-th dimension mismatch in tensor assignment: {} (lhs) != {} (rhs)'.format(i, chunk.shape[2], value.shape[i]))
-                    if self.cores[i].dim() == 4:
-                        add_core = torch.zeros(value.cores[i].shape[0], value.cores[i].shape[1], self.shape[i], value.cores[i].shape[3])
+                if len(value.shape) != len(key):
+                    if k == len(value.shape) - 1:
+                        value = value[..., None]
                     else:
-                        add_core = torch.zeros(value.cores[i].shape[0], self.shape[i], value.cores[i].shape[2])
+                        if sh == 1:
+                            if value.shape[k] == sh:
+                                value = value[..., None]
+                            else:
+                                current_shape = list(value.shape)
+                                new_shape = current_shape[:k] + [1] + current_shape[k:]
+                                value = tn.Tensor(value.torch().reshape(new_shape), batch=self.batch)
+
+                if self.batch:
+                    if self.cores[i].dim() == 4:
+                        add_core = torch.zeros(self.cores[i].shape[0], value.cores[i].shape[1], self.shape[i + 1], value.cores[i].shape[3])
+                    else:
+                        add_core = torch.zeros(self.cores[i].shape[0], self.shape[i + 1], value.cores[i].shape[2])
+
+                    if isinstance(key[i + 1], int):
+                        add_core[key[0], ..., key[i + 1], :] += value.cores[i][..., 0, :]
+                    else:
+                        add_core[key[0], ..., key[i + 1], :] += value.cores[i]
                 else:
                     if chunk.shape[1] != value.shape[i]:
                         raise ValueError('{}-th dimension mismatch in tensor assignment: {} (lhs) != {} (rhs)'.format(i, chunk.shape[1], value.shape[i]))
@@ -1206,10 +1250,10 @@ class Tensor(object):
                     else:
                         add_core = torch.zeros(self.shape[i], value.cores[i].shape[1])
 
-                add_core[..., key[i], :] += value.cores[i]
+                    add_core[..., key[i], :] += value.cores[i]
             add_cores.append(add_core)
         result = self - tn.Tensor(subtract_cores, batch=self.batch) + tn.Tensor(add_cores, batch=self.batch)
-        self.__init__(result.cores, result.Us, self.idxs)
+        self.__init__(result.cores, result.Us, self.idxs, batch=self.batch)
 
     def tucker_core(self):
         """

@@ -85,6 +85,9 @@ def truncated_svd(
 
     if batch:
         batch_size = M.shape[0]
+        dims_permute = [0, 2, 1]
+    else:
+        dims_permute = [1, 0]
 
     if algorithm == 'svd':
         start = time.time()
@@ -95,21 +98,17 @@ def truncated_svd(
             print('Time (SVD):', time.time() - start)
     else:
         start = time.time()
-        if M.shape[-2] <= M.shape[-1]:
-            if batch:
-                gram = M @ M.permute(0, 2, 1)
-            else:
-                gram = M @ M.permute(1, 0)
 
+        if M.shape[-2] <= M.shape[-1]:
+            gram = M @ M.permute(dims_permute)
             singular_vectors = 'left'
         else:
-            if batch:
-                gram = M.permute(0, 2, 1) @ M
-            else:
-                gram = M.permute(1, 0) @ M
+            gram = M.permute(dims_permute) @ M
             singular_vectors = 'right'
+
         if verbose:
             print('Time (gram):', time.time() - start)
+
         start = time.time()
         w, v = torch.linalg.eigh(gram)
         if verbose:
@@ -129,11 +128,12 @@ def truncated_svd(
             svd[0] = svd[0][..., idx]
             svd[1] = svd[1][..., idx]
 
+     # NOTE: Special case: M = zero -> rank is 1
     if batch:
-        if (svd[1][0] - torch.zeros_like(svd[1][0])).mean() < 1e-13:
+        if svd[1].max() < 1e-13:
             return torch.zeros([batch_size, M.shape[1], 1]), torch.zeros([batch_size, 1, M.shape[2]])
     else:
-        if svd[1][0] < 1e-13: # Special case: M = zero -> rank is 1
+        if svd[1][0] < 1e-13:
             return torch.zeros([M.shape[0], 1]), torch.zeros([1, M.shape[1]])
 
     S = svd[1]**2
@@ -155,32 +155,22 @@ def truncated_svd(
     start = time.time()
     if singular_vectors == 'left':
         if left_ortho:
-            if batch:
-                M2 = left.permute(0, 2, 1) @ M
-            else:
-                M2 = left.permute(1, 0) @ M
+            M2 = left.permute(dims_permute) @ M
         else:
+            M2 = (1. / svd[1][..., :rank])[..., None] * left.permute(dims_permute) @ M
             if batch:
-                M2 = (1. / svd[1][:, :rank])[:, :, None] * left.permute(0, 2, 1) @ M
-                left = torch.einsum('bij,bj->bij', left, svd[1][:, :rank])
+                left = torch.einsum('bij,bj->bij', left, svd[1][..., :rank])
             else:
-                M2 = (1. / svd[1][:rank])[:, None] * left.permute(1, 0) @ M
                 left = left * svd[1][:rank]
     else:
         if left_ortho:
-            if batch:
-                M2 = M @ (left * (1. / svd[1][:, :rank])[:, None, :])
-                left, M2 = M2, (left @ (torch.diag(svd[1][:, :rank]))).permute(0, 2, 1)
-            else:
-                M2 = M @ (left * (1. / svd[1][:rank])[None, :])
-                left, M2 = M2, (left @ (torch.diag(svd[1][:rank]))).permute(1, 0)
+            M2 = M @ (left * (1. / svd[1][..., :rank])[..., None, :])
+            left, M2 = M2, (left @ (torch.diag(svd[1][..., :rank]))).permute(dims_permute)
         else:
             M2 = M @ left
 
-            if batch:
-                left, M2 = M2, left.permute(0, 2, 1)
-            else:
-                left, M2 = M2, left.permute(1, 0)
+            left, M2 = M2, left.permute(dims_permute)
+    
     if verbose:
         print('Time (product):', time.time() - start)
 
