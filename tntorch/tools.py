@@ -46,7 +46,7 @@ def unsqueeze(t, dim):
     if not hasattr(dim, '__len__'):
         dim = [dim]
 
-    idx = [slice(None) for n in range(t.dim()+len(dim))]
+    idx = [slice(None) for n in range(t.dim() + len(dim))]
     for d in dim:
         idx[d] = None
     return t[tuple(idx)]
@@ -78,10 +78,10 @@ def cat(*ts, dim):
                 t.cores[dim] = torch.zeros(sumshapes[-1], t.cores[dim].shape[-1])
             else:
                 t.cores[dim] = torch.zeros(t.cores[dim].shape[0], sumshapes[-1], t.cores[dim].shape[-1])
-            t.cores[dim][..., sumshapes[i]:sumshapes[i+1], :] += ts[i].cores[dim]
+            t.cores[dim][..., sumshapes[i]:sumshapes[i + 1], :] += ts[i].cores[dim]
         else:
             t.Us[dim] = torch.zeros(sumshapes[-1], t.Us[dim].shape[-1])
-            t.Us[dim][sumshapes[i]:sumshapes[i+1], :] += ts[i].Us[dim]
+            t.Us[dim][sumshapes[i]:sumshapes[i + 1], :] += ts[i].Us[dim]
         if i == 0:
             result = t
         else:
@@ -499,15 +499,15 @@ def pad(t, shape, dim=None, fill_value=0):
         if t.Us[dim[i]] is None:
             if t.cores[dim[i]].dim() == 2:
                 t.cores[dim[i]] = torch.cat([t.cores[dim[i]],
-                                             mult*torch.ones(shape[i] - t.cores[dim[i]].shape[0],
-                                                         t.cores[dim[i]].shape[1])], dim=0)
+                                             mult * torch.ones(shape[i] - t.cores[dim[i]].shape[0],
+                                                               t.cores[dim[i]].shape[1])], dim=0)
             else:
                 t.cores[dim[i]] = torch.cat([t.cores[dim[i]],
-                                             mult*torch.ones(t.cores[dim[i]].shape[0],
-                                                         shape[i] - t.cores[dim[i]].shape[1],
-                                                         t.cores[dim[i]].shape[2])], dim=1)
+                                             mult * torch.ones(t.cores[dim[i]].shape[0],
+                                                               shape[i] - t.cores[dim[i]].shape[1],
+                                                               t.cores[dim[i]].shape[2])], dim=1)
         else:
             t.Us[dim[i]] = torch.cat([t.Us[dim[i]],
-                                         mult*torch.ones(shape[i] - t.Us[dim[i]].shape[0],
-                                                     t.Us[dim[i]].shape[1])], dim=0)
+                                      mult * torch.ones(shape[i] - t.Us[dim[i]].shape[0],
+                                                        t.Us[dim[i]].shape[1])], dim=0)
     return t

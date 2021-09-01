@@ -15,6 +15,9 @@ def anova_decomposition(t, marginals=None):
     :return: a :class:`Tensor`
     """
 
+    if t.batch:
+        raise ValueError('Batched tensors are not supproted.')
+
     marginals = copy.deepcopy(marginals)
     if marginals is None:
         marginals = [None] * t.dim()
@@ -29,9 +32,10 @@ def anova_decomposition(t, marginals=None):
             U = torch.eye(t.shape[n])
         else:
             U = t.Us[n]
+
         expected = torch.sum(U * (marginals[n][:, None] / torch.sum(marginals[n])), dim=0, keepdim=True)
         Us.append(torch.cat((expected, U-expected), dim=0))
-        idxs.append([0] + [1]*t.shape[n])
+        idxs.append([0] + [1] * t.shape[n])
     return tn.Tensor(cores, Us, idxs=idxs)
 
 

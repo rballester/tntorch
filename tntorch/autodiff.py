@@ -26,6 +26,9 @@ def optimize(tensors, loss_function, optimizer=torch.optim.Adam, tol=1e-4, max_i
     parameters = []
     for t in tensors:
         if isinstance(t, tn.Tensor):
+            if t.batch:
+                raise ValueError('Batched tensors are not supproted.')
+
             parameters.extend([c for c in t.cores if c.requires_grad])
             parameters.extend([U for U in t.Us if U is not None and U.requires_grad])
         elif t.requires_grad:
