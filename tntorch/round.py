@@ -1,8 +1,6 @@
-import tntorch as tn
 import torch
-import numpy as np
 import time
-
+from typing import Optional
 
 def round_tt(t, **kwargs):
     """
@@ -49,7 +47,16 @@ def round(t, **kwargs):
     return t2
 
 
-def truncated_svd(M, delta=None, eps=None, rmax=None, left_ortho=True, algorithm='svd', verbose=False, batch=False):
+def truncated_svd(
+    M: torch.tensor,
+    delta: Optional[float] = None,
+    eps: Optional[float] = None,
+    rmax: Optional[int] = None,
+    left_ortho: Optional[bool] = True,
+    algorithm: Optional[str] = 'svd',
+    verbose: Optional[bool] = False,
+    batch: Optional[bool] = False):
+
     """
     Decomposes a matrix M (size (m x n) in two factors U and V (sizes m x r and r x n) with bounded error (or given r).
 
@@ -72,12 +79,15 @@ def truncated_svd(M, delta=None, eps=None, rmax=None, left_ortho=True, algorithm
     if delta is None and eps is None:
         delta = 0
     if rmax is None:
-        rmax = np.iinfo(np.int32).max
+        rmax = torch.iinfo(torch.int32).max
     assert rmax >= 1
     assert algorithm in ('svd', 'eig')
 
     if batch:
         batch_size = M.shape[0]
+        dims_permute = [0, 2, 1]
+    else:
+        dims_permute = [1, 0]
 
     if algorithm == 'svd':
         start = time.time()
@@ -88,21 +98,17 @@ def truncated_svd(M, delta=None, eps=None, rmax=None, left_ortho=True, algorithm
             print('Time (SVD):', time.time() - start)
     else:
         start = time.time()
-        if M.shape[-2] <= M.shape[-1]:
-            if batch:
-                gram = torch.matmul(M, M.permute(0, 2, 1))
-            else:
-                gram = torch.mm(M, M.permute(1, 0))
 
+        if M.shape[-2] <= M.shape[-1]:
+            gram = M @ M.permute(dims_permute)
             singular_vectors = 'left'
         else:
-            if batch:
-                gram = torch.matmul(M.permute(0, 2, 1), M)
-            else:
-                gram = torch.mm(M.permute(1, 0), M)
+            gram = M.permute(dims_permute) @ M
             singular_vectors = 'right'
+
         if verbose:
             print('Time (gram):', time.time() - start)
+
         start = time.time()
         w, v = torch.linalg.eigh(gram)
         if verbose:
@@ -112,21 +118,22 @@ def truncated_svd(M, delta=None, eps=None, rmax=None, left_ortho=True, algorithm
         svd = [v, w]
         # Sort eigenvalues and eigenvectors in decreasing importance
         if batch:
-            reverse = np.arange(len(svd[1][0])-1, -1, -1)
+            reverse = torch.arange(len(svd[1][0]) - 1, -1, -1)
             idx = torch.argsort(svd[1])[:, reverse]
             svd[0] = torch.cat([svd[0][i, ..., idx[i]][None, ...] for i in range(len(idx))])
             svd[1] = torch.cat([svd[1][i, ..., idx[i]][None, ...] for i in range(len(idx))])
         else:
-            reverse = np.arange(len(svd[1])-1, -1, -1)
+            reverse = torch.arange(len(svd[1]) - 1, -1, -1)
             idx = torch.argsort(svd[1])[reverse]
             svd[0] = svd[0][..., idx]
             svd[1] = svd[1][..., idx]
 
+     # NOTE: Special case: M = zero -> rank is 1
     if batch:
-        if (svd[1][0] - torch.zeros_like(svd[1][0])).mean() < 1e-13:
+        if svd[1].max() < 1e-13:
             return torch.zeros([batch_size, M.shape[1], 1]), torch.zeros([batch_size, 1, M.shape[2]])
     else:
-        if svd[1][0] < 1e-13: # Special case: M = zero -> rank is 1
+        if svd[1][0] < 1e-13:
             return torch.zeros([M.shape[0], 1]), torch.zeros([1, M.shape[1]])
 
     S = svd[1]**2
@@ -134,8 +141,8 @@ def truncated_svd(M, delta=None, eps=None, rmax=None, left_ortho=True, algorithm
     if batch:
         rank = max(1, int(min(rmax, len(S[0]))))
     else:
-        reverse = np.arange(len(S)-1, -1, -1)
-        where = np.where((torch.cumsum(S[reverse], dim=0).detach().cpu() <= delta**2))[0]
+        reverse = torch.arange(len(S) - 1, -1, -1)
+        where = torch.where((torch.cumsum(S[reverse], dim=0) <= delta**2))[0]
 
         if len(where) == 0:
             rank = max(1, int(min(rmax, len(S))))
@@ -148,32 +155,22 @@ def truncated_svd(M, delta=None, eps=None, rmax=None, left_ortho=True, algorithm
     start = time.time()
     if singular_vectors == 'left':
         if left_ortho:
-            if batch:
-                M2 = torch.matmul(left.permute(0, 2, 1), M)
-            else:
-                M2 = torch.mm(left.permute(1, 0), M)
+            M2 = left.permute(dims_permute) @ M
         else:
+            M2 = (1. / svd[1][..., :rank])[..., None] * left.permute(dims_permute) @ M
             if batch:
-                M2 = torch.matmul((1. / svd[1][:, :rank])[:, :, None] * left.permute(0, 2, 1), M)
-                left = torch.einsum('bij,bj->bij', left, svd[1][:, :rank])
+                left = torch.einsum('bij,bj->bij', left, svd[1][..., :rank])
             else:
-                M2 = torch.mm((1. / svd[1][:rank])[:, None]*left.permute(1, 0), M)
                 left = left * svd[1][:rank]
     else:
         if left_ortho:
-            if batch:
-                M2 = torch.matmul(M, (left * (1. / svd[1][:, :rank])[:, None, :]))
-                left, M2 = M2, torch.matmul(left, (torch.diag(svd[1][:, :rank]))).permute(0, 2, 1)
-            else:
-                M2 = torch.mm(M, (left * (1. / svd[1][:rank])[None, :]))
-                left, M2 = M2, torch.mm(left, (torch.diag(svd[1][:rank]))).permute(1, 0)
+            M2 = M @ (left * (1. / svd[1][..., :rank])[..., None, :])
+            left, M2 = M2, (left @ (torch.diag(svd[1][..., :rank]))).permute(dims_permute)
         else:
-            if batch:
-                M2 = torch.matmul(M, left)
-                left, M2 = M2, left.permute(0, 2, 1)
-            else:
-                M2 = torch.mm(M, left)
-                left, M2 = M2, left.permute(1, 0)
+            M2 = M @ left
+
+            left, M2 = M2, left.permute(dims_permute)
+    
     if verbose:
         print('Time (product):', time.time() - start)
 

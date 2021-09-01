@@ -14,8 +14,12 @@ def _process(gt, approx):
     if is1 and is2:
         return gt, approx
     if is1:
+        if gt.batch:
+            raise ValueError('Batched tensors are not supproted.')
         gt = gt.torch()
     if is2:
+        if approx.batch:
+            raise ValueError('Batched tensors are not supproted.')
         approx = approx.torch()
     return gt, approx
 
@@ -182,6 +186,9 @@ def sum(t, dim=None, keepdim=False, _normalize=False):
 
     :return: a scalar (if keepdim is False and all dims were chosen) or :class:`Tensor` otherwise
     """
+    if t.batch:
+        raise ValueError('Batched tensors are not supproted.')
+
     if dim is None:
         dim = np.arange(t.dim())
 
@@ -190,27 +197,16 @@ def sum(t, dim=None, keepdim=False, _normalize=False):
 
     device = t.cores[0].device
 
-    if t.batch:
-        if _normalize:
-            us = [(1./t.shape[d])*torch.ones((t.shape[0], t.shape[d + 1])).to(device) for d in dim]
-        else:
-            us = [torch.ones((t.shape[0], t.shape[d + 1])).to(device) for d in dim]
+    if _normalize:
+        us = [(1./t.shape[d])*torch.ones(t.shape[d]).to(device) for d in dim]
     else:
-        if _normalize:
-            us = [(1./t.shape[d])*torch.ones(t.shape[d]).to(device) for d in dim]
-        else:
-            us = [torch.ones(t.shape[d]).to(device) for d in dim]
+        us = [torch.ones(t.shape[d]).to(device) for d in dim]
 
     result = tn.ttm(t, us, dim)
     if keepdim:
         return result
     else:
-        if t.batch and t.shape[0] == 1:
-            return tn.squeeze(result, np.arange(len(t.shape)))
-        elif t.batch:
-            return tn.squeeze(result, np.arange(1, len(t.shape)))
-        else:
-            return tn.squeeze(result, dim)
+        return tn.squeeze(result)
 
 
 def mean(t, dim=None, marginals=None, keepdim=False):
@@ -277,7 +273,7 @@ def skew(t):
     :return: a scalar
     """
 
-    return tn.mean(((t-tn.mean(t))/tn.std(t))**3)
+    return tn.mean(((t - tn.mean(t)) / tn.std(t))**3)
 
 
 def kurtosis(t, fisher=True):
@@ -290,7 +286,7 @@ def kurtosis(t, fisher=True):
     :return: a scalar
     """
 
-    return tn.mean(((t-tn.mean(t))/tn.std(t))**4) - fisher*3
+    return tn.mean(((t - tn.mean(t)) / tn.std(t))**4) - fisher * 3
 
 
 def raw_moment(t, k, marginals=None, eps=1e-6, algorithm='eig'):
@@ -372,6 +368,9 @@ def hadamard_sum(ts, eps=1e-6, algorithm='eig'):
     M = len(ts)
     tstt = []
     for m in range(M):  # Convert everything to the TT format
+        if ts[m].batch:
+            raise ValueError('Batched tensors are not supproted.')
+
         t = ts[m].decompress_tucker_factors()
         t._cp_to_tt()
         tstt.append(t)
@@ -384,7 +383,7 @@ def hadamard_sum(ts, eps=1e-6, algorithm='eig'):
         newcores = []
         for m in range(M):
             c = torch.einsum('ijkl,akbc->iajblc', (thiscores[m], nextcores[m]))  # vecmat product
-            c = torch.reshape(c, [c.shape[0]*c.shape[1]*c.shape[2], c.shape[3], c.shape[4]*c.shape[5]])
+            c = torch.reshape(c, [c.shape[0] * c.shape[1] * c.shape[2], c.shape[3], c.shape[4] * c.shape[5]])
             newcores.append(c)
         thiscores = tn.round_tt(tn.Tensor(newcores), eps=eps, algorithm=algorithm).cores
 
