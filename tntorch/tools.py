@@ -512,3 +512,58 @@ def pad(t, shape, dim=None, fill_value=0):
                                       mult * torch.ones(shape[i] - t.Us[dim[i]].shape[0],
                                                         t.Us[dim[i]].shape[1])], dim=0)
     return t
+
+
+def convolve(t1: tn.Tensor, t2: tn.Tensor, mode='full', **kwargs):
+    """
+    ND convolution of two compressed tensors. Note: this function uses cross-approximation to multiply both tensors in the Fourier frequency domain [1].
+
+    [1] M. Rakhuba, I. Oseledets: "Fast multidimensional convolution in low-rank formats via cross approximation" (2014)
+
+    :param t1: a `tn.Tensor`
+    :param t2: a `tn.Tensor`
+    :param mode: 'full' (default), 'same', or 'valid'. See `np.convolve`
+    :param kwargs: to be passed to the cross-approximation
+    :return: a `tn.Tensor`
+    """
+
+    N = t1.dim()
+    assert N == t2.dim()
+
+    t1 = t1.decompress_tucker_factors()
+    t2 = t2.decompress_tucker_factors()
+    t1f = tn.Tensor([torch.fft.fft(t1.cores[n], n=t1.shape[n]+t2.shape[n]-1, dim=1) for n in range(N)])
+    t2f = tn.Tensor([torch.fft.fft(t2.cores[n], n=t1.shape[n]+t2.shape[n]-1, dim=1) for n in range(N)])
+
+    def multr(x, y):
+        a = torch.real(x)
+        b = torch.imag(x)
+        c = torch.real(y)
+        d = torch.imag(y)
+        return a*c - b*d
+
+    def multi(x, y):
+        a = torch.real(x)
+        b = torch.imag(x)
+        c = torch.real(y)
+        d = torch.imag(y)
+        return b*c + a*d
+
+    t12fr = tn.cross(tensors=[t1f, t2f], function=multr, **kwargs)
+    t12fi = tn.cross(tensors=[t1f, t2f], function=multi, **kwargs)
+    t12fi.cores[-1] = t12fi.cores[-1]*1j
+    t12r = tn.Tensor([torch.fft.ifft(t12fr.cores[n], dim=1) for n in range(N)])
+    t12i = tn.Tensor([torch.fft.ifft(t12fi.cores[n], dim=1) for n in range(N)])
+    t12 = tn.cross(tensors=[t12r, t12i], function=lambda x, y: torch.real(x)+torch.real(y), **kwargs)
+
+    # Crop as needed
+    if mode == 'same':
+        for n in range(N):
+            k = min(t1.shape[n], t2.shape[n])
+            t12.cores[n] = t12.cores[n][:, k//2:k//2+max(t1.shape[n], t2.shape[n]), :]
+    elif mode == 'valid':
+        for n in range(N):
+            k = min(t1.shape[n], t2.shape[n])
+            t12.cores[n] = t12.cores[n][:, k-1:-(k-1), :]
+
+    return t12
