@@ -567,3 +567,51 @@ def convolve(t1: tn.Tensor, t2: tn.Tensor, mode='full', **kwargs):
             t12.cores[n] = t12.cores[n][:, k-1:-(k-1), :]
 
     return t12
+
+
+def shift_mode(t, n, shift, eps=1e-3):
+    """
+    Shift a mode back or forth within a TT. This is an *in-place* operation.
+
+    :param t: a `tn.Tensor`
+    :param n: which mode to move
+    :param shift: how many positions to move. If positive move right, if negative move left
+    :param eps: prescribed relative error tolerance. If 'same', ranks will be kept no larger than the original. Default is 1e-3
+    """
+
+    N = t.dim()
+    assert 0 <= n + shift < N
+
+    if shift == 0:
+        return t
+
+    if any([U is not None for U in t.Us]):
+        t = t.decompress_tucker_factors(_clone=False)
+    t.orthogonalize(n)
+    cores = t.cores
+    sign = np.sign(shift)
+    for i in range(n, n + shift, sign):
+        if sign == 1:
+            c1 = i
+            c2 = i+1
+            left_ortho = True
+        else:
+            c1 = i-1
+            c2 = i
+            left_ortho = False
+        R1 = cores[c1].shape[0]
+        R2 = cores[c1].shape[2]
+        R3 = cores[c2].shape[2]
+        I1 = cores[c1].shape[1]
+        I2 = cores[c2].shape[1]
+        sc = torch.einsum('iaj,jbk->ibak', (cores[c1], cores[c2]))
+        sc = sc.reshape(sc.shape[0]*sc.shape[1], sc.shape[2]*sc.shape[3])
+        if eps == 'same':
+            left, right = tn.truncated_svd(sc, eps=0, rmax=R2, left_ortho=left_ortho)
+        elif eps >= 0:
+            left, right = tn.truncated_svd(sc, eps=eps/np.sqrt(np.abs(shift)), left_ortho=left_ortho)
+        else:
+            raise ValueError("Relative error '{}' not recognized".format(eps))
+        newR2 = left.shape[1]
+        cores[c1] = left.reshape(R1, I2, newR2)
+        cores[c2] = right.reshape(newR2, I1, R3)
