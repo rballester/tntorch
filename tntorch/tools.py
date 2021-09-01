@@ -339,7 +339,7 @@ def mask(t, mask):
     return t*mask
 
 
-def sample(t, P=1):
+def sample(t, P=1, seed=None):
     """
     Generate P points (with replacement) from a joint PDF distribution represented by a tensor.
 
@@ -360,11 +360,12 @@ def sample(t, P=1):
         M /= torch.sum(M, dim=1)[:, None]  # Normalize row-wise
         M = np.hstack([np.zeros([M.shape[0], 1]), M])
         M = np.cumsum(M, axis=1)
-        thresh = np.random.rand(M.shape[0])
+        thresh = rng.random(M.shape[0])
         M -= thresh[:, np.newaxis]
         shiftand = np.logical_and(M[:, :-1] <= 0, M[:, 1:] > 0)  # Find where the sign switches
         return np.where(shiftand)[1]
 
+    rng = np.random.default_rng(seed=seed)
     N = t.dim()
     tsum = tn.sum(t, dim=np.arange(N), keepdim=True).decompress_tucker_factors()
     Xs = torch.zeros([P, N])
