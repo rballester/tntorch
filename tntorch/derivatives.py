@@ -109,65 +109,6 @@ def partial(t, dim, order=1, bounds=None, periodic=False):
     return t2
 
 
-def partial0(t, dim, order=1, bounds=None, periodic=False, pad='top'):
-    """
-    Compute a single partial derivative.
-
-    :param t: a :class:`Tensor`
-    :param dim: int or list of ints
-    :param order: how many times to derive. Default is 1
-    :param bounds: variable(s) range bounds (to compute the derivative step). If None (default), step 1 will be assumed
-    :param periodic: int or list of ints (same as `dim`), mark dimensions with periodicity
-    :param pad: string or list of strings indicating dimension zero-padding after differentiation. If 'top' (default) or 'bottom', the tensor will retain the same shape after the derivative. If 'none' it will lose one slice
-
-    :return: a :class:`Tensor`
-    """
-
-    if t.batch:
-        raise ValueError('Batched tensors are not supproted.')
-
-    if not hasattr(dim, '__len__'):
-        dim = [dim]
-    if bounds is None:
-        bounds = [[0, t.shape[n]-1] for n in range(t.dim())]
-    if not hasattr(bounds[0], '__len__'):
-        bounds = [bounds]
-    if not hasattr(periodic, '__len__'):
-        periodic = [periodic]*len(dim)
-    if not isinstance(pad, list):
-        pad = [pad]*len(dim)
-    device = t.cores[0].device
-
-    t2 = t.clone()
-    for i, d in enumerate(dim):
-        for o in range(1, order+1):
-            if periodic[i]:
-                step = (bounds[i][1] - bounds[i][0]) / t.shape[d]
-                if t2.Us[d] is None:
-                    t2.cores[d] = (t2.cores[d][:, list(range(1, t2.cores[d].shape[1]))+[0], :] - t2.cores[d])
-                else:
-                    t2.Us[d] = (t2.Us[d][list(range(1, t2.Us[d].shape[0]))+[0], :] - t2.Us[d]) / step
-            else:
-                step = (bounds[i][1] - bounds[i][0]) / (t.shape[d]-1)
-                if t2.Us[d] is None:
-                    t2.cores[d] = (t2.cores[d][..., 1:, :] - t2.cores[d][..., :-1, :]) / step
-                    if t2.cores[d].dim() == 3:
-                        pad_slice = torch.zeros(t2.cores[d].shape[0], 1, t2.cores[d].shape[2], device=device)
-                    else:
-                        pad_slice = torch.zeros(1, t2.cores[d].shape[1], device=device)
-                    if pad[i] == 'top':
-                        t2.cores[d] = torch.cat((t2.cores[d], pad_slice), dim=-2)
-                    if pad[i] == 'bottom':
-                        t2.cores[d] = torch.cat((pad_slice, t2.cores[d]), dim=-2)
-                else:
-                    t2.Us[d] = (t2.Us[d][1:, :] - t2.Us[d][:-1, :]) / step
-                    if pad[i] == 'top':
-                        t2.Us[d] = torch.cat((t2.Us[d], torch.zeros(1, t2.cores[d].shape[-2])), dim=0)
-                    if pad[i] == 'bottom':
-                        t2.Us[d] = torch.cat((torch.zeros(1, t2.cores[d].shape[-2]), t2.Us[d]), dim=0)
-    return t2
-
-
 def gradient(t, dim='all', bounds=None):
     """
     Compute the gradient of a tensor.
@@ -292,7 +233,7 @@ def divergence(ts, bounds=None):
         bounds = [bounds for n in range(len(ts))]
     assert len(bounds) == len(ts)
 
-    return sum([tn.partial0(ts[n], n, order=1, bounds=bounds[n]) for n in range(len(ts))])
+    return sum([tn.partial(ts[n], n, order=1, bounds=bounds[n]) for n in range(len(ts))])
 
 
 def curl(ts, bounds=None):
