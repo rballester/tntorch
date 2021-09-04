@@ -11,3 +11,4 @@ from .ops import *
 from .round import *
 from .tensor import *
 from .tools import *
+from .tt_matrix import *
