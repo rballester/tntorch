@@ -2,7 +2,7 @@ import numpy as np
 import torch
 import tntorch as tn
 import time
-from typing import Any, Iterable, Optional, Union
+from typing import Any, Optional, Sequence, Union
 
 # The derivative of lstsq() is not implemented as of PyTorch 1.9.0,
 # so we use cvxpylayer solver
@@ -108,14 +108,14 @@ class Tensor(object):
 
     def __init__(
         self,
-        data: Union[torch.Tensor, np.ndarray, Iterable[torch.Tensor]],
+        data: Union[torch.Tensor, np.ndarray, Sequence[torch.Tensor]],
         Us: Optional[Union[torch.Tensor, Any]] = None,
         idxs: Optional[Any] = None,
         device: Optional[Any] = None,
         requires_grad: Optional[bool] = None,
-        ranks_cp: Optional[Iterable[int]] = None,
-        ranks_tucker: Optional[Iterable[int]] = None,
-        ranks_tt: Optional[Iterable[int]] = None,
+        ranks_cp: Optional[Sequence[int]] = None,
+        ranks_tucker: Optional[Sequence[int]] = None,
+        ranks_tt: Optional[Sequence[int]] = None,
         eps: Optional[float] = None,
         max_iter: Optional[int] = 25,
         tol: Optional[float] = 1e-4,
@@ -784,7 +784,7 @@ class Tensor(object):
 
     def _process_key(
         self,
-        key: Union[Iterable[int], torch.Tensor, int, Any]):
+        key: Union[Sequence[int], torch.Tensor, int, Any]):
         if not hasattr(key, '__len__'):
             key = (key,)
         fancy = False
@@ -815,7 +815,7 @@ class Tensor(object):
 
     def __getitem__(
         self,
-        key: Union[Iterable[int], torch.Tensor, int, Any]):
+        key: Union[Sequence[int], torch.Tensor, int, Any]):
         """
         NumPy-style indexing for compressed tensors. There are 5 accessors supported: slices, index arrays, integers,
         None, or another Tensor (selection via binary indexing)
@@ -945,7 +945,7 @@ class Tensor(object):
 
         def get_key(
             counter: int,
-            key: Union[Iterable[int], torch.Tensor, int, Any]):
+            key: Union[Sequence[int], torch.Tensor, int, Any]):
             if self.Us[counter] is None:
                 if self.batch:
                     nCore = self.cores[counter][..., key, :][batch_dim_idx]
@@ -1157,7 +1157,7 @@ class Tensor(object):
 
     def __setitem__(
             self,
-            key: Union[Iterable[int], torch.Tensor, int, Any],
+            key: Union[Sequence[int], torch.Tensor, int, Any],
             value: Any):
 
         key = self._process_key(key)
@@ -1597,8 +1597,8 @@ class Tensor(object):
     def round_tucker(
         self,
         eps: float = 1e-14,
-        rmax: Optional[int] = None,
-        dim: Optional[Union[Iterable[int], str]] = 'all',
+        rmax: Optional[Union[int, Sequence[int]]] = None,
+        dim: Optional[Union[Sequence[int], str]] = 'all',
         algorithm: Optional[str] = 'svd'):
 
         """
@@ -1670,7 +1670,7 @@ class Tensor(object):
     def round_tt(
         self,
         eps: float = 1e-14,
-        rmax: Optional[int] = None,
+        rmax: Optional[Union[int, Sequence[int]]] = None,
         algorithm: Optional[str] = 'svd',
         verbose: Optional[bool] = False):
 
@@ -1687,8 +1687,8 @@ class Tensor(object):
 
         N = self.dim()
         if not hasattr(rmax, '__len__'):
-            rmax = [rmax] * (N-1)
-        assert len(rmax) == N-1
+            rmax = [rmax] * (N - 1)
+        assert len(rmax) == N - 1
 
         self._cp_to_tt()
         start = time.time()
@@ -1791,7 +1791,7 @@ class Tensor(object):
     def set_factors(
         self,
         name: str,
-        dim: Optional[Union[Iterable[int], str]] = 'all',
+        dim: Optional[Union[Sequence[int], str]] = 'all',
         requires_grad: Optional[bool] = False):
         """
         Sets factors Us of this tensor to be of a certain family.
@@ -1882,7 +1882,7 @@ class Tensor(object):
 
     def repeat(
         self,
-        *rep: Iterable[int]):
+        *rep: Sequence[int]):
 
         """
         Returns another tensor repeated along one or more axes; works like PyTorch's `repeat()`.
