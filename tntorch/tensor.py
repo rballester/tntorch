@@ -69,21 +69,21 @@ def _full_rank_tt(
     for n in range(1, N):
         if resh.shape[d1] < resh.shape[d2]:
             if batch:
-                I = torch.eye(resh.shape[1]).repeat(resh.shape[0], 1, 1)
+                I = torch.eye(resh.shape[1], device=device).repeat(resh.shape[0], 1, 1)
                 result.append(I.reshape([resh.shape[0], resh.shape[1] // shape[n], shape[n], resh.shape[1]]))
                 resh = torch.reshape(resh, (resh.shape[0], resh.shape[1] * shape[n + 1], resh.shape[2] // shape[n + 1]))
             else:
-                I = torch.eye(resh.shape[0])
+                I = torch.eye(resh.shape[0], device=device)
                 result.append(I.reshape([resh.shape[0] // shape[n - 1], shape[n - 1], resh.shape[0]]).to(device))
                 resh = torch.reshape(resh, (resh.shape[0] * shape[n], resh.shape[1] // shape[n]))
         else:
             if batch:
                 result.append(resh.reshape([resh.shape[0], resh.shape[1] // shape[n], shape[n], resh.shape[2]]))
-                I = torch.eye(resh.shape[2]).repeat(resh.shape[0], 1, 1)
+                I = torch.eye(resh.shape[2], device=device).repeat(resh.shape[0], 1, 1)
                 resh = I.reshape((resh.shape[0], resh.shape[2] * shape[n + 1], resh.shape[2] // shape[n + 1]))
             else:
                 result.append(resh.reshape([resh.shape[0] // shape[n - 1], shape[n - 1], resh.shape[1]]))
-                I = torch.eye(resh.shape[1])
+                I = torch.eye(resh.shape[1], device=device)
                 resh = I.reshape(resh.shape[1] * shape[n], resh.shape[1] // shape[n]).to(device)
 
     if batch:
