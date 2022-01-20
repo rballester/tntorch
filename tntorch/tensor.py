@@ -353,7 +353,7 @@ class Tensor(object):
 
             other.cores[0].data *= factor
             other.to(self.cores[0].device)
-        
+
         if self.batch != other.batch:
             raise ValueError('Tensors with the same batch mode are supported')
         if self.batch:
@@ -506,7 +506,7 @@ class Tensor(object):
             # We do the product core along 3 axes, unless it would blow up
             if self.batch:
                 d1 = this.cores[n].shape[2] * other.cores[n].shape[2]
-                
+
                 shape1 = (
                     core1.shape[0],
                     core1.shape[1] * core2.shape[1],
@@ -516,7 +516,7 @@ class Tensor(object):
                     shape2 = (this.Us[n].shape[0], this.Us[n].shape[1], -1)
             else:
                 d1 = this.cores[n].shape[1] * other.cores[n].shape[1]
-                
+
                 shape1 = (
                     core1.shape[0] * core2.shape[0],
                     core1.shape[1] * core2.shape[1],
@@ -1198,7 +1198,7 @@ class Tensor(object):
                 subtract_core[..., key[i], :] += chunk
                 sh = chunk.shape[1]
                 k = i
-            
+
             subtract_cores.append(subtract_core)
             if scalar:
                 if self.batch:
@@ -1206,7 +1206,7 @@ class Tensor(object):
                         add_core = torch.zeros(self.shape[0], 1, self.shape[i + 1], 1)
                     else:
                         add_core = torch.zeros(self.shape[0], self.shape[i + 1], 1)
-                    
+
                     add_core[key[0], ..., key[i + 1], :] += 1
                     if i == 0:
                         add_core *= value
