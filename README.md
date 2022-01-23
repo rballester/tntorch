@@ -20,7 +20,7 @@
 Available [tensor formats](https://github.com/rballester/tntorch/blob/master/docs/tutorials/main_formats.ipynb) include:
 
 - [CANDECOMP/PARAFAC (CP)](https://epubs.siam.org/doi/pdf/10.1137/07070111X)
-- [Tucker](https://epubs.siam.org/doi/pdf/10.1137/S0895479898346995)
+- [Tucker](https://epubs.siam.org/doi/pdf/10.1137/S0895479898346995) (implemented as TT with increasing ranks, which has equal expressive power. Tucker factors are unconstrained matrices, unlike unitary/orthogonal matrices in some implementations.)
 - [Tensor train (TT)](https://epubs.siam.org/doi/abs/10.1137/090752286?journalCode=sjoce3)
 - Hybrids: CP-Tucker, TT-Tucker, etc. 
 - [Partial support](https://github.com/rballester/tntorch/blob/master/docs/tutorials/other_formats.ipynb) for other decompositions such as [INDSCAL, CANDELINC, DEDICOM, PARATUCK2](https://epubs.siam.org/doi/pdf/10.1137/07070111X), and custom formats
@@ -84,6 +84,7 @@ Check out the [introductory notebook](https://github.com/rballester/tntorch/blob
 - [Boolean logic](https://github.com/rballester/tntorch/blob/master/docs/tutorials/logic.ipynb)
 - [Classification](https://github.com/rballester/tntorch/blob/master/docs/tutorials/classification.ipynb)
 - [Cross-approximation](https://github.com/rballester/tntorch/blob/master/docs/tutorials/cross.ipynb)
+- [Differentiable cross-approximation](https://github.com/rballester/tntorch/blob/master/docs/tutorials/diffcross.ipynb)
 - [Differentiation](https://github.com/rballester/tntorch/blob/master/docs/tutorials/derivatives.ipynb)
 - [Discrete/weighted finite automata](https://github.com/rballester/tntorch/blob/master/docs/tutorials/automata.ipynb)
 - [Exponential machines](https://github.com/rballester/tntorch/blob/master/docs/tutorials/exponential_machines.ipynb)

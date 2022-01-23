@@ -29,7 +29,9 @@ setup(
     install_requires=[
         'numpy',
         'scipy',
-        'torch'
+        'torch',
+        'cvxpy',
+        'cvxpylayers'
     ],
     license="LGPL",
     zip_safe=False,

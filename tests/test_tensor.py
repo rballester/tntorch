@@ -416,12 +416,12 @@ def test_set_item():
     a[5, 2, :] = 7
     b[5, 2, :] = 7
 
-    assert (a[5, 2, :].torch() - b[5, 2, :]).sum() == 0 and b[5, 2, 0] == 7
+    assert torch.allclose(a[5, 2, :].torch(), b[5, 2, :]) and b[5, 2, 0] == 7
 
     a[..., :] = 8
     b[..., :] = 8
 
-    assert (a[..., :].torch() - b[..., :]).sum() == 0 and b[5, 2, 0] == 8
+    assert torch.allclose(a[..., :].torch(), b[..., :]) and b[5, 2, 0] == 8
 
     a = tn.rand((10, 5, 6), ranks_tt=3)
     c = torch.zeros_like(b[:, 2, 0])
