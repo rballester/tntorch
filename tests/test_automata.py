@@ -18,4 +18,4 @@ def test_accepted_inputs():
         gt = tn.Tensor(torch.randint(0, 2, (1, 2, 3, 4)))
         idx = tn.automata.accepted_inputs(gt)
         assert len(idx) == round(tn.sum(gt).item())
-        assert torch.norm(gt[idx].torch() - 1).item() <= 1e-7
+        assert torch.norm(gt[idx].torch().double() - 1).item() <= 1e-7

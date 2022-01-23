@@ -198,9 +198,9 @@ def sum(t, dim=None, keepdim=False, _normalize=False):
     device = t.cores[0].device
 
     if _normalize:
-        us = [(1./t.shape[d])*torch.ones(t.shape[d]).to(device) for d in dim]
+        us = [(1./t.shape[d]) * torch.ones(t.shape[d], dtype=t.cores[0].dtype).to(device) for d in dim]
     else:
-        us = [torch.ones(t.shape[d]).to(device) for d in dim]
+        us = [torch.ones(t.shape[d], dtype=t.cores[0].dtype).to(device) for d in dim]
 
     result = tn.ttm(t, us, dim)
     if keepdim:

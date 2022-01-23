@@ -90,7 +90,7 @@ def accepted_inputs(t):
 
     :return Xs: a Torch matrix, each row is one string
     """
-
+    dtype = t.cores[0].dtype
     def recursion(Xs, left, rights, bound, mu):
         if t.batch:
             raise ValueError('Batched tensors are not supproted.')
@@ -99,7 +99,7 @@ def accepted_inputs(t):
 
         fiber = torch.einsum('ijk,k->ij', (t.cores[mu], rights[mu + 1]))
 
-        per_point = torch.matmul(left, fiber).round()
+        per_point = torch.matmul(left, fiber).double().round()
 
         c = torch.cat((torch.tensor([0], dtype=per_point.dtype), per_point.cumsum(dim=0))).long()
 
@@ -110,9 +110,9 @@ def accepted_inputs(t):
             recursion(Xs, torch.matmul(left, t.cores[mu][..., i, :]), rights, bound + c[i], mu + 1)
 
     Xs = torch.zeros([round(tn.sum(t).item()), t.dim()], dtype=torch.long)
-    rights = [torch.ones(1)]  # Precomputed right-product chains
+    rights = [torch.ones(1, dtype=dtype)]  # Precomputed right-product chains
     for core in t.cores[::-1]:
         rights.append(torch.matmul(torch.sum(core, dim=1), rights[-1]))
     rights = rights[::-1]
-    recursion(Xs, torch.ones(1), rights, 0, 0)
+    recursion(Xs, torch.ones(1, dtype=dtype), rights, 0, 0)
     return Xs

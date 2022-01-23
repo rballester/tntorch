@@ -45,15 +45,14 @@ def lstsq(
 
 
 def _full_rank_tt(
-    data: Union[torch.Tensor, Any],
+    data: torch.Tensor,
     batch: Optional[bool] = False): # Naive TT formatting, don't even attempt to compress
 
-    data = data.to(torch.get_default_dtype())
+    assert isinstance(data, torch.Tensor)
     shape = data.shape
-    result = []
-
-    data = data if isinstance(data, torch.Tensor) else torch.tensor(data)
+    dtype = data.dtype
     device = data.device
+    result = []
 
     if batch:
         N = data.dim() - 1
@@ -69,21 +68,21 @@ def _full_rank_tt(
     for n in range(1, N):
         if resh.shape[d1] < resh.shape[d2]:
             if batch:
-                I = torch.eye(resh.shape[1], device=device).repeat(resh.shape[0], 1, 1)
+                I = torch.eye(resh.shape[1], device=device, dtype=dtype).repeat(resh.shape[0], 1, 1)
                 result.append(I.reshape([resh.shape[0], resh.shape[1] // shape[n], shape[n], resh.shape[1]]))
                 resh = torch.reshape(resh, (resh.shape[0], resh.shape[1] * shape[n + 1], resh.shape[2] // shape[n + 1]))
             else:
-                I = torch.eye(resh.shape[0], device=device)
+                I = torch.eye(resh.shape[0], device=device, dtype=dtype)
                 result.append(I.reshape([resh.shape[0] // shape[n - 1], shape[n - 1], resh.shape[0]]).to(device))
                 resh = torch.reshape(resh, (resh.shape[0] * shape[n], resh.shape[1] // shape[n]))
         else:
             if batch:
                 result.append(resh.reshape([resh.shape[0], resh.shape[1] // shape[n], shape[n], resh.shape[2]]))
-                I = torch.eye(resh.shape[2], device=device).repeat(resh.shape[0], 1, 1)
+                I = torch.eye(resh.shape[2], device=device, dtype=dtype).repeat(resh.shape[0], 1, 1)
                 resh = I.reshape((resh.shape[0], resh.shape[2] * shape[n + 1], resh.shape[2] // shape[n + 1]))
             else:
                 result.append(resh.reshape([resh.shape[0] // shape[n - 1], shape[n - 1], resh.shape[1]]))
-                I = torch.eye(resh.shape[1], device=device)
+                I = torch.eye(resh.shape[1], device=device, dtype=dtype)
                 resh = I.reshape(resh.shape[1] * shape[n], resh.shape[1] // shape[n]).to(device)
 
     if batch:
@@ -187,7 +186,7 @@ class Tensor(object):
         self.Us = Us
         if isinstance(data, torch.Tensor):
             if data.dim() == 0:
-                data = data * torch.ones(1, device=device)
+                data = data * torch.ones(1, device=device, dtype=data.dtype)
             if ranks_cp is not None:  # Compute CP from full tensor: CP-ALS
                 if ranks_tt is not None:
                     raise ValueError('ALS for CP-TT is not yet supported')
@@ -1338,6 +1337,7 @@ class Tensor(object):
         t = self.decompress_tucker_factors(_clone=False)
 
         device = t.cores[0].device
+        dtype = t.cores[0].dtype
         if self.batch:
             m = 3
             idx1 = 'gai,gbi->gabi'
@@ -1345,13 +1345,13 @@ class Tensor(object):
             idx3 = 'gai,gibj->gabj'
             batch_size = self.cores[0].shape[0]
             shape = [batch_size]
-            factor = torch.ones(batch_size, 1, self.ranks_tt[0]).to(device)
+            factor = torch.ones(batch_size, 1, self.ranks_tt[0], dtype=dtype).to(device)
         else:
             m = 2
             idx1 = 'ai,bi->abi'
             idx2 = 'ai,bi->ab'
             idx3 = 'ai,ibj->abj'
-            factor = torch.ones(1, self.ranks_tt[0]).to(device)
+            factor = torch.ones(1, self.ranks_tt[0], dtype=dtype).to(device)
             shape = []
 
         for n in range(t.dim()):
