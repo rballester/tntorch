@@ -470,7 +470,10 @@ class Tensor(object):
 
         if not isinstance(other, Tensor):  # A scalar
             result = self.clone()
-            result.cores[0].data *= other
+            factor = np.abs(other)**(1/self.dim())  # We scale all cores by the same factor to prevent precision issues
+            for n in range(self.dim()):
+                result.cores[n].data *= factor
+            result.cores[0].data *= np.sign(other)
             return result
 
         if self.batch:
