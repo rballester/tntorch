@@ -24,6 +24,11 @@ def test_tensors():
         t2 = tn.cross(function=lambda x: x, tensors=t, ranks_tt=15, verbose=False)
         assert tn.relative_error(t, t2) < 1e-6
 
+    t = tn.rand([10] * 6, ranks_tt=10)
+    _, info = tn.cross(function=lambda x: x, tensors=[t], ranks_tt=15, verbose=False, return_info=True)
+    t2 = tn.cross_forward(info, function=lambda x: x, tensors=t)
+    assert tn.relative_error(t, t2) < 1e-6
+
 
 def test_ops():
 
