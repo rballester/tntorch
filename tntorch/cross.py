@@ -97,6 +97,26 @@ def argmax(tensors=None, function=lambda x: x, rmax=10, max_iter=10, verbose=Fal
     return info['argmin']
 
 
+# Initialize left and right interfaces for `tensors`
+def init_interfaces(tensors, rsets, N, device):
+    t_linterfaces = []
+    t_rinterfaces = []
+    for t in tensors:
+        linterfaces = [torch.ones(1, t.ranks_tt[0]).to(device)] + [None] * (N - 1)
+        rinterfaces = [None] * (N - 1) + [torch.ones(t.ranks_tt[t.dim()], 1).to(device)]
+        for j in range(N - 1):
+            M = torch.ones(t.cores[-1].shape[-1], len(rsets[j])).to(device)
+            for n in range(N - 1, j, -1):
+                if t.cores[n].dim() == 3:  # TT core
+                    M = torch.einsum('iaj,ja->ia', [t.cores[n][:, rsets[j][:, n - 1 - j], :].to(device), M])
+                else:  # CP factor
+                    M = torch.einsum('ai,ia->ia', [t.cores[n][rsets[j][:, n - 1 - j], :].to(device), M])
+            rinterfaces[j] = M
+        t_linterfaces.append(linterfaces)
+        t_rinterfaces.append(rinterfaces)
+    return t_linterfaces, t_rinterfaces
+
+
 def cross(
     function: Callable = lambda x: x,
     domain=None,
@@ -114,7 +134,8 @@ def cross(
     _minimize: bool = False,
     device: Any = None,
     suppress_warnings: bool = False,
-    detach_evaluations: bool = False):
+    detach_evaluations: bool = False,
+    truncate_ranks: bool = True):
     """
     Cross-approximation routine that samples a black-box function and returns an N-dimensional tensor train approximating it. It accepts either:
 
@@ -172,7 +193,7 @@ def cross(
     except ModuleNotFoundError:
         print(
             "Functions that require cross-approximation can be accelerated with the optional maxvolpy package," +
-            " which can be installed by 'pip install maxvolpy'. " + 
+            " which can be installed by 'pip install maxvolpy'. " +
             "More info is available at https://bitbucket.org/muxas/maxvolpy.")
         from tntorch.maxvol import py_maxvol, py_rect_maxvol
         maxvol = py_maxvol
@@ -223,8 +244,10 @@ def cross(
         ranks_tt = [ranks_tt] * (N - 1)
     ranks_tt = [1] + list(ranks_tt) + [1]
     Rs = np.array(ranks_tt)
-    for n in list(range(1, N)) + list(range(N - 1, -1, -1)):
-        Rs[n] = min(Rs[n - 1] * Is[n - 1], Rs[n], Is[n] * Rs[n + 1])
+
+    if truncate_ranks:
+        for n in list(range(1, N)) + list(range(N - 1, -1, -1)):
+            Rs[n] = min(Rs[n - 1] * Is[n - 1], Rs[n], Is[n] * Rs[n + 1])
 
     # Initialize cores at random
     cores = [torch.randn(Rs[n], Is[n], Rs[n + 1]).to(device) for n in range(N)]
@@ -234,25 +257,7 @@ def cross(
     randint = np.hstack([np.random.randint(0, Is[n + 1], [max(Rs), 1]) for n in range(N - 1)] + [np.zeros([max(Rs), 1], dtype=int)])
     rsets = [randint[:Rs[n + 1], n:] for n in range(N - 1)] + [np.array([[0]])]
 
-    # Initialize left and right interfaces for `tensors`
-    def init_interfaces():
-        t_linterfaces = []
-        t_rinterfaces = []
-        for t in tensors:
-            linterfaces = [torch.ones(1, t.ranks_tt[0]).to(device)] + [None] * (N - 1)
-            rinterfaces = [None] * (N - 1) + [torch.ones(t.ranks_tt[t.dim()], 1).to(device)]
-            for j in range(N - 1):
-                M = torch.ones(t.cores[-1].shape[-1], len(rsets[j])).to(device)
-                for n in range(N - 1, j, -1):
-                    if t.cores[n].dim() == 3:  # TT core
-                        M = torch.einsum('iaj,ja->ia', [t.cores[n][:, rsets[j][:, n - 1 - j], :].to(device), M])
-                    else:  # CP factor
-                        M = torch.einsum('ai,ia->ia', [t.cores[n][rsets[j][:, n - 1 - j], :].to(device), M])
-                rinterfaces[j] = M
-            t_linterfaces.append(linterfaces)
-            t_rinterfaces.append(rinterfaces)
-        return t_linterfaces, t_rinterfaces
-    t_linterfaces, t_rinterfaces = init_interfaces()
+    t_linterfaces, t_rinterfaces = init_interfaces(tensors, rsets, N, device)
 
     # Create a validation set
     Xs_val = [torch.as_tensor(np.random.choice(I, int(val_size))).to(device) for I in Is]
@@ -337,7 +342,7 @@ def cross(
             V = evaluate_function(j)
 
             # QR + maxvol towards the right
-            V = torch.reshape(V, [-1, V.shape[2]])  # Left unfolding
+            V = torch.reshape(V, [-1, Rs[j + 1]])  # Left unfolding
             Q, _ = torch.linalg.qr(V)
             if _minimize:
                 local, _ = rect_maxvol(Q.detach().cpu().numpy(), maxK=Q.shape[1])
@@ -415,7 +420,7 @@ def cross(
                 if newRs[n + 1] > Rs[n + 1]:
                     rsets[n] = np.vstack([rsets[n], extra[:newRs[n + 1]-Rs[n + 1], n:]])
             Rs = newRs
-            t_linterfaces, t_rinterfaces = init_interfaces()  # Recompute interfaces
+            t_linterfaces, t_rinterfaces = init_interfaces(tensors, rsets, N, device)  # Recompute interfaces
 
     if val_eps > eps and not _minimize and not suppress_warnings:
         logging.warning('eps={:g} (larger than {}) when cross-approximating {}'.format(val_eps, eps, function))
@@ -444,7 +449,6 @@ def cross_forward(
         domain=None,
         tensors=None,
         function_arg='vectors',
-        detach_evaluations=True,
         return_info=False):
     """
     Given TT-cross indices and a black-box function (to be evaluated on an arbitrary grid), computes a differentiable TT tensor as given by the TT-cross interpolation formula.
@@ -454,7 +458,6 @@ def cross_forward(
     :param domain: domain where `function` will be evaluated on, as in `tntorch.cross()`
     :param tensors: list of $M$ TT tensors where `function` will be evaluated on
     :param function_arg: type of argument accepted by `function`. See `tntorch.cross()`
-    :param detach_evaluations: Boolean, if True, will remove gradient buffers for the function when not selected
     :param return_info: Boolean, if True, will also return a dictionary with informative metrics about the algorithm's outcome
     :return: a TT :class:`Tensor`(if `return_info`=True, also a dictionary)
     """
@@ -493,22 +496,7 @@ def cross_forward(
     else:
         f = function
 
-    # Initialize left and right interfaces for `tensors`
-    def init_interfaces():
-        t_linterfaces = []
-        t_rinterfaces = []
-        for t in tensors:
-            linterfaces = [torch.ones(1, t.ranks_tt[0]).to(device)] + [None]*(N-1)
-            rinterfaces = [None] * (N-1) + [torch.ones(t.ranks_tt[t.dim()], 1).to(device)]
-            for j in range(N-1):
-                M = torch.ones(t.cores[-1].shape[-1], len(rsets[j])).to(device)
-                for n in range(N-1, j, -1):
-                    M = torch.einsum('iaj,ja->ia', [t.cores[n][:, rsets[j][:, n-1-j], :], M])
-                rinterfaces[j] = M
-            t_linterfaces.append(linterfaces)
-            t_rinterfaces.append(rinterfaces)
-        return t_linterfaces, t_rinterfaces
-    t_linterfaces, t_rinterfaces = init_interfaces()
+    t_linterfaces, t_rinterfaces = init_interfaces(tensors, rsets, N, device)
 
     def evaluate_function(j):  # Evaluate function over Rs[j] x Rs[j+1] fibers, each of size I[j]
         Xs = []
@@ -534,22 +522,9 @@ def cross_forward(
         V = evaluate_function(j)
         V = torch.reshape(V, [-1, V.shape[2]])  # Left unfolding
         A = V[left_locals[j], :]
+        X = torch.linalg.lstsq(A.t(), V.t()).solution.t()
 
-        # The derivative of lstsq() is not implemented as of PyTorch 1.8.0,
-        # so we use cvxpy solver
-        # Q, R = torch.linalg.qr(A)
-        # X = V.matmul(torch.linalg.pinv(R)).matmul(Q.t())
-        m, n = A.shape
-
-        Acp = cp.Parameter((m, n))
-        b = cp.Parameter(m)
-        x = cp.Variable(n)
-        obj = cp.sum_squares(Acp@x - b) + cp.sum_squares(x)
-        prob = cp.Problem(cp.Minimize(obj))
-        prob_th = CvxpyLayer(prob, [Acp, b], [x])
-
-        X = torch.reshape(prob_th(A, V, solver_args={'eps': 1e-10})[0], [Rs[j], Is[j], Rs[j + 1]])
-        cores.append(X)
+        cores.append(X.reshape(Rs[j], Is[j], Rs[j + 1]))
 
         # Map local indices to global ones
         local_r, local_i = np.unravel_index(left_locals[j], [Rs[j], Is[j]])

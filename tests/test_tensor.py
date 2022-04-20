@@ -1,29 +1,10 @@
 import tntorch as tn
 import pytest
 import torch
-from tntorch.tensor import lstsq
 torch.set_default_dtype(torch.float64)
 
 
 torch.manual_seed(1)
-
-
-def test_lstsq():
-    a = torch.rand((5, 6))
-    b = torch.rand((5, 6))
-
-    assert torch.allclose(lstsq(b, a, 'lstsq'), lstsq(b, a, 'qr'))
-    assert torch.norm(lstsq(b, a, 'qr') - lstsq(b, a, 'cvxpylayers', lam=0, eps=1e-8)) < 1e-3
-
-    a = torch.rand((10, 5, 6))
-    b = torch.rand((10, 5, 6))
-
-    assert torch.allclose(lstsq(b, a, 'lstsq'), lstsq(b, a, 'qr'))
-
-    a = torch.rand((10, 5, 6))
-    b = torch.rand((10, 5, 7))
-
-    assert torch.allclose(lstsq(b, a, 'lstsq'), lstsq(b, a, 'qr'))
 
 
 def test_complex_tensor():

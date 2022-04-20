@@ -30,8 +30,6 @@ setup(
         'numpy',
         'scipy',
         'torch',
-        'cvxpy',
-        'cvxpylayers'
     ],
     license="LGPL",
     zip_safe=False,
