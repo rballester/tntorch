@@ -306,7 +306,7 @@ def cross(
             evaluation_argmax = torch.argmax(evaluation)
             eval_min = torch.tan(np.pi / 2 - evaluation[evaluation_argmax]) + info['min']
             if info['min'] == 0 or eval_min < info['min']:
-                coords = np.unravel_index(evaluation_argmax, [Rs[j], Is[j], Rs[j + 1]])
+                coords = np.unravel_index(evaluation_argmax.cpu(), [Rs[j], Is[j], Rs[j + 1]])
                 info['min'] = eval_min
                 info['argmin'] = tuple(lsets[j][coords[0]][1:]) + tuple([coords[1]]) + tuple(rsets[j][coords[2]][:-1])
 
