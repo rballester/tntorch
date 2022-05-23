@@ -3,9 +3,7 @@ import torch
 import sys
 import time
 import numpy as np
-import cvxpy as cp
 import logging
-from cvxpylayers.torch import CvxpyLayer
 from typing import Any, Callable, Sequence, Union
 
 
@@ -134,8 +132,7 @@ def cross(
     _minimize: bool = False,
     device: Any = None,
     suppress_warnings: bool = False,
-    detach_evaluations: bool = False,
-    truncate_ranks: bool = True):
+    detach_evaluations: bool = False):
     """
     Cross-approximation routine that samples a black-box function and returns an N-dimensional tensor train approximating it. It accepts either:
 
@@ -244,10 +241,9 @@ def cross(
         ranks_tt = [ranks_tt] * (N - 1)
     ranks_tt = [1] + list(ranks_tt) + [1]
     Rs = np.array(ranks_tt)
-
-    if truncate_ranks:
-        for n in list(range(1, N)) + list(range(N - 1, -1, -1)):
-            Rs[n] = min(Rs[n - 1] * Is[n - 1], Rs[n], Is[n] * Rs[n + 1])
+    
+    for n in list(range(1, N)) + list(range(N - 1, -1, -1)):
+        Rs[n] = min(Rs[n - 1] * Is[n - 1], Rs[n], Is[n] * Rs[n + 1])
 
     # Initialize cores at random
     cores = [torch.randn(Rs[n], Is[n], Rs[n + 1]).to(device) for n in range(N)]

@@ -21,13 +21,13 @@ def test_construction():
 
 def test_tt_multiply():
     m = torch.rand(11 * 3, 23 * 2)
-    v = torch.rand(30, 11 * 3)  # Note: batch = 30, 10 features
+    v = torch.rand(30, 11 * 3)  # Note: batch = 30, 11 * 3 features
 
     input_dims = [11, 3]
     output_dims = [23, 2]
     ranks = [50]
 
-    ttm = tn.TTMatrix(m, input_dims=input_dims, output_dims=output_dims, ranks=ranks)
+    ttm = tn.TTMatrix(m, input_dims=input_dims, batch_size=30, output_dims=output_dims, ranks=ranks, verbose=True)
     assert torch.allclose(v @ m, tn.tt_multiply(ttm, v))
 
 

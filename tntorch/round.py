@@ -91,7 +91,7 @@ def truncated_svd(
 
     if algorithm == 'svd':
         start = time.time()
-        svd = torch.svd(M)[:2]
+        svd = torch.linalg.svd(M)[:2]
 
         singular_vectors = 'left'
         if verbose:

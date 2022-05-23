@@ -28,8 +28,9 @@ setup(
     include_package_data=True,
     install_requires=[
         'numpy',
+        'opt_einsum',
         'scipy',
-        'torch',
+        'torch>=1.11',
     ],
     license="LGPL",
     zip_safe=False,
