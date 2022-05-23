@@ -17,17 +17,17 @@
 - **Batch operations** (work in progress)
 
 
-Available [tensor formats](https://github.com/rballester/tntorch/blob/master/docs/tutorials/main_formats.ipynb) include:
+Available [tensor formats](https://github.com/rballester/tntorch/blob/main/docs/tutorials/main_formats.ipynb) include:
 
 - [CANDECOMP/PARAFAC (CP)](https://epubs.siam.org/doi/pdf/10.1137/07070111X)
 - [Tucker](https://epubs.siam.org/doi/pdf/10.1137/S0895479898346995) (implemented as TT with increasing ranks, which has equal expressive power. Tucker factors are unconstrained matrices, unlike unitary/orthogonal matrices in some implementations.)
 - [Tensor train (TT)](https://epubs.siam.org/doi/abs/10.1137/090752286?journalCode=sjoce3)
 - Hybrids: CP-Tucker, TT-Tucker, etc. 
-- [Partial support](https://github.com/rballester/tntorch/blob/master/docs/tutorials/other_formats.ipynb) for other decompositions such as [INDSCAL, CANDELINC, DEDICOM, PARATUCK2](https://epubs.siam.org/doi/pdf/10.1137/07070111X), and custom formats
+- [Partial support](https://github.com/rballester/tntorch/blob/main/docs/tutorials/other_formats.ipynb) for other decompositions such as [INDSCAL, CANDELINC, DEDICOM, PARATUCK2](https://epubs.siam.org/doi/pdf/10.1137/07070111X), and custom formats
 
 For example, the following networks both represent a 4D tensor (i.e. a real function that can take I1 x I2 x I3 x I4 possible values) in the TT and TT-Tucker formats:
 
-<p align="center"><img src="https://github.com/rballester/tntorch/blob/master/images/tensors.jpg" width="600" title="TT-Tucker"></p>
+<p align="center"><img src="https://github.com/rballester/tntorch/blob/main/images/tensors.jpg" width="600" title="TT-Tucker"></p>
 
 In *tntorch*, **all tensor decompositions share the same interface**. You can handle them in a transparent form, as if they were plain NumPy arrays or PyTorch tensors:
 
