@@ -11,7 +11,7 @@ def test_domain():
 
     domain = [torch.linspace(1, 10, 10) for n in range(3)]
     t = tn.cross(function=function, domain=domain, ranks_tt=3, function_arg='matrix')
-    gt = torch.meshgrid(domain)
+    gt = torch.meshgrid(domain, indexing='ij')
     gt = 1. / sum(gt)
 
     assert tn.relative_error(gt, t) < 5e-2
