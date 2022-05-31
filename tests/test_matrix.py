@@ -18,6 +18,9 @@ def test_construction():
     ttm = tn.TTMatrix(m, input_dims=input_dims, output_dims=output_dims, ranks=ranks)
     assert torch.allclose(m, ttm.torch())
 
+    cpm = tn.CPMatrix(m, input_dims=input_dims, output_dims=output_dims, rank=ranks[0])
+    assert torch.allclose(m, cpm.torch())
+
 
 def test_tt_multiply():
     m = torch.rand(11 * 3, 23 * 2)
@@ -27,8 +30,11 @@ def test_tt_multiply():
     output_dims = [23, 2]
     ranks = [50]
 
-    ttm = tn.TTMatrix(m, input_dims=input_dims, batch_size=30, output_dims=output_dims, ranks=ranks, verbose=True)
+    ttm = tn.TTMatrix(m, input_dims=input_dims, output_dims=output_dims, ranks=ranks)
     assert torch.allclose(v @ m, tn.tt_multiply(ttm, v))
+
+    cpm = tn.CPMatrix(m, input_dims=input_dims, output_dims=output_dims, rank=ranks[0])
+    assert torch.allclose(v @ m, tn.cp_multiply(cpm, v))
 
 
 def test_trace():

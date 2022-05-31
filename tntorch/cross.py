@@ -116,23 +116,24 @@ def init_interfaces(tensors, rsets, N, device):
 
 
 def cross(
-    function: Callable = lambda x: x,
-    domain=None,
-    tensors: Union[Any, Sequence[Any]] = None,
-    function_arg: str = 'vectors',
-    ranks_tt: Union[int, Sequence[int]] = None,
-    kickrank: int = 3,
-    rmax: int = 100,
-    eps: float = 1e-6,
-    max_iter: int = 25,
-    val_size: int = 1000,
-    verbose: bool = True,
-    return_info: bool = False,
-    record_samples: bool = False,
-    _minimize: bool = False,
-    device: Any = None,
-    suppress_warnings: bool = False,
-    detach_evaluations: bool = False):
+        function: Callable = lambda x: x,
+        domain=None,
+        tensors: Union[Any, Sequence[Any]] = None,
+        function_arg: str = 'vectors',
+        ranks_tt: Union[int, Sequence[int]] = None,
+        kickrank: int = 3,
+        rmax: int = 100,
+        eps: float = 1e-6,
+        max_iter: int = 25,
+        val_size: int = 1000,
+        verbose: bool = True,
+        return_info: bool = False,
+        record_samples: bool = False,
+        _minimize: bool = False,
+        device: Any = None,
+        suppress_warnings: bool = False,
+        detach_evaluations: bool = False):
+
     """
     Cross-approximation routine that samples a black-box function and returns an N-dimensional tensor train approximating it. It accepts either:
 
@@ -241,7 +242,7 @@ def cross(
         ranks_tt = [ranks_tt] * (N - 1)
     ranks_tt = [1] + list(ranks_tt) + [1]
     Rs = np.array(ranks_tt)
-    
+
     for n in list(range(1, N)) + list(range(N - 1, -1, -1)):
         Rs[n] = min(Rs[n - 1] * Is[n - 1], Rs[n], Is[n] * Rs[n + 1])
 

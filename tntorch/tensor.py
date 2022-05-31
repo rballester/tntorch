@@ -6,8 +6,8 @@ from typing import Any, Optional, Sequence, Union
 
 
 def _full_rank_tt(
-    data: torch.Tensor,
-    batch: Optional[bool] = False): # Naive TT formatting, don't even attempt to compress
+        data: torch.Tensor,
+        batch: Optional[bool] = False): #  NOTE: Naive TT formatting, don't even attempt to compress
 
     assert isinstance(data, torch.Tensor)
     shape = data.shape
@@ -67,21 +67,21 @@ class Tensor(object):
     """
 
     def __init__(
-        self,
-        data: Union[torch.Tensor, np.ndarray, Sequence[torch.Tensor]],
-        Us: Optional[Union[torch.Tensor, Any]] = None,
-        idxs: Optional[Any] = None,
-        device: Optional[Any] = None,
-        requires_grad: Optional[bool] = None,
-        ranks_cp: Optional[Sequence[int]] = None,
-        ranks_tucker: Optional[Sequence[int]] = None,
-        ranks_tt: Optional[Sequence[int]] = None,
-        eps: Optional[float] = None,
-        max_iter: Optional[int] = 25,
-        tol: Optional[float] = 1e-4,
-        verbose: Optional[bool] = False,
-        batch: Optional[bool] = False,
-        algorithm: Optional[str] = 'svd'):
+            self,
+            data: Union[torch.Tensor, np.ndarray, Sequence[torch.Tensor]],
+            Us: Optional[Union[torch.Tensor, Any]] = None,
+            idxs: Optional[Any] = None,
+            device: Optional[Any] = None,
+            requires_grad: Optional[bool] = None,
+            ranks_cp: Optional[Sequence[int]] = None,
+            ranks_tucker: Optional[Sequence[int]] = None,
+            ranks_tt: Optional[Sequence[int]] = None,
+            eps: Optional[float] = None,
+            max_iter: Optional[int] = 25,
+            tol: Optional[float] = 1e-4,
+            verbose: Optional[bool] = False,
+            batch: Optional[bool] = False,
+            algorithm: Optional[str] = 'svd'):
 
         """
         The constructor can either:
@@ -297,8 +297,8 @@ class Tensor(object):
     """
 
     def __add__(
-        self,
-        other: Union[Any, int, float]):
+            self,
+            other: Union[Any, int, float]):
 
         if not isinstance(other, Tensor): # A scalar
             factor = other
@@ -400,22 +400,22 @@ class Tensor(object):
         return Tensor(cores, Us=Us, batch=self.batch)
 
     def __radd__(
-        self,
-        other: Union[Any, torch.Tensor]):
+            self,
+            other: Union[Any, torch.Tensor]):
 
         if other is None:
             return self
         return self + other
 
     def __sub__(
-        self,
-        other: Union[Any, torch.Tensor]):
+            self,
+            other: Union[Any, torch.Tensor]):
 
         return self + -1 * other
 
     def __rsub__(
-        self,
-        other: Union[Any, torch.Tensor]):
+            self,
+            other: Union[Any, torch.Tensor]):
 
         return -1 * self + other
 
@@ -423,8 +423,8 @@ class Tensor(object):
         return -1 * self
 
     def __mul__(
-        self,
-        other: Union[Any, int, float]):
+            self,
+            other: Union[Any, int, float]):
 
         if not isinstance(other, Tensor):  # A scalar
             result = self.clone()
@@ -503,32 +503,32 @@ class Tensor(object):
         return tn.Tensor(cores, Us=Us, batch=self.batch)
 
     def __truediv__(
-        self,
-        other: Union[Any, torch.Tensor]):
+            self,
+            other: Union[Any, torch.Tensor]):
 
         return tn.cross(function=lambda x, y: x / y, tensors=[self, other], verbose=False)
 
     def __rtruediv__(
-        self,
-        other: Union[Any, torch.Tensor]):
+            self,
+            other: Union[Any, torch.Tensor]):
 
         return tn.cross(function=lambda x, y: x / y, tensors=[tn.full_like(self, fill_value=other), self], verbose=False)
 
     def __pow__(
-        self,
-        other: Union[Any, torch.Tensor]):
+            self,
+            other: Union[Any, torch.Tensor]):
 
         return tn.cross(function=lambda x, y: x**y, tensors=[self, tn.full_like(self, fill_value=power)], verbose=False)
 
     def __rmul__(
-        self,
-        other: Union[Any, torch.Tensor]):
+            self,
+            other: Union[Any, torch.Tensor]):
 
         return self * other
 
     def __truediv__(
-        self,
-        other: Union[Any, torch.Tensor]):
+            self,
+            other: Union[Any, torch.Tensor]):
 
         return self * (1./other)
 
@@ -624,8 +624,8 @@ class Tensor(object):
 
     @ranks_tt.setter
     def ranks_tt(
-        self,
-        value: int):
+            self,
+            value: int):
 
         self.round_tt(rmax=value)
 
@@ -641,8 +641,8 @@ class Tensor(object):
 
     @ranks_tucker.setter
     def ranks_tucker(
-        self,
-        value: int):
+            self,
+            value: int):
 
         self.round_tucker(rmax=value)
 
@@ -743,8 +743,8 @@ class Tensor(object):
     """
 
     def _process_key(
-        self,
-        key: Union[Sequence[int], torch.Tensor, int, Any]):
+            self,
+            key: Union[Sequence[int], torch.Tensor, int, Any]):
         if not hasattr(key, '__len__'):
             key = (key,)
         fancy = False
@@ -774,8 +774,8 @@ class Tensor(object):
         return key
 
     def __getitem__(
-        self,
-        key: Union[Sequence[int], torch.Tensor, int, Any]):
+            self,
+            key: Union[Sequence[int], torch.Tensor, int, Any]):
         """
         NumPy-style indexing for compressed tensors. There are 5 accessors supported: slices, index arrays, integers,
         None, or another Tensor (selection via binary indexing)
@@ -904,8 +904,8 @@ class Tensor(object):
                         Us.append(nU)
 
         def get_key(
-            counter: int,
-            key: Union[Sequence[int], torch.Tensor, int, Any]):
+                counter: int,
+                key: Union[Sequence[int], torch.Tensor, int, Any]):
             if self.Us[counter] is None:
                 if self.batch:
                     nCore = self.cores[counter][..., key, :][batch_dim_idx]
@@ -1232,9 +1232,9 @@ class Tensor(object):
         return tn.Tensor(self.cores, batch=self.batch).torch()
 
     def decompress_tucker_factors(
-        self,
-        dim: Optional[Union[str, Any]] = 'all',
-        _clone: Optional[bool] = True):
+            self,
+            dim: Optional[Union[str, Any]] = 'all',
+            _clone: Optional[bool] = True):
 
         """
         Decompresses this tensor along the Tucker factors only.
@@ -1339,8 +1339,8 @@ class Tensor(object):
         return factor
 
     def to(
-        self,
-        device: Any):
+            self,
+            device: Any):
 
         """
         Moves tensor to device.
@@ -1370,8 +1370,8 @@ class Tensor(object):
         return self.torch().detach().cpu().numpy()
 
     def _cp_to_tt(
-        self,
-        factor: Optional[Union[None, Any]] = None):
+            self,
+            factor: Optional[Union[None, Any]] = None):
         """
         Turn a CP factor into a TT core (each slice is a diagonal matrix)
         :param factor: CP factor. If None, all cores in this tensor will be converted
@@ -1448,8 +1448,8 @@ class Tensor(object):
             self.cores[mu] = torch.einsum(idx2, (self.cores[mu], R))
 
     def left_orthogonalize(
-        self,
-        mu: int):
+            self,
+            mu: int):
 
         """
         Makes the mu-th core left-orthogonal and pushes the R factor to its right core. This may change the ranks
@@ -1482,8 +1482,8 @@ class Tensor(object):
         return R
 
     def right_orthogonalize(
-        self,
-        mu: int):
+            self,
+            mu: int):
 
         """
         Makes the mu-th core right-orthogonal and pushes the L factor to its left core. Note: this may change the ranks
@@ -1523,8 +1523,8 @@ class Tensor(object):
         return L
 
     def orthogonalize(
-        self,
-        mu: int):
+            self,
+            mu: int):
 
         """
         Apply all left and right orthogonalizations needed to make the tensor mu-orthogonal.
@@ -1556,11 +1556,11 @@ class Tensor(object):
         return R, L
 
     def round_tucker(
-        self,
-        eps: float = 1e-14,
-        rmax: Optional[Union[int, Sequence[int]]] = None,
-        dim: Optional[Union[Sequence[int], str]] = 'all',
-        algorithm: Optional[str] = 'svd'):
+            self,
+            eps: float = 1e-14,
+            rmax: Optional[Union[int, Sequence[int]]] = None,
+            dim: Optional[Union[Sequence[int], str]] = 'all',
+            algorithm: Optional[str] = 'svd'):
 
         """
         Tries to recompress this tensor in place by reducing its Tucker ranks.
@@ -1629,11 +1629,11 @@ class Tensor(object):
                 self.right_orthogonalize(mu)
 
     def round_tt(
-        self,
-        eps: float = 1e-14,
-        rmax: Optional[Union[int, Sequence[int]]] = None,
-        algorithm: Optional[str] = 'svd',
-        verbose: Optional[bool] = False):
+            self,
+            eps: float = 1e-14,
+            rmax: Optional[Union[int, Sequence[int]]] = None,
+            algorithm: Optional[str] = 'svd',
+            verbose: Optional[bool] = False):
 
         """
         Tries to recompress this tensor in place by reducing its TT ranks.
@@ -1674,9 +1674,9 @@ class Tensor(object):
                 self.cores[mu - 1] = torch.einsum('ijk,kl', (self.cores[mu - 1], left))  # Pass factor to the left
 
     def round(
-        self,
-        eps: float = 1e-14,
-        **kwargs):
+            self,
+            eps: float = 1e-14,
+            **kwargs):
 
         """
         General recompression. Attempts to reduce TT ranks first; then does Tucker rounding with the remaining error
@@ -1750,10 +1750,10 @@ class Tensor(object):
     """
 
     def set_factors(
-        self,
-        name: str,
-        dim: Optional[Union[Sequence[int], str]] = 'all',
-        requires_grad: Optional[bool] = False):
+            self,
+            name: str,
+            dim: Optional[Union[Sequence[int], str]] = 'all',
+            requires_grad: Optional[bool] = False):
         """
         Sets factors Us of this tensor to be of a certain family.
 
@@ -1842,8 +1842,8 @@ class Tensor(object):
         return result
 
     def repeat(
-        self,
-        *rep: Sequence[int]):
+            self,
+            *rep: Sequence[int]):
 
         """
         Returns another tensor repeated along one or more axes; works like PyTorch's `repeat()`.
@@ -1879,8 +1879,8 @@ class Tensor(object):
 
 
 def _broadcast(
-    a: Any,
-    b: Any):
+        a: Any,
+        b: Any):
 
     if a.shape == b.shape:
         return a, b
@@ -1892,9 +1892,9 @@ def _broadcast(
 
 
 def _core_kron(
-    a: Any,
-    b: Any,
-    batch: Optional[bool] = False):
+        a: Any,
+        b: Any,
+        batch: Optional[bool] = False):
 
     if batch:
         assert a.shape[0] == b.shape[0]
