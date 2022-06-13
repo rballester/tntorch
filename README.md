@@ -4,7 +4,7 @@
 
 **[Read the Docs site: *http://tntorch.readthedocs.io/*](http://tntorch.readthedocs.io/)**
 
-[Welcome to *tntorch*](https://github.com/VMML/tntorch/blob/master/docs/tutorials/introduction.ipynb), a PyTorch-powered modeling and learning library using tensor networks. Such networks are unique in that [they use *multilinear* neural units](https://arxiv.org/abs/1711.00811) (instead of non-linear activation units). Features include:
+[Welcome to *tntorch*](https://github.com/rballester/tntorch/blob/main/docs/tutorials/introduction.ipynb), a PyTorch-powered modeling and learning library using tensor networks. Such networks are unique in that [they use *multilinear* neural units](https://arxiv.org/abs/1711.00811) (instead of non-linear activation units). Features include:
 
 - Basic and fancy **indexing** of tensors, **broadcasting**, **assignment**, etc.
 - Tensor **decomposition** and **reconstruction**
@@ -16,6 +16,19 @@
 - **Misc. operations** on tensors: stacking, unfolding, sampling, derivating, etc.
 - **Batch operations** (work in progress)
 
+If you use this package, please cite our paper:
+
+```
+@article{UBS:22,
+    title = {tntorch: Tensor Network Learning with {P}y{T}orch},
+    journal = {Journal of Machine Learning Research},
+    volume = {forthcoming},
+    year = {2022},
+    author = {Mikhail Usvyatsov and Rafael Ballester-Ripoll and Konrad Schindler},
+}
+```
+
+## Example Use Cases
 
 Available [tensor formats](https://github.com/rballester/tntorch/blob/main/docs/tutorials/main_formats.ipynb) include:
 
