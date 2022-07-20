@@ -179,13 +179,17 @@ class Tensor(object):
                                         self.cores[-1].shape[0],
                                         self.cores[-1].shape[1],
                                         ranks_cp-self.cores[-1].shape[2],
+                                        dtype=self.cores[-1].dtype,
                                         device=device)), dim=2)
                         else:
                             reverse = torch.arange(len(eigvals)-1, -1, -1)
                             idx = torch.argsort(eigvals)[reverse[:ranks_cp]]
                             self.cores.append(eigvecs[:, idx])
                             if self.cores[-1].shape[1] < ranks_cp:  # Complete with random entries
-                                self.cores[-1] = torch.cat((self.cores[-1], torch.randn(self.cores[-1].shape[0], ranks_cp-self.cores[-1].shape[1], device=device)), dim=1)
+                                self.cores[-1] = torch.cat(
+                                    (self.cores[-1], torch.randn(self.cores[-1].shape[0], ranks_cp-self.cores[-1].shape[1],
+                                    dtype=self.cores[-1].dtype,
+                                    device=device)), dim=1)
                 else: # CP on Tucker's core
                     self.cores = _full_rank_tt(data, batch)
                     self.round_tucker(rmax=ranks_tucker, algorithm=algorithm)
@@ -193,10 +197,10 @@ class Tensor(object):
 
                     if batch:
                         data_norms = torch.sqrt(torch.sum(data**2, dim=list(range(1, data.dim()))))
-                        self.cores = [torch.randn(data.shape[0], sh, ranks_cp, device=device) for sh in data.shape[1:]]
+                        self.cores = [torch.randn(data.shape[0], sh, ranks_cp, dtype=data.dtype, device=device) for sh in data.shape[1:]]
                     else:
                         data_norm = tn.norm(data)
-                        self.cores = [torch.randn(sh, ranks_cp, device=device) for sh in data.shape]
+                        self.cores = [torch.randn(sh, ranks_cp, dtype=data.dtype, device=device) for sh in data.shape]
 
                 if verbose:
                     print(' -- initialization time =', time.time() - start)
@@ -212,13 +216,13 @@ class Tensor(object):
                 for iter in range(max_iter):
                     for n in range(self.dim()):
                         if batch:
-                            khatri = torch.ones(batch_size, 1, ranks_cp, device=device)
-                            prod = torch.ones(batch_size, ranks_cp, ranks_cp, device=device)
+                            khatri = torch.ones(batch_size, 1, ranks_cp, dtype=data.dtype, device=device)
+                            prod = torch.ones(batch_size, ranks_cp, ranks_cp, dtype=data.dtype, device=device)
                             idxs = 'bir,bjr->bijr'
                             shape = [batch_size, -1, ranks_cp]
                         else:
-                            khatri = torch.ones(1, ranks_cp, device=device)
-                            prod = torch.ones(ranks_cp, ranks_cp, device=device)
+                            khatri = torch.ones(1, ranks_cp, dtype=data.dtype, device=device)
+                            prod = torch.ones(ranks_cp, ranks_cp, dtype=data.dtype, device=device)
                             idxs = 'ir,jr->ijr'
                             shape = [-1, ranks_cp]
 
@@ -372,12 +376,23 @@ class Tensor(object):
                 core2 = torch.einsum(idxs, (core2, other.Us[n]))
 
             if self.batch:
-                c1_st = torch.zeros([core2.shape[0], core2.shape[1], this.shape[n + 1], core1.shape[3]], device=core1.device)
-                c2_st = torch.zeros([core1.shape[0], core1.shape[1], this.shape[n + 1], core2.shape[3]], device=core2.device)
+                c1_st = torch.zeros(
+                    [core2.shape[0], core2.shape[1], this.shape[n + 1], core1.shape[3]],
+                    dtype=core1.dtype,
+                    device=core1.device)
+                c2_st = torch.zeros(
+                    [core1.shape[0], core1.shape[1], this.shape[n + 1], core2.shape[3]],
+                    dtype=core1.dtype,
+                    device=core2.device)
             else:
-                c1_st = torch.zeros([core2.shape[0], this.shape[n], core1.shape[2]], device=core1.device)
-                c2_st = torch.zeros([core1.shape[0], this.shape[n], core2.shape[2]], device=core2.device)
-
+                c1_st = torch.zeros(
+                    [core2.shape[0], this.shape[n], core1.shape[2]],
+                    dtype=core1.dtype,
+                    device=core1.device)
+                c2_st = torch.zeros(
+                    [core1.shape[0], this.shape[n], core2.shape[2]],
+                    dtype=core1.dtype,
+                    device=core2.device)
 
             column1 = torch.cat([core1, c1_st], dim=d)
             column2 = torch.cat([c2_st, core2], dim=d)
@@ -1592,11 +1607,12 @@ class Tensor(object):
         for mu in range(N - 1, -1, -1):
             if self.Us[mu] is None:
                 device = self.cores[mu].device
+                dtype = self.cores[mu].dtype
 
                 if self.batch:
-                    self.Us[mu] = torch.eye(self.shape[mu + 1]).repeat(batch_size, 1, 1).to(device)
+                    self.Us[mu] = torch.eye(self.shape[mu + 1], dtype=dtype).repeat(batch_size, 1, 1).to(device)
                 else:
-                    self.Us[mu] = torch.eye(self.shape[mu]).to(device)
+                    self.Us[mu] = torch.eye(self.shape[mu], dtype=dtype).to(device)
 
             # Send non-orthogonality to factor
             if self.batch:
