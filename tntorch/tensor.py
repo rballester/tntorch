@@ -304,23 +304,24 @@ class Tensor(object):
             self,
             other: Union[Any, int, float]):
 
-        if not isinstance(other, Tensor): # A scalar
+        device = self.cores[0].device
+
+        if not isinstance(other, Tensor):  # A scalar
             factor = other
 
             if self.batch:
-                other = Tensor([torch.ones([self.shape[0], 1, self.shape[n + 1], 1]) for n in range(self.dim())], batch=True)
+                other = Tensor([torch.ones([self.shape[0], 1, self.shape[n + 1], 1], device=device) for n in range(self.dim())], batch=True)
             else:
-                other = Tensor([torch.ones([1, self.shape[n], 1]) for n in range(self.dim())])
+                other = Tensor([torch.ones([1, self.shape[n], 1], device=device) for n in range(self.dim())])
 
             other.cores[0].data *= factor
-            other.to(self.cores[0].device)
 
         if self.batch != other.batch:
             raise ValueError('Tensors with the same batch mode are supported')
         if self.batch:
             assert self.shape[0] == other.shape[0], f'Batch dim must match, got {self.shape[0]} and {other.shape[0]}'
 
-        if self.dim() == 1: # Special case
+        if self.dim() == 1:  # Special case
             return Tensor([self.decompress_tucker_factors().cores[0] + other.decompress_tucker_factors().cores[0]])
 
         if self.batch:
@@ -353,17 +354,17 @@ class Tensor(object):
 
             if this.Us[n] is not None and other.Us[n] is not None:
                 if self.batch:
-                    slice1 = torch.cat([core1, torch.zeros(core2.shape[0], core1.shape[1], core1.shape[2], core1.shape[3])], dim=1)
-                    slice1 = torch.cat([slice1, torch.zeros(core1.shape[0], core1.shape[1] + core2.shape[1], core1.shape[2], core2.shape[3])], dim=3)
-                    slice2 = torch.cat([torch.zeros(core1.shape[0], core1.shape[1], core2.shape[2], core2.shape[3]), core2], dim=1)
-                    slice2 = torch.cat([torch.zeros(core1.shape[0], core1.shape[1]+core2.shape[1], core2.shape[2], core1.shape[3]), slice2], dim=3)
+                    slice1 = torch.cat([core1, torch.zeros(core2.shape[0], core1.shape[1], core1.shape[2], core1.shape[3], device=device)], dim=1)
+                    slice1 = torch.cat([slice1, torch.zeros(core1.shape[0], core1.shape[1] + core2.shape[1], core1.shape[2], core2.shape[3], device=device)], dim=3)
+                    slice2 = torch.cat([torch.zeros(core1.shape[0], core1.shape[1], core2.shape[2], core2.shape[3], device=device), core2], dim=1)
+                    slice2 = torch.cat([torch.zeros(core1.shape[0], core1.shape[1]+core2.shape[1], core2.shape[2], core1.shape[3], device=device), slice2], dim=3)
                     c = torch.cat([slice1, slice2], dim=2)
                     Us.append(torch.cat((self.Us[n], other.Us[n]), dim=2))
                 else:
-                    slice1 = torch.cat([core1, torch.zeros([core2.shape[0], core1.shape[1], core1.shape[2]])], dim=0)
-                    slice1 = torch.cat([slice1, torch.zeros(core1.shape[0] + core2.shape[0], core1.shape[1], core2.shape[2])], dim=2)
-                    slice2 = torch.cat([torch.zeros([core1.shape[0], core2.shape[1], core2.shape[2]]), core2], dim=0)
-                    slice2 = torch.cat([torch.zeros(core1.shape[0]+core2.shape[0], core2.shape[1], core1.shape[2]), slice2], dim=2)
+                    slice1 = torch.cat([core1, torch.zeros([core2.shape[0], core1.shape[1], core1.shape[2]], device=device)], dim=0)
+                    slice1 = torch.cat([slice1, torch.zeros(core1.shape[0] + core2.shape[0], core1.shape[1], core2.shape[2], device=device)], dim=2)
+                    slice2 = torch.cat([torch.zeros([core1.shape[0], core2.shape[1], core2.shape[2]], device=device), core2], dim=0)
+                    slice2 = torch.cat([torch.zeros(core1.shape[0]+core2.shape[0], core2.shape[1], core1.shape[2], device=device), slice2], dim=2)
                     c = torch.cat([slice1, slice2], dim=1)
                     Us.append(torch.cat((self.Us[n], other.Us[n]), dim=1))
 
