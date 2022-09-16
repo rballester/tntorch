@@ -16,7 +16,7 @@ with open('HISTORY.rst') as history_file:
 
 setup(
     name='tntorch',
-    version='1.0.1',
+    version='1.1.1',
     description="Tensor Network Learning with PyTorch",
     long_description="tntorch is a PyTorch-powered modeling and learning library using tensor networks. Features include basic and fancy indexing of tensors, broadcasting, assignment, etc.; tensor decomposition and arithmetics; adaptive sampling (cross-approximation); global optimization of tensors; sensitivity analysis; and more.",
     url='https://github.com/rballester/tntorch',
