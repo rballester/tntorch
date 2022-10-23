@@ -20,11 +20,14 @@ If you use this package, please cite our paper:
 
 ```
 @article{UBS:22,
-    title = {tntorch: Tensor Network Learning with {P}y{T}orch},
-    journal = {Journal of Machine Learning Research},
-    volume = {forthcoming},
-    year = {2022},
-    author = {Mikhail Usvyatsov and Rafael Ballester-Ripoll and Konrad Schindler},
+  author  = {Mikhail Usvyatsov and Rafael Ballester-Ripoll and Konrad Schindler},
+  title   = {tntorch: Tensor Network Learning with {PyTorch}},
+  journal = {Journal of Machine Learning Research},
+  year    = {2022},
+  volume  = {23},
+  number  = {208},
+  pages   = {1--6},
+  url     = {http://jmlr.org/papers/v23/21-1197.html}
 }
 ```
 
