@@ -323,15 +323,15 @@ def normalized_moment(t, k, marginals=None, eps=1e-12, algorithm='eig'):
     return raw_moment(t-tn.mean(t, marginals=marginals), k=k, marginals=marginals, eps=eps, algorithm=algorithm) / tn.var(t, marginals=marginals)**(k/2.)# / t.numel()
 
 
-def hadamard_sum(ts, eps=1e-6, algorithm='eig'):
+def hadamard_sum(ts, algorithm='exact', eps=None):
     """
     Given tensors :math:`t_1, \\dots, t_M`, computes :math:'\\Sum (t_1 \\circ \\dots \\circ t_M)'.
 
-    Reference: this is a variant of A. Novikov et al., "Putting MRFs on a Tensor Train" (2016), Alg. 1
-
     :param ts: a list of :class:`Tensor` (the algorithm will use temporary TT-format copies of those)
-    :param eps: relative error used at each rounding step (default is 1e-6)
-    :param algorithm: 'eig' (default) or 'svd'
+    :param algorithm: one of:
+        - exact (default)
+        - 'eig' or 'svd': an approximate algorithm will be used that is a variant of A. Novikov et al., "Putting MRFs on a Tensor Train" (2016), Alg. 1
+    :param eps: only for algoritm='eig' or 'svd'; relative error used at each rounding step
 
     :return: a scalar
     """
@@ -365,16 +365,39 @@ def hadamard_sum(ts, eps=1e-6, algorithm='eig'):
         cs = [cs[m].reshape([cs[m].shape[0], cores[m].shape[0], cores[m].shape[2], cs[m].shape[-1]]) for m in range(M)]
         return cs
 
+    assert all([ts[0].shape == ts[i].shape for i in range(1, len(ts))])
+
     M = len(ts)
     tstt = []
     for m in range(M):  # Convert everything to the TT format
         if ts[m].batch:
-            raise ValueError('Batched tensors are not supproted.')
+            raise ValueError('Batched tensors are not supported.')
 
         t = ts[m].decompress_tucker_factors()
         t._cp_to_tt()
         tstt.append(t)
     ts = tstt
+
+    if algorithm == 'exact':
+        K = len(ts)
+        N = ts[0].dim()
+        core = torch.ones(*[1]*K)
+        for n in range(0, N):
+            B = ts[0].shape[n]
+            core = core[None, ...].repeat(B, *[1]*K)
+            for i in range(K):
+                neworder = [0, *list(np.delete(np.arange(1, K+1), i)), i+1]
+                undo_neworder = np.argsort(neworder)
+                unfolded = core.permute(neworder)
+                shape = list(unfolded.shape)
+                unfolded = unfolded.reshape(B, -1, core.shape[i+1])
+                unfolded = torch.bmm(unfolded, ts[i].cores[n].permute(1, 0, 2))
+                shape[-1] = ts[i].cores[n].shape[2]
+                unfolded = unfolded.reshape(shape)
+                core = unfolded.permute(*undo_neworder)
+            core = torch.sum(core, dim=0)
+        return core.item()
+
     N = ts[0].dim()
     thiscores = get_tensor([t.cores[0] for t in ts])
 
