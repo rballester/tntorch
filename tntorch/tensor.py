@@ -73,7 +73,7 @@ class Tensor(object):
             idxs: Optional[Any] = None,
             device: Optional[Any] = None,
             requires_grad: Optional[bool] = None,
-            ranks_cp: Optional[Sequence[int]] = None,
+            ranks_cp: int = None,
             ranks_tucker: Optional[Sequence[int]] = None,
             ranks_tt: Optional[Sequence[int]] = None,
             eps: Optional[float] = None,
@@ -97,7 +97,7 @@ class Tensor(object):
         :param idxs: annotate maskable tensors (*advanced users*)
         :param device: PyTorch device
         :param requires_grad: Boolean
-        :param ranks_cp: an integer (or list)
+        :param ranks_cp: an integer
         :param ranks_tucker: an integer (or list)
         :param ranks_tt: an integer (or list)
         :param eps: maximal error
