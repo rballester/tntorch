@@ -356,8 +356,8 @@ def sample(t, P=1, seed=None):
         Treat each row of a matrix M as a PMF and select a column per row according to it
         """
 
-        M = np.abs(M)
-        M /= torch.sum(M, dim=1)[:, None]  # Normalize row-wise
+        M = np.abs(M.detach().numpy())
+        M /= np.sum(M, axis=1)[:, None]  # Normalize row-wise
         M = np.hstack([np.zeros([M.shape[0], 1]), M])
         M = np.cumsum(M, axis=1)
         thresh = rng.random(M.shape[0])
