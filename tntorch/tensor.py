@@ -1,8 +1,10 @@
-import numpy as np
-import torch
-import tntorch as tn
 import time
 from typing import Any, Optional, Sequence, Union
+
+import numpy as np
+import torch
+
+import tntorch as tn
 
 
 def _full_rank_tt(
@@ -294,7 +296,7 @@ class Tensor(object):
         if eps is not None: # TT-SVD (or TT-EIG) algorithm
             if ranks_cp is not None or ranks_tucker is not None or ranks_tt is not None:
                 raise ValueError('Specify eps or ranks, but not both')
-            self.round(eps)
+            self.round(eps, algorithm=algorithm)
 
     """
     Arithmetic operations
