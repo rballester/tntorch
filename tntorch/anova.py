@@ -1,6 +1,8 @@
 import copy
+
 import numpy as np
 import torch
+
 import tntorch as tn
 
 
@@ -16,7 +18,7 @@ def anova_decomposition(t, marginals=None):
     """
 
     if t.batch:
-        raise ValueError('Batched tensors are not supproted.')
+        raise ValueError("Batched tensors are not supproted.")
 
     marginals = copy.deepcopy(marginals)
     if marginals is None:
@@ -33,8 +35,10 @@ def anova_decomposition(t, marginals=None):
         else:
             U = t.Us[n]
 
-        expected = torch.sum(U * (marginals[n][:, None] / torch.sum(marginals[n])), dim=0, keepdim=True)
-        Us.append(torch.cat((expected, U-expected), dim=0))
+        expected = torch.sum(
+            U * (marginals[n][:, None] / torch.sum(marginals[n])), dim=0, keepdim=True
+        )
+        Us.append(torch.cat((expected, U - expected), dim=0))
         idxs.append([0] + [1] * t.shape[n])
     return tn.Tensor(cores, Us, idxs=idxs)
 
@@ -79,7 +83,9 @@ def truncate_anova(t, mask, keepdim=False, marginals=None):
     :return: a :class:`Tensor`
     """
 
-    t = tn.undo_anova_decomposition(tn.mask(tn.anova_decomposition(t, marginals=marginals), mask=mask))
+    t = tn.undo_anova_decomposition(
+        tn.mask(tn.anova_decomposition(t, marginals=marginals), mask=mask)
+    )
     if not keepdim:
         N = t.dim()
         affecting = torch.sum(tn.accepted_inputs(mask).double(), dim=0)
@@ -108,9 +114,15 @@ def sobol(t, mask, marginals=None, normalize=True):
         marginals = [None] * t.dim()
 
     a = tn.anova_decomposition(t, marginals)
-    a -= tn.Tensor([torch.cat((torch.ones(1, 1, 1),
-                               torch.zeros(1, sh-1, 1)), dim=1)
-                    for sh in a.shape])*a[(0,)*t.dim()]  # Set empty tuple to 0
+    a -= (
+        tn.Tensor(
+            [
+                torch.cat((torch.ones(1, 1, 1), torch.zeros(1, sh - 1, 1)), dim=1)
+                for sh in a.shape
+            ]
+        )
+        * a[(0,) * t.dim()]
+    )  # Set empty tuple to 0
     am = a.clone()
     for n in range(t.dim()):
         if marginals[n] is None:
@@ -159,7 +171,9 @@ def mean_dimension(t, mask=None, marginals=None):
     if mask is None:
         return tn.sobol(t, tn.weight(t.dim()), marginals=marginals)
     else:
-        return tn.sobol(t, tn.mask(tn.weight(t.dim()), mask), marginals=marginals) / tn.sobol(t, mask, marginals=marginals)
+        return tn.sobol(
+            t, tn.mask(tn.weight(t.dim()), mask), marginals=marginals
+        ) / tn.sobol(t, mask, marginals=marginals)
 
 
 def dimension_distribution(t, mask=None, order=None, marginals=None):
@@ -177,7 +191,11 @@ def dimension_distribution(t, mask=None, order=None, marginals=None):
     if order is None:
         order = t.dim()
     if mask is None:
-        return tn.sobol(t, tn.weight_one_hot(t.dim(), order+1), marginals=marginals).torch()[1:]
+        return tn.sobol(
+            t, tn.weight_one_hot(t.dim(), order + 1), marginals=marginals
+        ).torch()[1:]
     else:
-        mask2 = tn.mask(tn.weight_one_hot(t.dim(), order+1), mask)
-        return tn.sobol(t, mask2, marginals=marginals).torch()[1:] / tn.sobol(t, mask, marginals=marginals)
+        mask2 = tn.mask(tn.weight_one_hot(t.dim(), order + 1), mask)
+        return tn.sobol(t, mask2, marginals=marginals).torch()[1:] / tn.sobol(
+            t, mask, marginals=marginals
+        )

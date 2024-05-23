@@ -1,5 +1,6 @@
-import torch
 import numpy as np
+import torch
+
 import tntorch as tn
 
 
@@ -15,11 +16,11 @@ def _process(gt, approx):
         return gt, approx
     if is1:
         if gt.batch:
-            raise ValueError('Batched tensors are not supproted.')
+            raise ValueError("Batched tensors are not supproted.")
         gt = gt.torch()
     if is2:
         if approx.batch:
-            raise ValueError('Batched tensors are not supproted.')
+            raise ValueError("Batched tensors are not supproted.")
         approx = approx.torch()
     return gt, approx
 
@@ -52,15 +53,15 @@ def dot(t1, t2, k=None):
 
     def _project_spatial(core, M):
         if core.dim() == 3:
-            return torch.einsum('iak,aj->ijk', (core, M))
+            return torch.einsum("iak,aj->ijk", (core, M))
         else:
-            return torch.einsum('ak,aj->jk', (core, M))
+            return torch.einsum("ak,aj->jk", (core, M))
 
     def _project_left(core, M):
         if core.dim() == 3:
-            return torch.einsum('sr,rai->sai', (M, core))
+            return torch.einsum("sr,rai->sai", (M, core))
         else:
-            return torch.einsum('sr,ar->sar', (M, core))
+            return torch.einsum("sr,ar->sar", (M, core))
 
     t1, t2 = _process(t1, t2)
     if isinstance(t1, torch.Tensor) and isinstance(t2, torch.Tensor):
@@ -70,7 +71,11 @@ def dot(t1, t2, k=None):
         k = min(t1.dim(), t2.dim())
     assert k <= t1.dim() and k <= t2.dim()
     if not np.array_equal(t1.shape[:k], t2.shape[:k]):
-        raise ValueError('Dot product requires leading dimensions to be equal, but they are {} and {}'.format(t1.shape[:k], t2.shape[:k]))
+        raise ValueError(
+            "Dot product requires leading dimensions to be equal, but they are {} and {}".format(
+                t1.shape[:k], t2.shape[:k]
+            )
+        )
 
     # Crunch first k dimensions of both tensors
     for mu in range(k):
@@ -90,7 +95,7 @@ def dot(t1, t2, k=None):
         if Vcore.dim() == 3:
             Lprod = torch.matmul(tn.left_unfolding(Vcore).t(), tn.left_unfolding(Ucore))
         else:
-            Lprod = torch.einsum('as,sar->sr', (Vcore, Ucore))
+            Lprod = torch.einsum("as,sar->sr", (Vcore, Ucore))
 
     # Deal with unprocessed dimensions, if any
     if k < t1.dim():
@@ -106,7 +111,7 @@ def dot(t1, t2, k=None):
         if k == t2.dim():
             return torch.sum(Lprod)
         else:
-            t2trail = tn.Tensor(t2.cores[k:], t2.Us[k:])#.clone()
+            t2trail = tn.Tensor(t2.cores[k:], t2.Us[k:])  # .clone()
             t2trail.cores[0] = _project_left(t2trail.cores[0], Lprod.t())
             return t2trail
 
@@ -141,7 +146,9 @@ def relative_error(gt, approx):
     if isinstance(gt, torch.Tensor) and isinstance(approx, torch.Tensor):
         return torch.dist(gt, approx) / torch.norm(gt)
     dotgt = tn.dot(gt, gt)
-    return torch.sqrt((dotgt + tn.dot(approx, approx) - 2*tn.dot(gt, approx)).clamp(0)) / torch.sqrt(dotgt.clamp(0))
+    return torch.sqrt(
+        (dotgt + tn.dot(approx, approx) - 2 * tn.dot(gt, approx)).clamp(0)
+    ) / torch.sqrt(dotgt.clamp(0))
 
 
 def rmse(gt, approx):
@@ -172,8 +179,8 @@ def r_squared(gt, approx):
 
     gt, approx = _process(gt, approx)
     if isinstance(gt, torch.Tensor) and isinstance(approx, torch.Tensor):
-        return 1 - torch.dist(gt, approx)**2 / torch.dist(gt, torch.mean(gt))**2
-    return 1 - tn.dist(gt, approx)**2 / tn.normsq(gt-tn.mean(gt))
+        return 1 - torch.dist(gt, approx) ** 2 / torch.dist(gt, torch.mean(gt)) ** 2
+    return 1 - tn.dist(gt, approx) ** 2 / tn.normsq(gt - tn.mean(gt))
 
 
 def sum(t, dim=None, keepdim=False, _normalize=False):
@@ -187,18 +194,22 @@ def sum(t, dim=None, keepdim=False, _normalize=False):
     :return: a scalar (if keepdim is False and all dims were chosen) or :class:`Tensor` otherwise
     """
     if t.batch:
-        raise ValueError('Batched tensors are not supproted.')
+        raise ValueError("Batched tensors are not supproted.")
 
     if dim is None:
         dim = np.arange(t.dim())
 
-    if not hasattr(dim, '__len__'):
+    if not hasattr(dim, "__len__"):
         dim = [dim]
 
     device = t.cores[0].device
 
     if _normalize:
-        us = [(1./t.shape[d]) * torch.ones(t.shape[d], dtype=t.cores[0].dtype).to(device) for d in dim]
+        us = [
+            (1.0 / t.shape[d])
+            * torch.ones(t.shape[d], dtype=t.cores[0].dtype).to(device)
+            for d in dim
+        ]
     else:
         us = [torch.ones(t.shape[d], dtype=t.cores[0].dtype).to(device) for d in dim]
 
@@ -222,13 +233,13 @@ def mean(t, dim=None, marginals=None, keepdim=False):
     """
 
     if marginals is not None:
-        pdfcores = [torch.ones(sh)/sh for sh in t.shape]
+        pdfcores = [torch.ones(sh) / sh for sh in t.shape]
         if dim is None:
             dim = range(t.dim())
         for d, marg in zip(dim, marginals):
             pdfcores[d] = marg[None, :, None] / marg.sum()
         pdf = tn.Tensor(pdfcores)
-        return tn.sum(t*pdf, dim, keepdim)
+        return tn.sum(t * pdf, dim, keepdim)
 
     return tn.sum(t, dim, keepdim, _normalize=True)
 
@@ -247,9 +258,9 @@ def var(t, marginals=None):
         assert len(marginals) == t.dim()
         tcentered = t - tn.mean(t, marginals=marginals)
         pdf = tn.Tensor([marg[None, :, None] / marg.sum() for marg in marginals])
-        return tn.dot(tcentered*pdf, tcentered)
+        return tn.dot(tcentered * pdf, tcentered)
 
-    return tn.normsq(t-tn.mean(t)) / t.numel()
+    return tn.normsq(t - tn.mean(t)) / t.numel()
 
 
 def std(t):
@@ -273,7 +284,7 @@ def skew(t):
     :return: a scalar
     """
 
-    return tn.mean(((t - tn.mean(t)) / tn.std(t))**3)
+    return tn.mean(((t - tn.mean(t)) / tn.std(t)) ** 3)
 
 
 def kurtosis(t, fisher=True):
@@ -286,10 +297,10 @@ def kurtosis(t, fisher=True):
     :return: a scalar
     """
 
-    return tn.mean(((t - tn.mean(t)) / tn.std(t))**4) - fisher * 3
+    return tn.mean(((t - tn.mean(t)) / tn.std(t)) ** 4) - fisher * 3
 
 
-def raw_moment(t, k, marginals=None, eps=1e-6, algorithm='eig'):
+def raw_moment(t, k, marginals=None, eps=1e-6, algorithm="eig"):
     """
     Compute a raw moment :math:`\\mathbb{E}[t^k]'.
 
@@ -302,13 +313,13 @@ def raw_moment(t, k, marginals=None, eps=1e-6, algorithm='eig'):
     """
 
     if marginals is not None:
-        pdf = tn.Tensor([marg[None, :, None]/marg.sum() for marg in marginals])
-        return hadamard_sum([t]*(k-1) + [t*pdf], eps=eps, algorithm=algorithm)
+        pdf = tn.Tensor([marg[None, :, None] / marg.sum() for marg in marginals])
+        return hadamard_sum([t] * (k - 1) + [t * pdf], eps=eps, algorithm=algorithm)
 
-    return hadamard_sum([t]*k, eps=eps, algorithm=algorithm) / t.numel()
+    return hadamard_sum([t] * k, eps=eps, algorithm=algorithm) / t.numel()
 
 
-def normalized_moment(t, k, marginals=None, eps=1e-12, algorithm='eig'):
+def normalized_moment(t, k, marginals=None, eps=1e-12, algorithm="eig"):
     """
     Compute a normalized central moment :math:`\\mathbb{E}[(t - \\mathbb{E}[t])^k] / \\sigma^k'.
 
@@ -320,10 +331,18 @@ def normalized_moment(t, k, marginals=None, eps=1e-12, algorithm='eig'):
     :return: the :math:`k`-th order normalized moment of `t`
     """
 
-    return raw_moment(t-tn.mean(t, marginals=marginals), k=k, marginals=marginals, eps=eps, algorithm=algorithm) / tn.var(t, marginals=marginals)**(k/2.)# / t.numel()
+    return raw_moment(
+        t - tn.mean(t, marginals=marginals),
+        k=k,
+        marginals=marginals,
+        eps=eps,
+        algorithm=algorithm,
+    ) / tn.var(t, marginals=marginals) ** (
+        k / 2.0
+    )  # / t.numel()
 
 
-def hadamard_sum(ts, algorithm='exact', eps=None):
+def hadamard_sum(ts, algorithm="exact", eps=None):
     """
     Given tensors :math:`t_1, \\dots, t_M`, computes :math:'\\Sum (t_1 \\circ \\dots \\circ t_M)'.
 
@@ -345,11 +364,13 @@ def hadamard_sum(ts, algorithm='exact', eps=None):
         factor = torch.reshape(factor, [-1, factor.shape[-1]])
         core = torch.zeros(factor.shape[1], factor.shape[1] + 1, factor.shape[0])
         core[:, 0, :] = factor.t()
-        core = core.reshape(factor.shape[1] + 1, factor.shape[1], factor.shape[0]).permute(0, 2, 1)[:-1, :, :]
+        core = core.reshape(
+            factor.shape[1] + 1, factor.shape[1], factor.shape[0]
+        ).permute(0, 2, 1)[:-1, :, :]
         core = core.reshape([c.shape[1], c.shape[0], c.shape[2], c.shape[1]])
         if m == 0:
             core = torch.sum(core, dim=0, keepdim=True)
-        if m == M-1:
+        if m == M - 1:
             core = torch.sum(core, dim=-1, keepdim=True)
         return core
 
@@ -358,11 +379,16 @@ def hadamard_sum(ts, algorithm='exact', eps=None):
         cs = []
         for m in range(M):
             c = diag_core(cores[m], m)
-            cs.append(c.reshape(c.shape[0], c.shape[1]*c.shape[2], c.shape[3]))
+            cs.append(c.reshape(c.shape[0], c.shape[1] * c.shape[2], c.shape[3]))
         t = tn.Tensor(cs)
         t.round_tt(eps, algorithm=algorithm)
         cs = t.cores
-        cs = [cs[m].reshape([cs[m].shape[0], cores[m].shape[0], cores[m].shape[2], cs[m].shape[-1]]) for m in range(M)]
+        cs = [
+            cs[m].reshape(
+                [cs[m].shape[0], cores[m].shape[0], cores[m].shape[2], cs[m].shape[-1]]
+            )
+            for m in range(M)
+        ]
         return cs
 
     assert all([ts[0].shape == ts[i].shape for i in range(1, len(ts))])
@@ -371,26 +397,26 @@ def hadamard_sum(ts, algorithm='exact', eps=None):
     tstt = []
     for m in range(M):  # Convert everything to the TT format
         if ts[m].batch:
-            raise ValueError('Batched tensors are not supported.')
+            raise ValueError("Batched tensors are not supported.")
 
         t = ts[m].decompress_tucker_factors()
         t._cp_to_tt()
         tstt.append(t)
     ts = tstt
 
-    if algorithm == 'exact':
+    if algorithm == "exact":
         K = len(ts)
         N = ts[0].dim()
-        core = torch.ones(*[1]*K)
+        core = torch.ones(*[1] * K)
         for n in range(0, N):
             B = ts[0].shape[n]
-            core = core[None, ...].repeat(B, *[1]*K)
+            core = core[None, ...].repeat(B, *[1] * K)
             for i in range(K):
-                neworder = [0, *list(np.delete(np.arange(1, K+1), i)), i+1]
+                neworder = [0, *list(np.delete(np.arange(1, K + 1), i)), i + 1]
                 undo_neworder = np.argsort(neworder)
                 unfolded = core.permute(neworder)
                 shape = list(unfolded.shape)
-                unfolded = unfolded.reshape(B, -1, core.shape[i+1])
+                unfolded = unfolded.reshape(B, -1, core.shape[i + 1])
                 unfolded = torch.bmm(unfolded, ts[i].cores[n].permute(1, 0, 2))
                 shape[-1] = ts[i].cores[n].shape[2]
                 unfolded = unfolded.reshape(shape)
@@ -405,14 +431,25 @@ def hadamard_sum(ts, algorithm='exact', eps=None):
         nextcores = get_tensor([t.cores[n] for t in ts])
         newcores = []
         for m in range(M):
-            c = torch.einsum('ijkl,akbc->iajblc', (thiscores[m], nextcores[m]))  # vecmat product
-            c = torch.reshape(c, [c.shape[0] * c.shape[1] * c.shape[2], c.shape[3], c.shape[4] * c.shape[5]])
+            c = torch.einsum(
+                "ijkl,akbc->iajblc", (thiscores[m], nextcores[m])
+            )  # vecmat product
+            c = torch.reshape(
+                c,
+                [
+                    c.shape[0] * c.shape[1] * c.shape[2],
+                    c.shape[3],
+                    c.shape[4] * c.shape[5],
+                ],
+            )
             newcores.append(c)
         thiscores = tn.round_tt(tn.Tensor(newcores), eps=eps, algorithm=algorithm).cores
 
-        if n < N-1:
+        if n < N - 1:
             for m in range(M):  # Cast the vector as a TT-matrix for the next iteration
-                thiscores[m] = thiscores[m].reshape(thiscores[m].shape[0], 1, thiscores[m].shape[1], -1)
+                thiscores[m] = thiscores[m].reshape(
+                    thiscores[m].shape[0], 1, thiscores[m].shape[1], -1
+                )
         else:
             return tn.Tensor(thiscores).torch().item()
 

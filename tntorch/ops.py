@@ -1,5 +1,6 @@
-import tntorch as tn
 import torch
+
+import tntorch as tn
 
 
 def cumsum(t, dim=None):
@@ -14,7 +15,7 @@ def cumsum(t, dim=None):
 
     if dim is None:
         dim = range(t.dim())
-    if not hasattr(dim, '__len__'):
+    if not hasattr(dim, "__len__"):
         dim = [dim]
 
     t = t.clone()

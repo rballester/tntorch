@@ -1,5 +1,6 @@
-import tntorch as tn
 import torch
+
+import tntorch as tn
 
 
 def partialset(t, order=1, mask=None, bounds=None):
@@ -25,26 +26,32 @@ def partialset(t, order=1, mask=None, bounds=None):
     """
 
     if t.batch:
-        raise ValueError('Batched tensors are not supproted.')
+        raise ValueError("Batched tensors are not supproted.")
 
     if bounds is None:
         bounds = [[0, sh - 1] for sh in t.shape]
-    if not hasattr(order, '__len__'):
+    if not hasattr(order, "__len__"):
         order = [order]
 
     max_order = max(order)
+
     def diff(core, n):
         if core.shape[1] == 1:
-            raise ValueError('Tensor size {} along dimension {} not enough to compute high-order derivative'.format(t.shape[n], n))
+            raise ValueError(
+                "Tensor size {} along dimension {} not enough to compute high-order derivative".format(
+                    t.shape[n], n
+                )
+            )
         step = (bounds[n][1] - bounds[n][0]) / (core.shape[-2] - 1)
         return (core[..., 1:, :] - core[..., :-1, :]) / step
+
     cores = []
     idxs = []
     for n in range(t.dim()):
         if t.Us[n] is None:
             stack = [t.cores[n]]
         else:
-            stack = [torch.einsum('ijk,aj->iak', (t.cores[n], t.Us[n]))]
+            stack = [torch.einsum("ijk,aj->iak", (t.cores[n], t.Us[n]))]
         idx = torch.zeros([t.shape[n]])
         for o in range(1, max_order + 1):
             stack.append(diff(stack[-1], n))
@@ -54,7 +61,7 @@ def partialset(t, order=1, mask=None, bounds=None):
         cores.append(torch.cat(stack, dim=-2))
         idxs.append(idx)
     d = tn.Tensor(cores, idxs=idxs)
-    wm = tn.automata.weight_mask(t.dim(), order, nsymbols=max_order+1)
+    wm = tn.automata.weight_mask(t.dim(), order, nsymbols=max_order + 1)
     if mask is not None:
         wm = tn.mask(wm, mask)
     result = tn.mask(d, wm)
@@ -75,41 +82,55 @@ def partial(t, dim, order=1, bounds=None, periodic=False):
     :return: a :class:`Tensor`
     """
 
-    if not hasattr(dim, '__len__'):
+    if not hasattr(dim, "__len__"):
         dim = [dim]
     if bounds is None:
         bounds = [[0, t.shape[n]] for n in range(t.dim())]
-    if not hasattr(bounds[0], '__len__'):
+    if not hasattr(bounds[0], "__len__"):
         bounds = [bounds]
-    if not hasattr(periodic, '__len__'):
-        periodic = [periodic]*len(dim)
+    if not hasattr(periodic, "__len__"):
+        periodic = [periodic] * len(dim)
 
     t2 = t.clone()
     for i, d in enumerate(dim):
-        step = (bounds[i][1] - bounds[i][0]) / (t.shape[d]+1) * 2
-        for o in range(1, order+1):
+        step = (bounds[i][1] - bounds[i][0]) / (t.shape[d] + 1) * 2
+        for o in range(1, order + 1):
             if periodic[i]:
                 if t2.Us[d] is None:
-                    t2.cores[d] = (t2.cores[d][:, list(range(1, t2.cores[d].shape[1]))+[0], :] -
-                                   t2.cores[d][:, [-1]+list(range(0, t2.cores[d].shape[1]-1)), :]) / step
+                    t2.cores[d] = (
+                        t2.cores[d][:, list(range(1, t2.cores[d].shape[1])) + [0], :]
+                        - t2.cores[d][
+                            :, [-1] + list(range(0, t2.cores[d].shape[1] - 1)), :
+                        ]
+                    ) / step
                 else:
-                    t2.Us[d] = (t2.Us[d][list(range(1, t2.Us[d].shape[0])) + [0], :] -
-                                   t2.Us[d][[-1] + list(range(0, t2.Us[d].shape[0] - 1)), :]) / step
+                    t2.Us[d] = (
+                        t2.Us[d][list(range(1, t2.Us[d].shape[0])) + [0], :]
+                        - t2.Us[d][[-1] + list(range(0, t2.Us[d].shape[0] - 1)), :]
+                    ) / step
             else:
                 if t2.Us[d] is None:
-                    t2.cores[d] = t2.cores[d][:, [0]+list(range(t2.shape[d]))+[t2.shape[d]-1], :]
+                    t2.cores[d] = t2.cores[d][
+                        :, [0] + list(range(t2.shape[d])) + [t2.shape[d] - 1], :
+                    ]
                     t2.cores[d][:, 0, :] -= t2.cores[d][:, 2, :] - t2.cores[d][:, 1, :]
-                    t2.cores[d][:, -1, :] += t2.cores[d][:, -2, :] - t2.cores[d][:, -3, :]
-                    t2.cores[d] = (t2.cores[d][:, 2:, :] - t2.cores[d][:, :-2, :])/step
+                    t2.cores[d][:, -1, :] += (
+                        t2.cores[d][:, -2, :] - t2.cores[d][:, -3, :]
+                    )
+                    t2.cores[d] = (
+                        t2.cores[d][:, 2:, :] - t2.cores[d][:, :-2, :]
+                    ) / step
                 else:
-                    t2.Us[d] = t2.Us[d][[0] + list(range(t2.shape[d])) + [t2.shape[d] - 1], :]
+                    t2.Us[d] = t2.Us[d][
+                        [0] + list(range(t2.shape[d])) + [t2.shape[d] - 1], :
+                    ]
                     t2.Us[d][0, :] -= t2.Us[d][2, :] - t2.Us[d][1, :]
                     t2.Us[d][-1, :] += t2.Us[d][-2, :] - t2.Us[d][-3, :]
                     t2.Us[d] = (t2.Us[d][2:, :] - t2.Us[d][:-2, :]) / step
     return t2
 
 
-def gradient(t, dim='all', bounds=None):
+def gradient(t, dim="all", bounds=None):
     """
     Compute the gradient of a tensor.
 
@@ -121,16 +142,16 @@ def gradient(t, dim='all', bounds=None):
     """
 
     if t.batch:
-        raise ValueError('Batched tensors are not supproted.')
+        raise ValueError("Batched tensors are not supproted.")
 
-    if dim == 'all':
+    if dim == "all":
         dim = range(t.dim())
     if bounds is None:
         bounds = [[0, t.shape[d]] for d in dim]
-    if not hasattr(bounds, '__len__'):
-        bounds = [bounds]*len(dim)
+    if not hasattr(bounds, "__len__"):
+        bounds = [bounds] * len(dim)
 
-    if not hasattr(dim, '__len__'):
+    if not hasattr(dim, "__len__"):
         return tn.partial(t, dim, bounds)
     else:
         return [tn.partial(t, d, order=1, bounds=b) for d, b in zip(dim, bounds)]
@@ -151,10 +172,10 @@ def active_subspace(t, bounds, marginals=None):
     """
 
     if t.batch:
-        raise ValueError('Batched tensors are not supproted.')
+        raise ValueError("Batched tensors are not supproted.")
 
     if marginals is None:
-        marginals = [torch.ones(sh)/sh for sh in t.shape]
+        marginals = [torch.ones(sh) / sh for sh in t.shape]
     assert all([len(marginals[n]) == t.shape[n] for n in range(t.dim())])
     cores = []
     for n in range(t.dim()):
@@ -164,11 +185,11 @@ def active_subspace(t, bounds, marginals=None):
         cores.append(marg[None, :, None])
     pdf = tn.Tensor(cores)
 
-    grad = tn.gradient(t, dim='all', bounds=bounds)
+    grad = tn.gradient(t, dim="all", bounds=bounds)
 
     M = torch.zeros(t.dim(), t.dim())
     for i in range(t.dim()):
-        first = grad[i]*pdf
+        first = grad[i] * pdf
         for j in range(i, t.dim()):
             M[i, j] = tn.dot(first, grad[j])
             M[j, i] = M[i, j]
@@ -194,9 +215,8 @@ def dgsm(t, bounds, marginals):
     :return: a vector of size N
     """
 
-
     if marginals is None:
-        marginals = [torch.ones(sh)/sh for sh in t.shape]
+        marginals = [torch.ones(sh) / sh for sh in t.shape]
     assert all([len(marginals[n]) == t.shape[n] for n in range(t.dim())])
     cores = []
     for n in range(t.dim()):
@@ -207,11 +227,11 @@ def dgsm(t, bounds, marginals):
         cores.append(marg[None, :, None])
     pdf = tn.Tensor(cores)
 
-    grad = tn.gradient(t, dim='all', bounds=bounds)
+    grad = tn.gradient(t, dim="all", bounds=bounds)
 
     result = torch.zeros(t.dim())
     for n in range(t.dim()):
-        result[n] = tn.dot(grad[n]*pdf, grad[n])
+        result[n] = tn.dot(grad[n] * pdf, grad[n])
     return result
 
 
@@ -228,12 +248,14 @@ def divergence(ts, bounds=None):
     assert ts[0].dim() == len(ts)
     assert all([t.shape == ts[0].shape for t in ts[1:]])
     if bounds is None:
-        bounds = [None]*len(ts)
-    elif not hasattr(bounds[0], '__len__'):
+        bounds = [None] * len(ts)
+    elif not hasattr(bounds[0], "__len__"):
         bounds = [bounds for n in range(len(ts))]
     assert len(bounds) == len(ts)
 
-    return sum([tn.partial(ts[n], n, order=1, bounds=bounds[n]) for n in range(len(ts))])
+    return sum(
+        [tn.partial(ts[n], n, order=1, bounds=bounds[n]) for n in range(len(ts))]
+    )
 
 
 def curl(ts, bounds=None):
@@ -250,13 +272,15 @@ def curl(ts, bounds=None):
     assert len(ts) == 3
     if bounds is None:
         bounds = [None for n in range(3)]
-    elif not hasattr(bounds[0], '__len__'):
+    elif not hasattr(bounds[0], "__len__"):
         bounds = [bounds for n in range(3)]
     assert len(bounds) == 3
 
-    return [tn.partial(ts[2], 1, bounds=bounds[1]) - tn.partial(ts[1], 2, bounds=bounds[2]),
-            tn.partial(ts[0], 2, bounds=bounds[2]) - tn.partial(ts[2], 0, bounds=bounds[0]),
-            tn.partial(ts[1], 0, bounds=bounds[0]) - tn.partial(ts[0], 1, bounds=bounds[1])]
+    return [
+        tn.partial(ts[2], 1, bounds=bounds[1]) - tn.partial(ts[1], 2, bounds=bounds[2]),
+        tn.partial(ts[0], 2, bounds=bounds[2]) - tn.partial(ts[2], 0, bounds=bounds[0]),
+        tn.partial(ts[1], 0, bounds=bounds[0]) - tn.partial(ts[0], 1, bounds=bounds[1]),
+    ]
 
 
 def laplacian(t, bounds=None):
@@ -270,8 +294,8 @@ def laplacian(t, bounds=None):
     """
 
     if bounds is None:
-        bounds = [None]*t.dim()
-    elif not hasattr(bounds[0], '__len__'):
+        bounds = [None] * t.dim()
+    elif not hasattr(bounds[0], "__len__"):
         bounds = [bounds for n in range(t.dim())]
     assert len(bounds) == t.dim()
 

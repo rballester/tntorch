@@ -1,6 +1,7 @@
-import torch
-import tntorch as tn
 import numpy as np
+import torch
+
+import tntorch as tn
 
 
 def true(N):
@@ -123,9 +124,14 @@ def relevant_symbols(t):
     :return: a list of integers
     """
 
-    cores = [torch.cat((c[:, 1:2, :]-c[:, 0:1, :], c), dim=1) for c in t.cores]
+    cores = [torch.cat((c[:, 1:2, :] - c[:, 0:1, :], c), dim=1) for c in t.cores]
     t2 = tn.Tensor(cores)
-    return [n for n in range(t.dim()) if tn.norm(t2[[slice(1, 3)]*n + [0] + [slice(1, 3)]*(t.dim()-n-1)]) > 1e-10]
+    return [
+        n
+        for n in range(t.dim())
+        if tn.norm(t2[[slice(1, 3)] * n + [0] + [slice(1, 3)] * (t.dim() - n - 1)])
+        > 1e-10
+    ]
 
 
 def irrelevant_symbols(t):

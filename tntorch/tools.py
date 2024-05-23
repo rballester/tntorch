@@ -1,9 +1,10 @@
-import tntorch as tn
-import torch
-import numpy as np
 import time
-import scipy.fftpack
 
+import numpy as np
+import scipy.fftpack
+import torch
+
+import tntorch as tn
 
 """
 Array-like manipulations
@@ -22,7 +23,7 @@ def squeeze(t, dim=None):
 
     if dim is None:
         dim = np.where([s == 1 for s in t.shape])[0]
-    if not hasattr(dim, '__len__'):
+    if not hasattr(dim, "__len__"):
         dim = [dim]
 
     assert np.all(np.array(t.shape)[dim] == 1)
@@ -43,7 +44,7 @@ def unsqueeze(t, dim):
     :return: a :class:`Tensor` with dummy (singleton) dimensions inserted at the positions given by `dim`
     """
 
-    if not hasattr(dim, '__len__'):
+    if not hasattr(dim, "__len__"):
         dim = [dim]
 
     idx = [slice(None) for n in range(t.dim() + len(dim))]
@@ -62,12 +63,24 @@ def cat(*ts, dim):
     :return: a :class:`Tensor` of the same shape as all tensors in the list, except along `dim` where it has the sum of shapes
     """
 
-    if hasattr(ts[0], '__len__'):
+    if hasattr(ts[0], "__len__"):
         ts = ts[0]
     if len(ts) == 1:
         return ts[0].clone()
-    if any([any([t.shape[n] != ts[0].shape[n] for n in np.delete(range(ts[0].dim()), dim)]) for t in ts[1:]]):
-        raise ValueError('To concatenate tensors, all must have the same shape along all but the given dim')
+    if any(
+        [
+            any(
+                [
+                    t.shape[n] != ts[0].shape[n]
+                    for n in np.delete(range(ts[0].dim()), dim)
+                ]
+            )
+            for t in ts[1:]
+        ]
+    ):
+        raise ValueError(
+            "To concatenate tensors, all must have the same shape along all but the given dim"
+        )
 
     shapes = np.array([t.shape[dim] for t in ts])
     sumshapes = np.concatenate([np.array([0]), np.cumsum(shapes)])
@@ -77,11 +90,13 @@ def cat(*ts, dim):
             if t.cores[dim].dim() == 2:
                 t.cores[dim] = torch.zeros(sumshapes[-1], t.cores[dim].shape[-1])
             else:
-                t.cores[dim] = torch.zeros(t.cores[dim].shape[0], sumshapes[-1], t.cores[dim].shape[-1])
-            t.cores[dim][..., sumshapes[i]:sumshapes[i + 1], :] += ts[i].cores[dim]
+                t.cores[dim] = torch.zeros(
+                    t.cores[dim].shape[0], sumshapes[-1], t.cores[dim].shape[-1]
+                )
+            t.cores[dim][..., sumshapes[i] : sumshapes[i + 1], :] += ts[i].cores[dim]
         else:
             t.Us[dim] = torch.zeros(sumshapes[-1], t.Us[dim].shape[-1])
-            t.Us[dim][sumshapes[i]:sumshapes[i + 1], :] += ts[i].Us[dim]
+            t.Us[dim][sumshapes[i] : sumshapes[i + 1], :] += ts[i].Us[dim]
         if i == 0:
             result = t
         else:
@@ -101,7 +116,7 @@ def transpose(t):
     cores = []
     Us = []
     idxs = []
-    for n in range(t.dim()-1, -1, -1):
+    for n in range(t.dim() - 1, -1, -1):
         if t.cores[n].dim() == 3:
             cores.append(t.cores[n].permute(2, 1, 0))
         else:
@@ -127,16 +142,16 @@ def meshgrid(*axes, batch=False):
     """
 
     device = None
-    if not hasattr(axes, '__len__'):
+    if not hasattr(axes, "__len__"):
         axes = [axes]
-    if hasattr(axes[0], '__len__'):
+    if hasattr(axes[0], "__len__"):
         axes = axes[0]
-    if hasattr(axes[0], 'device'):
+    if hasattr(axes[0], "device"):
         device = axes[0].device
     axes = list(axes)
     N = len(axes)
     for n in range(N):
-        if not hasattr(axes[n], '__len__'):
+        if not hasattr(axes[n], "__len__"):
             axes[n] = torch.arange(axes[n], dtype=torch.get_default_dtype())
 
     tensors = []
@@ -161,13 +176,13 @@ def flip(t, dim):
     :return: another :class:`Tensor` of the same shape
     """
 
-    if not hasattr(dim, '__len__'):
+    if not hasattr(dim, "__len__"):
         dim = [dim]
 
     shape = t.shape
     result = t.clone()
     for d in dim:
-        idx = np.arange(shape[d]-1, -1, -1)
+        idx = np.arange(shape[d] - 1, -1, -1)
         if result.Us[d] is not None:
             result.Us[d] = result.Us[d][idx, :]
         else:
@@ -187,7 +202,10 @@ def unbind(t, dim):
 
     if dim < 0:
         dim += t.dim()
-    return [t[[slice(None)]*dim + [sl] + [slice(None)]*(t.dim()-1-dim)] for sl in range(t.shape[dim])]
+    return [
+        t[[slice(None)] * dim + [sl] + [slice(None)] * (t.dim() - 1 - dim)]
+        for sl in range(t.shape[dim])
+    ]
 
 
 def unfolding(data, n, batch=False):
@@ -202,12 +220,12 @@ def unfolding(data, n, batch=False):
     """
     if batch:
         return data.permute(
-            [0, n + 1] + \
-            list(range(1, n + 1)) + \
-            list(range(n + 2, data.dim()))
+            [0, n + 1] + list(range(1, n + 1)) + list(range(n + 2, data.dim()))
         ).reshape([data.shape[0], data.shape[n + 1], -1])
     else:
-        return data.permute([n] + list(range(n)) + list(range(n + 1, data.dim()))).reshape([data.shape[n], -1])
+        return data.permute(
+            [n] + list(range(n)) + list(range(n + 1, data.dim()))
+        ).reshape([data.shape[n], -1])
 
 
 def right_unfolding(core, batch=False):
@@ -262,7 +280,7 @@ def ttm(t, U, dim=None, transpose=False):
         U = [U]
     if dim is None:
         dim = range(len(U))
-    if not hasattr(dim, '__len__'):
+    if not hasattr(dim, "__len__"):
         dim = [dim]
     dim = list(dim)
     for i in range(len(dim)):
@@ -280,18 +298,20 @@ def ttm(t, U, dim=None, transpose=False):
             if factor.dim() == 1 and not t.batch:
                 factor = factor[None, ...]
             if factor.dim() == 2 and t.batch:
-                factor = factor[:,  None, ...]
+                factor = factor[:, None, ...]
             if t.Us[n] is None:
                 if t.batch:
                     if t.cores[n].dim() == 4:
-                        cores.append(torch.einsum('biak,bja->bijk', (t.cores[n], factor)))
+                        cores.append(
+                            torch.einsum("biak,bja->bijk", (t.cores[n], factor))
+                        )
                     else:
-                        cores.append(torch.einsum('bai,bja->bji', (t.cores[n], factor)))
+                        cores.append(torch.einsum("bai,bja->bji", (t.cores[n], factor)))
                 else:
                     if t.cores[n].dim() == 3:
-                        cores.append(torch.einsum('iak,ja->ijk', (t.cores[n], factor)))
+                        cores.append(torch.einsum("iak,ja->ijk", (t.cores[n], factor)))
                     else:
-                        cores.append(torch.einsum('ai,ja->ji', (t.cores[n], factor)))
+                        cores.append(torch.einsum("ai,ja->ji", (t.cores[n], factor)))
                 Us.append(None)
             else:
                 cores.append(t.cores[n].clone())
@@ -320,7 +340,7 @@ def mask(t, mask):
     :return: masked :class:`Tensor`
     """
     device = t.cores[0].device
-    if not hasattr(t, 'idxs'):
+    if not hasattr(t, "idxs"):
         idxs = [np.arange(sh) for sh in t.shape]
     else:
         idxs = t.idxs
@@ -328,7 +348,7 @@ def mask(t, mask):
     Us = []
     for n in range(t.dim()):
         idx = np.array(idxs[n])
-        idx[idx >= mask.shape[n]] = mask.shape[n]-1  # Clamp
+        idx[idx >= mask.shape[n]] = mask.shape[n] - 1  # Clamp
         if mask.Us[n] is None:
             cores.append(mask.cores[n][..., idx, :].to(device))
             Us.append(None)
@@ -336,7 +356,7 @@ def mask(t, mask):
             cores.append(mask.cores[n].to(device))
             Us.append(mask.Us[n][idx, :])
     mask = tn.Tensor(cores, Us, device=device)
-    return t*mask
+    return t * mask
 
 
 def sample(t, P=1, seed=None):
@@ -362,7 +382,9 @@ def sample(t, P=1, seed=None):
         M = np.cumsum(M, axis=1)
         thresh = rng.random(M.shape[0])
         M -= thresh[:, np.newaxis]
-        shiftand = np.logical_and(M[:, :-1] <= 0, M[:, 1:] > 0)  # Find where the sign switches
+        shiftand = np.logical_and(
+            M[:, :-1] <= 0, M[:, 1:] > 0
+        )  # Find where the sign switches
         return np.where(shiftand)[1]
 
     rng = np.random.default_rng(seed=seed)
@@ -376,11 +398,11 @@ def sample(t, P=1, seed=None):
     lefts = torch.ones([P, 1])
     t = t.decompress_tucker_factors()
     for mu in range(t.dim()):
-        fiber = torch.einsum('ijk,k->ij', (t.cores[mu], rights[mu + 1]))
-        per_point = torch.einsum('ij,jk->ik', (lefts, fiber))
+        fiber = torch.einsum("ijk,k->ij", (t.cores[mu], rights[mu + 1]))
+        per_point = torch.einsum("ij,jk->ik", (lefts, fiber))
         rows = from_matrix(per_point)
         Xs[:, mu] = torch.tensor(rows)
-        lefts = torch.einsum('ij,jik->ik', (lefts, t.cores[mu][:, rows, :]))
+        lefts = torch.einsum("ij,jik->ik", (lefts, t.cores[mu][:, rows, :]))
 
     return Xs
 
@@ -415,25 +437,35 @@ def generate_basis(name, shape, orthonormal=False):
     """
 
     if name == "dct":
-        U = scipy.fftpack.dct(np.eye(shape[0]), norm="ortho")[:, :shape[1]]
-    elif name == 'identity':
+        U = scipy.fftpack.dct(np.eye(shape[0]), norm="ortho")[:, : shape[1]]
+    elif name == "identity":
         U = np.eye(shape[0], shape[1])
     else:
         eval_points = np.linspace(-1, 1, shape[0])
         if name == "legendre":
             U = np.polynomial.legendre.legval(eval_points, np.eye(shape[0], shape[1])).T
         elif name == "chebyshev":
-            U = np.polynomial.chebyshev.chebval(eval_points, np.eye(shape[0], shape[1])).T
+            U = np.polynomial.chebyshev.chebval(
+                eval_points, np.eye(shape[0], shape[1])
+            ).T
         elif name == "hermite":
             U = np.polynomial.hermite.hermval(eval_points, np.eye(shape[0], shape[1])).T
         else:
             raise ValueError("Unsupported basis function")
     if orthonormal:
-        U / np.sqrt(np.sum(U*U, axis=0))
+        U / np.sqrt(np.sum(U * U, axis=0))
     return torch.from_numpy(U)
 
 
-def reduce(ts, function, eps=0, rmax=np.iinfo(np.int32).max, algorithm='svd', verbose=False, **kwargs):
+def reduce(
+    ts,
+    function,
+    eps=0,
+    rmax=np.iinfo(np.int32).max,
+    algorithm="svd",
+    verbose=False,
+    **kwargs
+):
     """
     Compute a tensor as a function to all tensors in a sequence.
 
@@ -459,17 +491,24 @@ def reduce(ts, function, eps=0, rmax=np.iinfo(np.int32).max, algorithm='svd', ve
     start = time.time()
     for i, elem in enumerate(ts):
         if verbose and i % 100 == 0:
-            print("reduce: element {}, time={:g}".format(i, time.time()-start))
+            print("reduce: element {}, time={:g}".format(i, time.time() - start))
         climb = 0  # For going up the tree
         while climb in d:
-            elem = tn.round(function(d[climb], elem, **kwargs), eps=eps, rmax=rmax, algorithm=algorithm)
+            elem = tn.round(
+                function(d[climb], elem, **kwargs),
+                eps=eps,
+                rmax=rmax,
+                algorithm=algorithm,
+            )
             d.pop(climb)
             climb += 1
         d[climb] = elem
     keys = list(d.keys())
     result = d[keys[0]]
     for key in keys[1:]:
-        result = tn.round(function(result, d[key], **kwargs), eps=eps, rmax=rmax, algorithm=algorithm)
+        result = tn.round(
+            function(result, d[key], **kwargs), eps=eps, rmax=rmax, algorithm=algorithm
+        )
     return result
 
 
@@ -487,10 +526,10 @@ def pad(t, shape, dim=None, fill_value=0):
 
     if dim is None:
         dim = range(t.dim())
-    if not hasattr(dim, '__len__'):
+    if not hasattr(dim, "__len__"):
         dim = [dim]
-    if not hasattr(shape, '__len__'):
-        shape = [shape]*len(dim)
+    if not hasattr(shape, "__len__"):
+        shape = [shape] * len(dim)
 
     t = t.clone()
     for i in range(len(dim)):
@@ -499,22 +538,45 @@ def pad(t, shape, dim=None, fill_value=0):
             mult = fill_value
         if t.Us[dim[i]] is None:
             if t.cores[dim[i]].dim() == 2:
-                t.cores[dim[i]] = torch.cat([t.cores[dim[i]],
-                                             mult * torch.ones(shape[i] - t.cores[dim[i]].shape[0],
-                                                               t.cores[dim[i]].shape[1])], dim=0)
+                t.cores[dim[i]] = torch.cat(
+                    [
+                        t.cores[dim[i]],
+                        mult
+                        * torch.ones(
+                            shape[i] - t.cores[dim[i]].shape[0],
+                            t.cores[dim[i]].shape[1],
+                        ),
+                    ],
+                    dim=0,
+                )
             else:
-                t.cores[dim[i]] = torch.cat([t.cores[dim[i]],
-                                             mult * torch.ones(t.cores[dim[i]].shape[0],
-                                                               shape[i] - t.cores[dim[i]].shape[1],
-                                                               t.cores[dim[i]].shape[2])], dim=1)
+                t.cores[dim[i]] = torch.cat(
+                    [
+                        t.cores[dim[i]],
+                        mult
+                        * torch.ones(
+                            t.cores[dim[i]].shape[0],
+                            shape[i] - t.cores[dim[i]].shape[1],
+                            t.cores[dim[i]].shape[2],
+                        ),
+                    ],
+                    dim=1,
+                )
         else:
-            t.Us[dim[i]] = torch.cat([t.Us[dim[i]],
-                                      mult * torch.ones(shape[i] - t.Us[dim[i]].shape[0],
-                                                        t.Us[dim[i]].shape[1])], dim=0)
+            t.Us[dim[i]] = torch.cat(
+                [
+                    t.Us[dim[i]],
+                    mult
+                    * torch.ones(
+                        shape[i] - t.Us[dim[i]].shape[0], t.Us[dim[i]].shape[1]
+                    ),
+                ],
+                dim=0,
+            )
     return t
 
 
-def convolve(t1: tn.Tensor, t2: tn.Tensor, mode='full', **kwargs):
+def convolve(t1: tn.Tensor, t2: tn.Tensor, mode="full", **kwargs):
     """
     ND convolution of two compressed tensors. Note: this function uses cross-approximation to multiply both tensors in the Fourier frequency domain [1].
 
@@ -532,39 +594,55 @@ def convolve(t1: tn.Tensor, t2: tn.Tensor, mode='full', **kwargs):
 
     t1 = t1.decompress_tucker_factors()
     t2 = t2.decompress_tucker_factors()
-    t1f = tn.Tensor([torch.fft.fft(t1.cores[n], n=t1.shape[n]+t2.shape[n]-1, dim=1) for n in range(N)])
-    t2f = tn.Tensor([torch.fft.fft(t2.cores[n], n=t1.shape[n]+t2.shape[n]-1, dim=1) for n in range(N)])
+    t1f = tn.Tensor(
+        [
+            torch.fft.fft(t1.cores[n], n=t1.shape[n] + t2.shape[n] - 1, dim=1)
+            for n in range(N)
+        ]
+    )
+    t2f = tn.Tensor(
+        [
+            torch.fft.fft(t2.cores[n], n=t1.shape[n] + t2.shape[n] - 1, dim=1)
+            for n in range(N)
+        ]
+    )
 
     def multr(x, y):
         a = torch.real(x)
         b = torch.imag(x)
         c = torch.real(y)
         d = torch.imag(y)
-        return a*c - b*d
+        return a * c - b * d
 
     def multi(x, y):
         a = torch.real(x)
         b = torch.imag(x)
         c = torch.real(y)
         d = torch.imag(y)
-        return b*c + a*d
+        return b * c + a * d
 
     t12fr = tn.cross(tensors=[t1f, t2f], function=multr, **kwargs)
     t12fi = tn.cross(tensors=[t1f, t2f], function=multi, **kwargs)
-    t12fi.cores[-1] = t12fi.cores[-1]*1j
+    t12fi.cores[-1] = t12fi.cores[-1] * 1j
     t12r = tn.Tensor([torch.fft.ifft(t12fr.cores[n], dim=1) for n in range(N)])
     t12i = tn.Tensor([torch.fft.ifft(t12fi.cores[n], dim=1) for n in range(N)])
-    t12 = tn.cross(tensors=[t12r, t12i], function=lambda x, y: torch.real(x)+torch.real(y), **kwargs)
+    t12 = tn.cross(
+        tensors=[t12r, t12i],
+        function=lambda x, y: torch.real(x) + torch.real(y),
+        **kwargs
+    )
 
     # Crop as needed
-    if mode == 'same':
+    if mode == "same":
         for n in range(N):
             k = min(t1.shape[n], t2.shape[n])
-            t12.cores[n] = t12.cores[n][:, k//2:k//2+max(t1.shape[n], t2.shape[n]), :]
-    elif mode == 'valid':
+            t12.cores[n] = t12.cores[n][
+                :, k // 2 : k // 2 + max(t1.shape[n], t2.shape[n]), :
+            ]
+    elif mode == "valid":
         for n in range(N):
             k = min(t1.shape[n], t2.shape[n])
-            t12.cores[n] = t12.cores[n][:, k-1:-(k-1), :]
+            t12.cores[n] = t12.cores[n][:, k - 1 : -(k - 1), :]
 
     return t12
 
@@ -593,10 +671,10 @@ def shift_mode(t, n, shift, eps=1e-3):
     for i in range(n, n + shift, sign):
         if sign == 1:
             c1 = i
-            c2 = i+1
+            c2 = i + 1
             left_ortho = True
         else:
-            c1 = i-1
+            c1 = i - 1
             c2 = i
             left_ortho = False
         R1 = cores[c1].shape[0]
@@ -604,12 +682,14 @@ def shift_mode(t, n, shift, eps=1e-3):
         R3 = cores[c2].shape[2]
         I1 = cores[c1].shape[1]
         I2 = cores[c2].shape[1]
-        sc = torch.einsum('iaj,jbk->ibak', (cores[c1], cores[c2]))
-        sc = sc.reshape(sc.shape[0]*sc.shape[1], sc.shape[2]*sc.shape[3])
-        if eps == 'same':
+        sc = torch.einsum("iaj,jbk->ibak", (cores[c1], cores[c2]))
+        sc = sc.reshape(sc.shape[0] * sc.shape[1], sc.shape[2] * sc.shape[3])
+        if eps == "same":
             left, right = tn.truncated_svd(sc, eps=0, rmax=R2, left_ortho=left_ortho)
         elif eps >= 0:
-            left, right = tn.truncated_svd(sc, eps=eps/np.sqrt(np.abs(shift)), left_ortho=left_ortho)
+            left, right = tn.truncated_svd(
+                sc, eps=eps / np.sqrt(np.abs(shift)), left_ortho=left_ortho
+            )
         else:
             raise ValueError("Relative error '{}' not recognized".format(eps))
         newR2 = left.shape[1]

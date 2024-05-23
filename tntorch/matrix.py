@@ -1,10 +1,12 @@
-'''
+"""
     Some of the code in this file was shamelessly taken or adapted from https://github.com/Bihaqo/t3f
-'''
+"""
+
+from typing import Any, List, Optional, Sequence, Union
 
 import torch
+
 import tntorch as tn
-from typing import Any, Optional, List, Sequence, Union
 
 
 class TTMatrix:
@@ -18,17 +20,18 @@ class TTMatrix:
     """
 
     def __init__(
-            self,
-            t: Union[torch.Tensor, List[torch.Tensor]],
-            ranks: List[int],
-            input_dims: List[int],
-            output_dims: List[int]):
-        '''
+        self,
+        t: Union[torch.Tensor, List[torch.Tensor]],
+        ranks: List[int],
+        input_dims: List[int],
+        output_dims: List[int],
+    ):
+        """
         t: torch.Tensor or List[torch.Tensor] - input can be matrix M or the pre-processed cores
         ranks: List[int] - maximal ranks for each mode
         input_dims: List[int] - i_0, ..., i_{d - 1}
         output_dims: List[int] - j_0, ..., j_{d - 1}
-        '''
+        """
 
         assert len(input_dims) == len(output_dims)
         assert len(input_dims) > 0
@@ -42,7 +45,9 @@ class TTMatrix:
             core_dims = len(t[0].shape)
             assert core_dims in [4, 5]
 
-            self.batch = core_dims == 5  # NOTE: b x r_{i - 1} x input_i x output_i x r_i
+            self.batch = (
+                core_dims == 5
+            )  # NOTE: b x r_{i - 1} x input_i x output_i x r_i
             self.cores = t
             self.ranks = torch.tensor([c.shape[-1] for c in t[:-1]])
             return
@@ -64,27 +69,46 @@ class TTMatrix:
             # Note: tensor is now a reshape of matrix with dimesions stored as
             # b x i_0 x j_0, ..., i_{d - 1} x j_{d - 1}
 
-            new_dims: List[int] = torch.tensor([0] + list(zip(dims[:self.d], dims[self.d:]))).flatten().tolist()
+            new_dims: List[int] = (
+                torch.tensor([0] + list(zip(dims[: self.d], dims[self.d :])))
+                .flatten()
+                .tolist()
+            )
         else:
             tensor = M.reshape(list(input_dims) + list(output_dims))
             dims = list(range(2 * self.d))
             # Note: tensor is now a reshape of matrix with dimesions stored as
             # i_0 x j_0, ..., i_{d - 1} x j_{d - 1}
 
-            new_dims: List[int] = torch.tensor(list(zip(dims[:self.d], dims[self.d:]))).flatten().tolist()
+            new_dims: List[int] = (
+                torch.tensor(list(zip(dims[: self.d], dims[self.d :])))
+                .flatten()
+                .tolist()
+            )
         tensor = tensor.permute(new_dims)
         if self.batch:
-            tensor = tensor.reshape([-1] + [input_dims[i] * output_dims[i] for i in range(self.d)])
+            tensor = tensor.reshape(
+                [-1] + [input_dims[i] * output_dims[i] for i in range(self.d)]
+            )
         else:
-            tensor = tensor.reshape([input_dims[i] * output_dims[i] for i in range(self.d)])
+            tensor = tensor.reshape(
+                [input_dims[i] * output_dims[i] for i in range(self.d)]
+            )
         tt = tn.Tensor(tensor, ranks_tt=ranks, batch=self.batch)
         self.ranks = tt.ranks_tt[1:-1]
 
         self.cores = [
-            core.reshape(-1, core.shape[1], input_dims[i], output_dims[i], core.shape[-1])
-            if self.batch else
-            core.reshape(core.shape[0], input_dims[i], output_dims[i], core.shape[-1])
-            for i, core in enumerate(tt.cores)]
+            (
+                core.reshape(
+                    -1, core.shape[1], input_dims[i], output_dims[i], core.shape[-1]
+                )
+                if self.batch
+                else core.reshape(
+                    core.shape[0], input_dims[i], output_dims[i], core.shape[-1]
+                )
+            )
+            for i, core in enumerate(tt.cores)
+        ]
 
     def torch(self):
         """
@@ -94,15 +118,27 @@ class TTMatrix:
         """
 
         cores = [
-            c.reshape(-1, c.shape[1], self.input_dims[i] * self.output_dims[i], c.shape[-1])
-            if self.batch else
-            c.reshape(c.shape[0], -1, c.shape[-1])
-            for i, c in enumerate(self.cores)]
+            (
+                c.reshape(
+                    -1,
+                    c.shape[1],
+                    self.input_dims[i] * self.output_dims[i],
+                    c.shape[-1],
+                )
+                if self.batch
+                else c.reshape(c.shape[0], -1, c.shape[-1])
+            )
+            for i, c in enumerate(self.cores)
+        ]
         tensor = tn.Tensor(cores, batch=self.batch).torch()
         rows = torch.prod(self.input_dims)
         cols = torch.prod(self.output_dims)
 
-        shape: List[int] = torch.tensor(list(zip(self.input_dims, self.output_dims))).flatten().tolist()
+        shape: List[int] = (
+            torch.tensor(list(zip(self.input_dims, self.output_dims)))
+            .flatten()
+            .tolist()
+        )
         if self.batch:
             tensor = tensor.reshape([-1] + shape)
             dims = list(range(1, 2 * self.d + 1))
@@ -130,10 +166,10 @@ class TTMatrix:
         if self.batch:
             b = self.cores[0].shape[0]
             factor = torch.ones((b, 1))
-            eq = 'bi,biaaj->bj'
+            eq = "bi,biaaj->bj"
         else:
             factor = torch.ones(1)
-            eq = 'i,iaaj->j'
+            eq = "i,iaaj->j"
 
         for c in self.cores:
             factor = torch.einsum(eq, factor, c)
@@ -148,10 +184,21 @@ class TTMatrix:
         """
 
         return tn.Tensor(
-            [c.reshape(-1, c.shape[1], self.input_dims[i] * self.output_dims[i], c.shape[-1])
-            if self.batch else
-            c.reshape(c.shape[0], -1, c.shape[-1])
-            for i, c in enumerate(self.cores)], batch=self.batch)
+            [
+                (
+                    c.reshape(
+                        -1,
+                        c.shape[1],
+                        self.input_dims[i] * self.output_dims[i],
+                        c.shape[-1],
+                    )
+                    if self.batch
+                    else c.reshape(c.shape[0], -1, c.shape[-1])
+                )
+                for i, c in enumerate(self.cores)
+            ],
+            batch=self.batch,
+        )
 
     def _is_kron(self):
         """
@@ -167,12 +214,15 @@ class TTMatrix:
             or the tt-ranks are not 1.
         """
         if not self._is_kron():
-            raise ValueError('The argument should be a Kronecker product (tt-ranks '
-                             'should be 1)')
+            raise ValueError(
+                "The argument should be a Kronecker product (tt-ranks " "should be 1)"
+            )
 
         if torch.equal(self.input_dims, self.output_dims):
-            raise ValueError('The argument should be a Kronecker product of square '
-                             'matrices (tt-cores must be square)')
+            raise ValueError(
+                "The argument should be a Kronecker product of square "
+                "matrices (tt-cores must be square)"
+            )
 
     def determinant(self):
         """
@@ -192,7 +242,7 @@ class TTMatrix:
 
         rows = torch.prod(self.input_dims)
 
-        det = 1.
+        det = 1.0
         for core_idx in range(self.d):
             if self.batch:
                 core_det = torch.linalg.det(self.cores[core_idx][:, 0, :, :, 0])
@@ -219,8 +269,8 @@ class TTMatrix:
         self._check_kron_properties()
 
         rows = torch.prod(self.input_dims)
-        logdet = 0.
-        det_sign = 1.
+        logdet = 0.0
+        det_sign = 1.0
 
         for core_idx in range(self.d):
             if self.batch:
@@ -232,7 +282,7 @@ class TTMatrix:
             core_det_sign = torch.sign(core_det)
             core_pow = rows / self.input_dims[core_idx]
             logdet += torch.log(core_abs_det) * core_pow
-            det_sign *= core_det_sign**(core_pow)
+            det_sign *= core_det_sign ** (core_pow)
         return det_sign, logdet
 
     def inv(self):
@@ -298,13 +348,14 @@ class CPMatrix:
     """
 
     def __init__(
-            self,
-            M: torch.Tensor,
-            rank: Sequence[int],
-            input_dims: Sequence[int],
-            output_dims: Sequence[int],
-            batch_size: int = 1,
-            verbose: bool = False):
+        self,
+        M: torch.Tensor,
+        rank: Sequence[int],
+        input_dims: Sequence[int],
+        output_dims: Sequence[int],
+        batch_size: int = 1,
+        verbose: bool = False,
+    ):
         assert len(input_dims) == len(output_dims)
         assert len(input_dims) > 0
         assert isinstance(rank, int)
@@ -323,14 +374,17 @@ class CPMatrix:
         dims = list(range(2 * self.d))
         # Note: tensor is now a reshape of matrix with dimesions stored as
         # i_0 x j_0, ..., i_{d - 1} x j_{d - 1}
-        new_dims: List[int] = torch.tensor(list(zip(dims[:self.d], dims[self.d:]))).flatten().tolist()
+        new_dims: List[int] = (
+            torch.tensor(list(zip(dims[: self.d], dims[self.d :]))).flatten().tolist()
+        )
         tensor = tensor.permute(new_dims)
         tensor = tensor.reshape([input_dims[i] * output_dims[i] for i in range(self.d)])
         cp = tn.Tensor(tensor, ranks_cp=rank)
 
         self.cores = [
             core.reshape(input_dims[i], output_dims[i], core.shape[-1])
-            for i, core in enumerate(cp.cores)]
+            for i, core in enumerate(cp.cores)
+        ]
 
     def torch(self):
         """
@@ -345,7 +399,11 @@ class CPMatrix:
         input_size = torch.prod(self.input_dims)
         output_size = torch.prod(self.output_dims)
 
-        shape: List[int] = torch.tensor(list(zip(self.input_dims, self.output_dims))).flatten().tolist()
+        shape: List[int] = (
+            torch.tensor(list(zip(self.input_dims, self.output_dims)))
+            .flatten()
+            .tolist()
+        )
         tensor = tensor.reshape(shape)
         dims = list(range(2 * self.d))
         tensor = tensor.permute(dims[0::2] + dims[1::2])
@@ -374,11 +432,13 @@ def tt_multiply(tt_matrix: TTMatrix, tensor: torch.Tensor):
     b = tensor.reshape(-1, rows).shape[0]
     tensor = tensor.reshape(b, -1).T
     result = tensor.reshape(tt_matrix.input_dims[0], -1)
-    result = torch.einsum('id,lior->ldor', result, tt_matrix.cores[0])
+    result = torch.einsum("id,lior->ldor", result, tt_matrix.cores[0])
 
     for d in range(1, tt_matrix.d):
-        result = result.reshape(tt_matrix.input_dims[d], -1, tt_matrix.cores[d].shape[0])
-        result = torch.einsum('idr,riob->dob', result, tt_matrix.cores[d])
+        result = result.reshape(
+            tt_matrix.input_dims[d], -1, tt_matrix.cores[d].shape[0]
+        )
+        result = torch.einsum("idr,riob->dob", result, tt_matrix.cores[d])
 
     return result.reshape(b, -1)
 
@@ -396,11 +456,13 @@ def cp_multiply(cp_matrix: CPMatrix, tensor: torch.Tensor):
     tensor = tensor.reshape(b, -1).T
 
     result = tensor.reshape(cp_matrix.input_dims[0], -1)
-    result = torch.einsum('ij,ior->jor', result, cp_matrix.cores[0])
+    result = torch.einsum("ij,ior->jor", result, cp_matrix.cores[0])
 
     for d in range(1, cp_matrix.d):
-        result = result.reshape(cp_matrix.input_dims[d], -1, cp_matrix.cores[d].shape[-1])
-        result = torch.einsum('ior,idr->dor', cp_matrix.cores[d], result)
+        result = result.reshape(
+            cp_matrix.input_dims[d], -1, cp_matrix.cores[d].shape[-1]
+        )
+        result = torch.einsum("ior,idr->dor", cp_matrix.cores[d], result)
 
     result = result.sum(-1)
     return result.reshape(b, -1)

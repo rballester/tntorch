@@ -1,11 +1,21 @@
-import tntorch as tn
-import torch
-import numpy as np
 import time
 from functools import reduce
 
+import numpy as np
+import torch
 
-def optimize(tensors, loss_function, optimizer=torch.optim.Adam, tol=1e-4, max_iter=1e4, print_freq=500, verbose=True):
+import tntorch as tn
+
+
+def optimize(
+    tensors,
+    loss_function,
+    optimizer=torch.optim.Adam,
+    tol=1e-4,
+    max_iter=1e4,
+    print_freq=500,
+    verbose=True,
+):
     """
     High-level wrapper for iterative learning.
 
@@ -27,14 +37,16 @@ def optimize(tensors, loss_function, optimizer=torch.optim.Adam, tol=1e-4, max_i
     for t in tensors:
         if isinstance(t, tn.Tensor):
             if t.batch:
-                raise ValueError('Batched tensors are not supproted.')
+                raise ValueError("Batched tensors are not supproted.")
 
             parameters.extend([c for c in t.cores if c.requires_grad])
             parameters.extend([U for U in t.Us if U is not None and U.requires_grad])
         elif t.requires_grad:
             parameters.append(t)
     if len(parameters) == 0:
-        raise ValueError("There are no parameters to optimize. Did you forget a requires_grad=True somewhere?")
+        raise ValueError(
+            "There are no parameters to optimize. Did you forget a requires_grad=True somewhere?"
+        )
 
     optimizer = optimizer(parameters)
     losses = []
@@ -51,36 +63,42 @@ def optimize(tensors, loss_function, optimizer=torch.optim.Adam, tol=1e-4, max_i
         optimizer.step()
 
         losses.append(total_loss.detach())
-        
 
         if len(losses) >= 2:
-            delta_loss = (losses[-1] - losses[-2])
+            delta_loss = losses[-1] - losses[-2]
         else:
-            delta_loss = float('-inf')
-        if iter >= 2 and tol is not None and (losses[-1] <= tol or -delta_loss / losses[-1] <= tol) and losses[-2] - \
-                losses[-1] < losses[-3] - losses[-2]:
+            delta_loss = float("-inf")
+        if (
+            iter >= 2
+            and tol is not None
+            and (losses[-1] <= tol or -delta_loss / losses[-1] <= tol)
+            and losses[-2] - losses[-1] < losses[-3] - losses[-2]
+        ):
             converged = True
             break
         if iter == max_iter:
             break
         if verbose and iter % print_freq == 0:
-            print('iter: {: <{}} | loss: '.format(iter, len('{}'.format(max_iter))), end='')
-            print(' + '.join(['{:10.6f}'.format(l.item()) for l in loss]), end='')
+            print(
+                "iter: {: <{}} | loss: ".format(iter, len("{}".format(max_iter))),
+                end="",
+            )
+            print(" + ".join(["{:10.6f}".format(l.item()) for l in loss]), end="")
             if len(loss) > 1:
-                print(' = {:10.4}'.format(losses[-1].item()), end='')
-            print(' | total time: {:9.4f}'.format(time.time() - start))
+                print(" = {:10.4}".format(losses[-1].item()), end="")
+            print(" | total time: {:9.4f}".format(time.time() - start))
 
         iter += 1
     if verbose:
-        print('iter: {: <{}} | loss: '.format(iter, len('{}'.format(max_iter))), end='')
-        print(' + '.join(['{:10.6f}'.format(l.item()) for l in loss]), end='')
+        print("iter: {: <{}} | loss: ".format(iter, len("{}".format(max_iter))), end="")
+        print(" + ".join(["{:10.6f}".format(l.item()) for l in loss]), end="")
         if len(loss) > 1:
-            print(' = {:10.4}'.format(losses[-1].item()), end='')
-        print(' | total time: {:9.4f}'.format(time.time() - start), end='')
+            print(" = {:10.4}".format(losses[-1].item()), end="")
+        print(" | total time: {:9.4f}".format(time.time() - start), end="")
         if converged:
-            print(' <- converged (tol={})'.format(tol))
+            print(" <- converged (tol={})".format(tol))
         else:
-            print(' <- max_iter was reached: {}'.format(max_iter))
+            print(" <- max_iter was reached: {}".format(max_iter))
 
 
 def dof(t):

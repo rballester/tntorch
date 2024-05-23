@@ -1,4 +1,5 @@
 import torch
+
 import tntorch as tn
 
 
@@ -13,7 +14,7 @@ def weight_mask(N, weight, nsymbols=2):
     :return: a mask tensor
     """
 
-    if not hasattr(weight, '__len__'):
+    if not hasattr(weight, "__len__"):
         weight = [weight]
     weight = torch.tensor(weight).long()
     assert weight[0] >= 0
@@ -33,8 +34,8 @@ def weight_one_hot(N, r=None, nsymbols=2):
     :return: a vector of N zeros, except its :math:`k`-th element which is a 1
     """
 
-    if not hasattr(nsymbols, '__len__'):
-        nsymbols = [nsymbols]*N
+    if not hasattr(nsymbols, "__len__"):
+        nsymbols = [nsymbols] * N
     assert len(nsymbols) == N
     if r is None:
         r = N + 1
@@ -91,23 +92,32 @@ def accepted_inputs(t):
     :return Xs: a Torch matrix, each row is one string
     """
     dtype = t.cores[0].dtype
+
     def recursion(Xs, left, rights, bound, mu):
         if t.batch:
-            raise ValueError('Batched tensors are not supproted.')
+            raise ValueError("Batched tensors are not supproted.")
         if mu == t.dim():
             return
 
-        fiber = torch.einsum('ijk,k->ij', (t.cores[mu], rights[mu + 1]))
+        fiber = torch.einsum("ijk,k->ij", (t.cores[mu], rights[mu + 1]))
 
         per_point = torch.matmul(left, fiber).double().round()
 
-        c = torch.cat((torch.tensor([0], dtype=per_point.dtype), per_point.cumsum(dim=0))).long()
+        c = torch.cat(
+            (torch.tensor([0], dtype=per_point.dtype), per_point.cumsum(dim=0))
+        ).long()
 
         for i, p in enumerate(per_point):
             if c[i] == c[i + 1]:  # Improductive prefix, don't go further
                 continue
-            Xs[bound + c[i]:bound + c[i + 1], mu] = i
-            recursion(Xs, torch.matmul(left, t.cores[mu][..., i, :]), rights, bound + c[i], mu + 1)
+            Xs[bound + c[i] : bound + c[i + 1], mu] = i
+            recursion(
+                Xs,
+                torch.matmul(left, t.cores[mu][..., i, :]),
+                rights,
+                bound + c[i],
+                mu + 1,
+            )
 
     Xs = torch.zeros([round(tn.sum(t).item()), t.dim()], dtype=torch.long)
     rights = [torch.ones(1, dtype=dtype)]  # Precomputed right-product chains

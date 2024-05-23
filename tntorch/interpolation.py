@@ -1,7 +1,9 @@
-import numpy as np
-import tntorch as tn
-import torch
 import time
+
+import numpy as np
+import torch
+
+import tntorch as tn
 
 
 def als_completion(

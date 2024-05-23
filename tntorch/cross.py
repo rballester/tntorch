@@ -1,13 +1,17 @@
-import tntorch as tn
-import torch
+import logging
 import sys
 import time
-import numpy as np
-import logging
 from typing import Any, Callable, Sequence, Union
 
+import numpy as np
+import torch
 
-def minimum(tensors=None, function=lambda x: x, rmax=10, max_iter=10, verbose=False, **kwargs):
+import tntorch as tn
+
+
+def minimum(
+    tensors=None, function=lambda x: x, rmax=10, max_iter=10, verbose=False, **kwargs
+):
     """
     Estimate the minimal element of a tensor (or a function of one or several tensors)
 
@@ -28,11 +32,14 @@ def minimum(tensors=None, function=lambda x: x, rmax=10, max_iter=10, verbose=Fa
         max_iter=max_iter,
         verbose=verbose,
         return_info=True,
-        _minimize=True)
-    return info['min']
+        _minimize=True
+    )
+    return info["min"]
 
 
-def argmin(tensors=None, function=lambda x: x, rmax=10, max_iter=10, verbose=False, **kwargs):
+def argmin(
+    tensors=None, function=lambda x: x, rmax=10, max_iter=10, verbose=False, **kwargs
+):
     """
     Estimate the minimizer of a tensor (position where its minimum is located).
 
@@ -49,11 +56,14 @@ def argmin(tensors=None, function=lambda x: x, rmax=10, max_iter=10, verbose=Fal
         max_iter=max_iter,
         verbose=verbose,
         return_info=True,
-        _minimize=True)
-    return info['argmin']
+        _minimize=True
+    )
+    return info["argmin"]
 
 
-def maximum(tensors=None, function=lambda x: x, rmax=10, max_iter=10, verbose=False, **kwargs):
+def maximum(
+    tensors=None, function=lambda x: x, rmax=10, max_iter=10, verbose=False, **kwargs
+):
     """
     Estimate the maximal element of a tensor.
 
@@ -70,11 +80,14 @@ def maximum(tensors=None, function=lambda x: x, rmax=10, max_iter=10, verbose=Fa
         max_iter=max_iter,
         verbose=verbose,
         return_info=True,
-        _minimize=True)
-    return -info['min']
+        _minimize=True
+    )
+    return -info["min"]
 
 
-def argmax(tensors=None, function=lambda x: x, rmax=10, max_iter=10, verbose=False, **kwargs):
+def argmax(
+    tensors=None, function=lambda x: x, rmax=10, max_iter=10, verbose=False, **kwargs
+):
     """
     Estimate the maximizer of a tensor (position where its maximum is located).
 
@@ -91,8 +104,9 @@ def argmax(tensors=None, function=lambda x: x, rmax=10, max_iter=10, verbose=Fal
         max_iter=max_iter,
         verbose=verbose,
         return_info=True,
-        _minimize=True)
-    return info['argmin']
+        _minimize=True
+    )
+    return info["argmin"]
 
 
 # Initialize left and right interfaces for `tensors`
@@ -106,9 +120,15 @@ def init_interfaces(tensors, rsets, N, device):
             M = torch.ones(t.cores[-1].shape[-1], len(rsets[j])).to(device)
             for n in range(N - 1, j, -1):
                 if t.cores[n].dim() == 3:  # TT core
-                    M = torch.einsum('iaj,ja->ia', [t.cores[n][:, rsets[j][:, n - 1 - j], :].to(device), M])
+                    M = torch.einsum(
+                        "iaj,ja->ia",
+                        [t.cores[n][:, rsets[j][:, n - 1 - j], :].to(device), M],
+                    )
                 else:  # CP factor
-                    M = torch.einsum('ai,ia->ia', [t.cores[n][rsets[j][:, n - 1 - j], :].to(device), M])
+                    M = torch.einsum(
+                        "ai,ia->ia",
+                        [t.cores[n][rsets[j][:, n - 1 - j], :].to(device), M],
+                    )
             rinterfaces[j] = M
         t_linterfaces.append(linterfaces)
         t_rinterfaces.append(rinterfaces)
@@ -116,24 +136,24 @@ def init_interfaces(tensors, rsets, N, device):
 
 
 def cross(
-        function: Callable = lambda x: x,
-        domain=None,
-        tensors: Union[Any, Sequence[Any]] = None,
-        function_arg: str = 'vectors',
-        ranks_tt: Union[int, Sequence[int]] = None,
-        kickrank: int = 3,
-        rmax: int = 100,
-        eps: float = 1e-6,
-        max_iter: int = 25,
-        val_size: int = 1000,
-        verbose: bool = True,
-        return_info: bool = False,
-        record_samples: bool = False,
-        _minimize: bool = False,
-        device: Any = None,
-        suppress_warnings: bool = False,
-        detach_evaluations: bool = False):
-
+    function: Callable = lambda x: x,
+    domain=None,
+    tensors: Union[Any, Sequence[Any]] = None,
+    function_arg: str = "vectors",
+    ranks_tt: Union[int, Sequence[int]] = None,
+    kickrank: int = 3,
+    rmax: int = 100,
+    eps: float = 1e-6,
+    max_iter: int = 25,
+    val_size: int = 1000,
+    verbose: bool = True,
+    return_info: bool = False,
+    record_samples: bool = False,
+    _minimize: bool = False,
+    device: Any = None,
+    suppress_warnings: bool = False,
+    detach_evaluations: bool = False,
+):
     """
     Cross-approximation routine that samples a black-box function and returns an N-dimensional tensor train approximating it. It accepts either:
 
@@ -182,34 +202,40 @@ def cross(
             device = tensors.cores[0].device
 
     if verbose:
-        print('cross device is', device)
+        print("cross device is", device)
 
     try:
         import maxvolpy.maxvol
+
         maxvol = maxvolpy.maxvol.maxvol
         rect_maxvol = maxvolpy.maxvol.rect_maxvol
     except ModuleNotFoundError:
         print(
-            "Functions that require cross-approximation can be accelerated with the optional maxvolpy package," +
-            " which can be installed by 'pip install maxvolpy'. " +
-            "More info is available at https://bitbucket.org/muxas/maxvolpy.")
+            "Functions that require cross-approximation can be accelerated with the optional maxvolpy package,"
+            + " which can be installed by 'pip install maxvolpy'. "
+            + "More info is available at https://bitbucket.org/muxas/maxvolpy."
+        )
         from tntorch.maxvol import py_maxvol, py_rect_maxvol
+
         maxvol = py_maxvol
         rect_maxvol = py_rect_maxvol
 
     assert domain is not None or tensors is not None
-    assert function_arg in ('vectors', 'matrix')
-    if function_arg == 'matrix':
+    assert function_arg in ("vectors", "matrix")
+    if function_arg == "matrix":
+
         def f(*args):
             return function(torch.cat([arg[:, None] for arg in args], dim=1))
+
     else:
         f = function
 
     if detach_evaluations:
+
         def build_function_wrapper(func):
             def g(*args):
                 res = func(*args)
-                if hasattr(res, '__len__') and not isinstance(res, torch.Tensor):
+                if hasattr(res, "__len__") and not isinstance(res, torch.Tensor):
                     for i in range(len(res)):
                         if isinstance(res[i], torch.Tensor):
                             res[i] = res[i].detach()
@@ -217,6 +243,7 @@ def cross(
                     if isinstance(res, torch.Tensor):
                         res = res.detach()
                 return res
+
             return g
 
         f = build_function_wrapper(f)
@@ -224,11 +251,11 @@ def cross(
     if tensors is None:
         tensors = tn.meshgrid(domain)
 
-    if not hasattr(tensors, '__len__'):
+    if not hasattr(tensors, "__len__"):
         tensors = [tensors]
     for t in tensors:
         if t.batch:
-            raise ValueError('Batched tensors are not supported.')
+            raise ValueError("Batched tensors are not supported.")
     tensors = [t.decompress_tucker_factors(_clone=False) for t in tensors]
     Is = list(tensors[0].shape)
     N = len(Is)
@@ -238,7 +265,7 @@ def cross(
         ranks_tt = 1
     else:
         kickrank = None
-    if not hasattr(ranks_tt, '__len__'):
+    if not hasattr(ranks_tt, "__len__"):
         ranks_tt = [ranks_tt] * (N - 1)
     ranks_tt = [1] + list(ranks_tt) + [1]
     Rs = np.array(ranks_tt)
@@ -251,13 +278,18 @@ def cross(
 
     # Prepare left and right sets
     lsets = [np.array([[0]])] + [None] * (N - 1)
-    randint = np.hstack([np.random.randint(0, Is[n + 1], [max(Rs), 1]) for n in range(N - 1)] + [np.zeros([max(Rs), 1], dtype=int)])
-    rsets = [randint[:Rs[n + 1], n:] for n in range(N - 1)] + [np.array([[0]])]
+    randint = np.hstack(
+        [np.random.randint(0, Is[n + 1], [max(Rs), 1]) for n in range(N - 1)]
+        + [np.zeros([max(Rs), 1], dtype=int)]
+    )
+    rsets = [randint[: Rs[n + 1], n:] for n in range(N - 1)] + [np.array([[0]])]
 
     t_linterfaces, t_rinterfaces = init_interfaces(tensors, rsets, N, device)
 
     # Create a validation set
-    Xs_val = [torch.as_tensor(np.random.choice(I, int(val_size))).to(device) for I in Is]
+    Xs_val = [
+        torch.as_tensor(np.random.choice(I, int(val_size))).to(device) for I in Is
+    ]
     ys_val = f(*[t[Xs_val].torch() for t in tensors])
     if ys_val.dim() > 1:
         assert ys_val.dim() == 2
@@ -268,44 +300,63 @@ def cross(
     norm_ys_val = torch.norm(ys_val)
 
     if verbose:
-        print('Cross-approximation over a {}D domain containing {:g} grid points:'.format(N, tensors[0].numel()))
+        print(
+            "Cross-approximation over a {}D domain containing {:g} grid points:".format(
+                N, tensors[0].numel()
+            )
+        )
     start = time.time()
     converged = False
 
-    info = {
-        'nsamples': 0,
-        'eval_time': 0,
-        'val_epss': [],
-        'min': 0,
-        'argmin': None
-    }
+    info = {"nsamples": 0, "eval_time": 0, "val_epss": [], "min": 0, "argmin": None}
     if record_samples:
-        info['sample_positions'] = torch.zeros(0, N).to(device)
-        info['sample_values'] = torch.zeros(0).to(device)
+        info["sample_positions"] = torch.zeros(0, N).to(device)
+        info["sample_values"] = torch.zeros(0).to(device)
 
-    def evaluate_function(j):  # Evaluate function over Rs[j] x Rs[j+1] fibers, each of size I[j]
+    def evaluate_function(
+        j,
+    ):  # Evaluate function over Rs[j] x Rs[j+1] fibers, each of size I[j]
         Xs = []
         for k, t in enumerate(tensors):
             if tensors[k].cores[j].dim() == 3:  # TT core
-                V = torch.einsum('ai,ibj,jc->abc', [t_linterfaces[k][j], t.cores[j], t_rinterfaces[k][j]])
+                V = torch.einsum(
+                    "ai,ibj,jc->abc",
+                    [t_linterfaces[k][j], t.cores[j], t_rinterfaces[k][j]],
+                )
             else:  # CP factor
-                V = torch.einsum('ai,bi,ic->abc', [t_linterfaces[k][j], t.cores[j], t_rinterfaces[k][j]])
+                V = torch.einsum(
+                    "ai,bi,ic->abc",
+                    [t_linterfaces[k][j], t.cores[j], t_rinterfaces[k][j]],
+                )
             Xs.append(V.flatten())
 
         eval_start = time.time()
         evaluation = f(*Xs)
         if record_samples:
-            info['sample_positions'] = torch.cat((info['sample_positions'], torch.cat([x[:, None] for x in Xs], dim=1)), dim=0)
-            info['sample_values'] = torch.cat((info['sample_values'], evaluation))
-        info['eval_time'] += time.time() - eval_start
+            info["sample_positions"] = torch.cat(
+                (info["sample_positions"], torch.cat([x[:, None] for x in Xs], dim=1)),
+                dim=0,
+            )
+            info["sample_values"] = torch.cat((info["sample_values"], evaluation))
+        info["eval_time"] += time.time() - eval_start
         if _minimize:
-            evaluation = np.pi / 2 - torch.atan((evaluation - info['min']))  # Function used by I. Oseledets for TT minimization in ttpy
+            evaluation = np.pi / 2 - torch.atan(
+                (evaluation - info["min"])
+            )  # Function used by I. Oseledets for TT minimization in ttpy
             evaluation_argmax = torch.argmax(evaluation)
-            eval_min = torch.tan(np.pi / 2 - evaluation[evaluation_argmax]) + info['min']
-            if info['min'] == 0 or eval_min < info['min']:
-                coords = np.unravel_index(evaluation_argmax.cpu(), [Rs[j], Is[j], Rs[j + 1]])
-                info['min'] = eval_min
-                info['argmin'] = tuple(lsets[j][coords[0]][1:]) + tuple([coords[1]]) + tuple(rsets[j][coords[2]][:-1])
+            eval_min = (
+                torch.tan(np.pi / 2 - evaluation[evaluation_argmax]) + info["min"]
+            )
+            if info["min"] == 0 or eval_min < info["min"]:
+                coords = np.unravel_index(
+                    evaluation_argmax.cpu(), [Rs[j], Is[j], Rs[j + 1]]
+                )
+                info["min"] = eval_min
+                info["argmin"] = (
+                    tuple(lsets[j][coords[0]][1:])
+                    + tuple([coords[1]])
+                    + tuple(rsets[j][coords[2]][:-1])
+                )
 
         # Check for nan/inf values
         if evaluation.dim() == 2:
@@ -314,20 +365,24 @@ def cross(
         if len(invalid) > 0:
             invalid = invalid[0].item()
             raise ValueError(
-                'Invalid return value for function {}: f({}) = {}'.format(
+                "Invalid return value for function {}: f({}) = {}".format(
                     function,
-                    ', '.join('{:g}'.format(x[invalid].detach().cpu().numpy()) for x in Xs),
-                    f(*[x[invalid:invalid + 1][:, None] for x in Xs]).item()))
+                    ", ".join(
+                        "{:g}".format(x[invalid].detach().cpu().numpy()) for x in Xs
+                    ),
+                    f(*[x[invalid : invalid + 1][:, None] for x in Xs]).item(),
+                )
+            )
 
         V = torch.reshape(evaluation, [Rs[j], Is[j], Rs[j + 1]])
-        info['nsamples'] += V.numel()
+        info["nsamples"] += V.numel()
         return V
 
     # Sweeps
     for i in range(max_iter):
 
         if verbose:
-            print('iter: {: <{}}'.format(i, len('{}'.format(max_iter)) + 1), end='')
+            print("iter: {: <{}}".format(i, len("{}".format(max_iter)) + 1), end="")
             sys.stdout.flush()
 
         left_locals = []
@@ -351,12 +406,18 @@ def cross(
 
             # Map local indices to global ones
             local_r, local_i = np.unravel_index(local, [Rs[j], Is[j]])
-            lsets[j+1] = np.c_[lsets[j][local_r, :], local_i]
+            lsets[j + 1] = np.c_[lsets[j][local_r, :], local_i]
             for k, t in enumerate(tensors):
                 if t.cores[j].dim() == 3:  # TT core
-                    t_linterfaces[k][j+1] = torch.einsum('ai,iaj->aj', [t_linterfaces[k][j][local_r, :], t.cores[j][:, local_i, :]])
+                    t_linterfaces[k][j + 1] = torch.einsum(
+                        "ai,iaj->aj",
+                        [t_linterfaces[k][j][local_r, :], t.cores[j][:, local_i, :]],
+                    )
                 else:  # CP factor
-                    t_linterfaces[k][j+1] = torch.einsum('ai,ai->ai', [t_linterfaces[k][j][local_r, :], t.cores[j][local_i, :]])
+                    t_linterfaces[k][j + 1] = torch.einsum(
+                        "ai,ai->ai",
+                        [t_linterfaces[k][j][local_r, :], t.cores[j][local_i, :]],
+                    )
 
         # Right-to-left sweep
         for j in range(N - 1, 0, -1):
@@ -372,16 +433,22 @@ def cross(
             else:
                 local, _ = maxvol(Q.detach().cpu().numpy())
             V = torch.linalg.lstsq(Q[local, :].t(), Q.t()).solution
-            cores[j] = torch.reshape(torch.as_tensor(V), [Rs[j], Is[j], Rs[j+1]])
+            cores[j] = torch.reshape(torch.as_tensor(V), [Rs[j], Is[j], Rs[j + 1]])
 
             # Map local indices to global ones
             local_i, local_r = np.unravel_index(local, [Is[j], Rs[j + 1]])
             rsets[j - 1] = np.c_[local_i, rsets[j][local_r, :]]
             for k, t in enumerate(tensors):
                 if t.cores[j].dim() == 3:  # TT core
-                    t_rinterfaces[k][j-1] = torch.einsum('iaj,ja->ia', [t.cores[j][:, local_i, :], t_rinterfaces[k][j][:, local_r]])
+                    t_rinterfaces[k][j - 1] = torch.einsum(
+                        "iaj,ja->ia",
+                        [t.cores[j][:, local_i, :], t_rinterfaces[k][j][:, local_r]],
+                    )
                 else:  # CP factor
-                    t_rinterfaces[k][j-1] = torch.einsum('ai,ia->ia', [t.cores[j][local_i, :], t_rinterfaces[k][j][:, local_r]])
+                    t_rinterfaces[k][j - 1] = torch.einsum(
+                        "ai,ia->ia",
+                        [t.cores[j][local_i, :], t_rinterfaces[k][j][:, local_r]],
+                    )
 
         # Leave the first core ready
         V = evaluate_function(0)
@@ -389,20 +456,24 @@ def cross(
 
         # Evaluate validation error
         val_eps = torch.norm(ys_val - tn.Tensor(cores)[Xs_val].torch()) / norm_ys_val
-        info['val_epss'].append(val_eps)
+        info["val_epss"].append(val_eps)
         if val_eps < eps:
             converged = True
-
         if verbose:  # Print status
             if _minimize:
-                print('| best: {:.8g}'.format(info['min']), end='')
+                print("| best: {:.8g}".format(info["min"]), end="")
             else:
-                print('| eps: {:.3e}'.format(val_eps), end='')
-            print(' | time: {:8.4f} | largest rank: {:3d}'.format(time.time() - start, max(Rs)), end='')
+                print("| eps: {:.3e}".format(val_eps), end="")
+            print(
+                " | time: {:8.4f} | largest rank: {:3d}".format(
+                    time.time() - start, max(Rs)
+                ),
+                end="",
+            )
             if converged:
-                print(' <- converged: eps < {}'.format(eps))
-            elif i == max_iter-1:
-                print(' <- max_iter was reached: {}'.format(max_iter))
+                print(" <- converged: eps < {}".format(eps))
+            elif i == max_iter - 1:
+                print(" <- max_iter was reached: {}".format(max_iter))
             else:
                 print()
         if converged:
@@ -412,41 +483,60 @@ def cross(
             newRs[1:-1] = np.minimum(rmax, newRs[1:-1] + kickrank)
             for n in list(range(1, N)) + list(range(N - 1, 0, -1)):
                 newRs[n] = min(newRs[n - 1] * Is[n - 1], newRs[n], Is[n] * newRs[n + 1])
-            extra = np.hstack([np.random.randint(0, Is[n + 1], [max(newRs), 1]) for n in range(N - 1)] + [np.zeros([max(newRs), 1], dtype=int)])
+            extra = np.hstack(
+                [np.random.randint(0, Is[n + 1], [max(newRs), 1]) for n in range(N - 1)]
+                + [np.zeros([max(newRs), 1], dtype=int)]
+            )
             for n in range(N - 1):
                 if newRs[n + 1] > Rs[n + 1]:
-                    rsets[n] = np.vstack([rsets[n], extra[:newRs[n + 1]-Rs[n + 1], n:]])
+                    rsets[n] = np.vstack(
+                        [rsets[n], extra[: newRs[n + 1] - Rs[n + 1], n:]]
+                    )
             Rs = newRs
-            t_linterfaces, t_rinterfaces = init_interfaces(tensors, rsets, N, device)  # Recompute interfaces
+            t_linterfaces, t_rinterfaces = init_interfaces(
+                tensors, rsets, N, device
+            )  # Recompute interfaces
 
     if val_eps > eps and not _minimize and not suppress_warnings:
-        logging.warning('eps={:g} (larger than {}) when cross-approximating {}'.format(val_eps, eps, function))
+        logging.warning(
+            "eps={:g} (larger than {}) when cross-approximating {}".format(
+                val_eps, eps, function
+            )
+        )
 
     if verbose:
-        print('Did {} function evaluations, which took {:.4g}s ({:.4g} evals/s)'.format(
-            info['nsamples'], info['eval_time'], info['nsamples'] / info['eval_time']))
+        print(
+            "Did {} function evaluations, which took {:.4g}s ({:.4g} evals/s)".format(
+                info["nsamples"],
+                info["eval_time"],
+                info["nsamples"] / info["eval_time"],
+            )
+        )
         print()
 
-    ret = tn.Tensor([c if isinstance(c, torch.Tensor) else torch.tensor(c) for c in cores])
+    ret = tn.Tensor(
+        [c if isinstance(c, torch.Tensor) else torch.tensor(c) for c in cores]
+    )
     if return_info:
-        info['lsets'] = lsets
-        info['rsets'] = rsets
-        info['Rs'] = Rs
-        info['left_locals'] = left_locals
-        info['total_time'] = time.time() - start
-        info['val_eps'] = val_eps
+        info["lsets"] = lsets
+        info["rsets"] = rsets
+        info["Rs"] = Rs
+        info["left_locals"] = left_locals
+        info["total_time"] = time.time() - start
+        info["val_eps"] = val_eps
         return ret, info
     else:
         return ret
 
 
 def cross_forward(
-        info,
-        function=lambda x: x,
-        domain=None,
-        tensors=None,
-        function_arg='vectors',
-        return_info=False):
+    info,
+    function=lambda x: x,
+    domain=None,
+    tensors=None,
+    function_arg="vectors",
+    return_info=False,
+):
     """
     Given TT-cross indices and a black-box function (to be evaluated on an arbitrary grid), computes a differentiable TT tensor as given by the TT-cross interpolation formula.
     Reference: I. Oseledets, E. Tyrtyshnikov: `"TT-cross Approximation for Multidimensional Arrays" (2009) <http://www.mat.uniroma2.it/~tvmsscho/papers/Tyrtyshnikov5.pdf>`_
@@ -460,52 +550,64 @@ def cross_forward(
     """
 
     assert domain is not None or tensors is not None
-    assert function_arg in ('vectors', 'matrix')
+    assert function_arg in ("vectors", "matrix")
     device = None
-    if function_arg == 'matrix':
+    if function_arg == "matrix":
+
         def f(*args):
             return function(torch.cat([arg[:, None] for arg in args], dim=1))
+
     else:
         f = function
     if tensors is None:
         tensors = tn.meshgrid(domain)
         device = domain[0].device
-    if not hasattr(tensors, '__len__'):
+    if not hasattr(tensors, "__len__"):
         tensors = [tensors]
 
     Is = list(tensors[0].shape)
     N = len(Is)
 
     # Load index information from dictionary
-    lsets = info['lsets']
-    rsets = info['rsets']
-    left_locals = info['left_locals']
-    Rs = info['Rs']
+    lsets = info["lsets"]
+    rsets = info["rsets"]
+    left_locals = info["left_locals"]
+    Rs = info["Rs"]
 
     if return_info:
-        info['Xs'] = torch.zeros(0, N)
-        info['shapes'] = []
+        info["Xs"] = torch.zeros(0, N)
+        info["shapes"] = []
 
-    assert function_arg in ('vectors', 'matrix')
-    if function_arg == 'matrix':
+    assert function_arg in ("vectors", "matrix")
+    if function_arg == "matrix":
+
         def f(*args):
             return function(torch.cat([arg[:, None] for arg in args], dim=1))
+
     else:
         f = function
 
     t_linterfaces, t_rinterfaces = init_interfaces(tensors, rsets, N, device)
 
-    def evaluate_function(j):  # Evaluate function over Rs[j] x Rs[j+1] fibers, each of size I[j]
+    def evaluate_function(
+        j,
+    ):  # Evaluate function over Rs[j] x Rs[j+1] fibers, each of size I[j]
         Xs = []
         for k, t in enumerate(tensors):
-            V = torch.einsum('ai,ibj,jc->abc', [t_linterfaces[k][j], tensors[k].cores[j], t_rinterfaces[k][j]])
+            V = torch.einsum(
+                "ai,ibj,jc->abc",
+                [t_linterfaces[k][j], tensors[k].cores[j], t_rinterfaces[k][j]],
+            )
             Xs.append(V.flatten())
 
         evaluation = f(*Xs)
 
         if return_info:
-            info['Xs'] = torch.cat((info['Xs'], torch.cat([x[:, None] for x in Xs], dim=1).detach().cpu()), dim=0)
-            info['shapes'].append([Rs[j], Is[j], Rs[j + 1]])
+            info["Xs"] = torch.cat(
+                (info["Xs"], torch.cat([x[:, None] for x in Xs], dim=1).detach().cpu()),
+                dim=0,
+            )
+            info["shapes"].append([Rs[j], Is[j], Rs[j + 1]])
 
         V = torch.reshape(evaluation, [Rs[j], Is[j], Rs[j + 1]])
         return V
@@ -513,7 +615,7 @@ def cross_forward(
     cores = []
 
     # Cross-interpolation formula, left-to-right
-    for j in range(0, N-1):
+    for j in range(0, N - 1):
 
         # Update tensors for current indices
         V = evaluate_function(j)
@@ -527,11 +629,13 @@ def cross_forward(
         local_r, local_i = np.unravel_index(left_locals[j], [Rs[j], Is[j]])
         lsets[j + 1] = np.c_[lsets[j][local_r, :], local_i]
         for k, t in enumerate(tensors):
-            t_linterfaces[k][j + 1] = torch.einsum('ai,iaj->aj',
-                                                       [t_linterfaces[k][j][local_r, :], t.cores[j][:, local_i, :]])
+            t_linterfaces[k][j + 1] = torch.einsum(
+                "ai,iaj->aj",
+                [t_linterfaces[k][j][local_r, :], t.cores[j][:, local_i, :]],
+            )
 
     # Leave the last core ready
-    X = evaluate_function(N-1)
+    X = evaluate_function(N - 1)
     cores.append(X)
 
     if return_info:
